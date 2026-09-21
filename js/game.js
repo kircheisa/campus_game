@@ -491,6 +491,7 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
   async function trial(opts) {
     const { teacher, intro, subject, badge, gemColor } = opts;
     const npc = opts.npcId ? E().getNpc(opts.npcId) : null;
+    const office = ADV.Cal.period === 2;                         // 午休＝老师办公时间：答疑加成
     if (F().finalPassed) { await say({ name: teacher, text: opts.after || '你的传说我已经听说了。继续向前吧，孩子！' }); return; }
     if (F().badges[subject]) {
       /* —— 每日作业：徽章在手也能天天来练。
@@ -503,7 +504,9 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
         return;
       }
       E().playAction(npc, 'read', 1.6);
-      await say({ name: teacher, text: opts.hw || '徽章已经是你的了，但学问是一天天练出来的。\n今天也留了三道作业题，全对有奖励哦！' });
+      await say({ name: teacher, text: office
+        ? (opts.hwOffice || '现在是午休办公时间，来答疑正合适。\n今天也留了三道作业题，全对奖励翻倍哦！')
+        : (opts.hw || '徽章已经是你的了，但学问是一天天练出来的。\n今天也留了三道作业题，全对有奖励哦！') });
       const go = await choose(['做今日作业！', '今天先告辞……'], { caption: { name: teacher, text: '怎么样，来练练手？' } });
       if (go === 1) { await say({ name: teacher, text: '好吧，功课可别落下太久哦。' }); return; }
       const wrongs = { n: 0 };
@@ -511,8 +514,8 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
       for (let i = 0; i < qs.length; i++) await ask(teacher, qs[i], wrongs, npc, subject);
       if (wrongs.n === 0) {
         F().homeworkDay[subject] = day;
-        F().gold = (F().gold || 0) + 8;
-        addCup(1);
+        F().gold = (F().gold || 0) + (office ? 16 : 8);          // 办公时间作业：奖励翻倍
+        addCup(office ? 2 : 1);
         // 奖励按日期轮换：书 → 昆虫图册 → 小动物图册
         const kind = day % 3;
         if (kind === 0 && ADV.Books && ADV.Books.LIST.length) {
@@ -528,7 +531,9 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
           await UI().itemGet('作业奖励·' + it.name, kind === 2 ? '#a8e063' : '#c8f078');
         }
         E().playAction(npc, 'laugh', 1.4);
-        await say({ name: teacher, text: opts.hwGreat || '全对！功课做得漂亮，这份奖励拿好。\n金币 +8 · 学院分 +1，明天还有新题目！' });
+        await say({ name: teacher, text: office
+          ? (opts.hwGreatOffice || '全对！趁着午休来答疑的孩子最出色。\n办公时间作业：金币 +16 · 学院分 +2，双倍拿好！')
+          : (opts.hwGreat || '全对！功课做得漂亮，这份奖励拿好。\n金币 +8 · 学院分 +1，明天还有新题目！') });
         logEvent(`完成了${teacher}布置的今日作业`);
         save();
       } else {
@@ -545,7 +550,9 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     const go = await choose(['接受试炼！', '我再准备一下……'], { caption: { name: teacher, text: '怎么样，你准备好了吗？' } });
     if (go === 1) { await say({ name: teacher, text: '好的，我随时在这里等你。' }); return; }
 
+    if (office) await say({ name: teacher, text: opts.officeIntro || '午休正好是我的办公时间——答错了也不要紧，我当面给你再讲一遍。' });
     const wrongs = { n: 0 };
+    let forgiven = false;                                        // 办公时间：首错当面重讲、既往不咎
     const qs = shuffle(QUIZ[subject]).slice(0, 3);
     for (let i = 0; i < qs.length; i++) {
       let item = qs[i];
@@ -555,6 +562,11 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
         if (ai && ai.q) item = { q: ai.q + (ai.ai ? ' ✦' : ''), opts: ai.opts, a: ai.a };
       }
       await ask(teacher, item, wrongs, npc, subject);
+      if (office && !forgiven && wrongs.n > 0) {
+        forgiven = true;
+        wrongs.n = 0;                                            // 当面重讲一遍，这次的错不记账
+        await say({ name: teacher, text: '办公时间就是用来答疑的——这题我重新讲了一遍，别再错啦。' });
+      }
     }
 
     E().playAction(npc, 'laugh', 1.6);                           // 老师开怀大笑
@@ -5612,12 +5624,46 @@ E().playAction(E().player, 'laugh', 1.6);
       成长: '第一天的你，连校门朝哪开都不知道。\n现在的你，能给新同学画一张藏宝图了。\n这就叫长大。'
     };
     await say({ text: tails[f.endingType] });
+    const rep = growthReport();                                  // 期末成长报告：四年数据一页看完
+    await say({ name: '📋 期末成长报告', text: `—— 这一学期，你留下了这些脚印 ——\n${rep.rows.join('\n')}` });
+    await say({ name: '✉️ 老师评语', text: rep.comment });
+    logEvent('领取了学期成长报告');
     f.gold = (f.gold || 0) + 200;
     addCup(10);
     UI().toast(` 🎓 毕业结局达成【${f.endingType}】（之后可继续自由游玩 / NG+）`);
     await say({ text: '（标题画面新增「新的学期（NG+）」——\n带着友谊与图鉴，题目更难地再来一年！）' });
     save();
     return true;
+  }
+
+  // —— 期末成长报告：聚合一学期的学习/收集/社交/财务数据 + 五维之最 + 老师评语 ——
+  function growthReport() {
+    const f = F(), C = ADV.Cal, Cl = ADV.Collect;
+    let qn = 0, qok = 0;                                         // 全学期答题聚合（quizLog 按日累计）
+    Object.values(f.quizLog || {}).forEach(r => { qn += r.n; qok += r.ok; });
+    const rate = qn ? Math.floor(qok / qn * 100) : 0;
+    const stages = Object.values(state.friends).reduce((s, r) => s + (r.stage || 0), 0);
+    let top = 'knowledge', topV = -1;                            // 五维之最（aggregate 含 flag 反推展示值）
+    try {
+      const agg = ADV.Growth.aggregate();
+      Object.keys(agg).forEach(k => { if (agg[k] > topV) { topV = agg[k]; top = k; } });
+    } catch (e) {}
+    const DIM_CN = { knowledge: '学识', body: '体魄', mind: '心性', bond: '人缘', art: '技艺' };
+    const rows = [
+      `📖 知识点 ${totalKp()} · 答题 ${qn} 次 · 正确率 ${rate}%`,
+      `🐾 图鉴 ${Cl.catCount('critters')}/${Cl.totalOf('critters')} · 累计收服 ${f.catchTotal || 0} 只`,
+      `💗 好友进度 ${stages} · 帮助声望 ${f.helpPts || 0} · 连续打卡 ${C.dump().bestStreak} 天`,
+      `🏆 学院分 ${f.cup || 0} · 零花钱 ${f.gold || 0} 文 · 五维之最：${DIM_CN[top] || top}`
+    ];
+    const comments = {
+      knowledge: { by: '王老师', text: '课堂上你的眼睛是亮的。保持这份好奇心，它会带你走得很远。' },
+      body: { by: '刘老师', text: '操场上总能看到你的身影。身体是本钱，你已经攒下了最厚的一页。' },
+      mind: { by: '校长', text: '你学会了安静与思考。心里的秩序，是比分数更重要的收获。' },
+      bond: { by: '同学们', text: '大家都说，有你在一间教室里，连放学都变得慢了些。' },
+      art: { by: '美术老师', text: '你看世界的角度很特别。把这个角度留住，别让它被磨平。' }
+    };
+    const cm = comments[top] || comments.knowledge;
+    return { rows, comment: `「${cm.text}」——${cm.by}`, top };
   }
 
   // —— 成就墙（手册「成就」页数据） ——
@@ -5668,6 +5714,7 @@ E().playAction(E().player, 'laugh', 1.6);
       ['电影发烧友', (f.movieNights || 0) >= 5, '看满 5 场周日电影夜'],
       ['集市常客', (f.fleaVisits || 0) >= 3, '逛满 3 个周日跳蚤集市'],
       ['捕虫高手', (f.catchTotal || 0) >= 10, '累计收服 10 只小家伙（球/网/笼都算）'],
+      ['金色传说', C.shinyCount() >= 3, '图鉴里集齐 3 只金色异色个体（高档工具更容易遇见）'],
       ['珍稀架收藏家', f.legendTrio, '集齐传说三只（月光凤蝶 · 锦鲤苗 · 山神小狐狸）'],
       ['早睡早起', f.graduated && ADV.Cal.sleepDebt === 0, '零睡眠债迎来毕业'],
       ['毕业快乐', f.graduated, '迎来毕业结局'],
@@ -7509,7 +7556,14 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       await say({ text: up ? `${cn}课上你完成得特别出色，老师竖起大拇指！` : `（${cn}课玩得很开心，下次做得更好～）` });
       await examAsk(`${cn}课 · 小知识`, 'final', 'easy');
     }
-    const gained = M.kp(en) - kp0;
+    let gained = M.kp(en) - kp0;
+    const br = f.borrow, bk = br && ADV.Books ? ADV.Books.DB[br.id] : null;
+    if (bk && C.day <= br.due && gained > 0 && BOOK_SUBJECT[bk.id] === en) {
+      const bonus = Math.ceil(gained / 2);                     // 借书 buff：带着对应课本上课 +50%
+      if (M.gain) M.gain(en, bonus);
+      gained += bonus;
+      UI().toast(` 📚 《${bk.name}》派上用场 · 额外知识点 +${bonus} `);
+    }
     const gold = 4 + gained * 2;
     f.gold = (f.gold || 0) + gold;
     logEvent(`上了${cn}课（随堂答题知识点 +${gained}）`);
@@ -7525,6 +7579,57 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     if (i === 0) { await takeClass(); return; }
     if (i > 0 && i <= list.length) await readBook(list[i - 1].id);
   };
+
+  /* —— 图书借阅：在秦墨处借书，借期 3 天；借期内带着对应课本上课，知识点收益 +50%；
+        按时归还另有小奖励，超期会被罚金收书。 —— */
+  const BOOK_SUBJECT = { tb_chinese: 'chinese', tb_math: 'math', tb_science: 'science', tb_english: 'english' };
+  const SUB_CN = { chinese: '语文', math: '数学', science: '科学', english: '英语' };
+
+  async function libMenu(ent) {
+    const f = F(), C = ADV.Cal;
+    if (f.borrow && C.day > f.borrow.due) {                      // 逾期结算：罚金收书
+      const bk = ADV.Books.DB[f.borrow.id];
+      const fine = Math.min(f.gold || 0, 10);
+      E().playAction(ent, 'doubt', 1.6);
+      await say({ name: '秦墨', text: `《${bk.name}》超期 ${C.day - f.borrow.due} 天了。\n按规矩，罚金 ${fine} 文——书我先收回架子。` });
+      f.gold = (f.gold || 0) - fine;
+      f.borrow = null;
+      logEvent('借的书超期，被秦墨收回并罚了款');
+      save();
+      UI().toast(` ⏰ 借书超期 · 罚金 -${fine} 文 `);
+    }
+    if (f.borrow) {
+      const bk = ADV.Books.DB[f.borrow.id];
+      const sub = BOOK_SUBJECT[f.borrow.id];
+      const left = f.borrow.due - C.day;
+      const i = await choose(['归还这本书', '继续带着'], {
+        caption: { name: '秦墨', text: `借阅中：《${bk.name}》· 还期剩 ${left} 天${sub ? `\n（带着它上${SUB_CN[sub]}课，知识点 +50%）` : ''}` }
+      });
+      if (i !== 0) { await say({ name: '秦墨', text: left <= 1 ? '明天就到期了，别忘了。' : '好书不厌百回读，拿稳了。' }); return; }
+      f.borrow = null;
+      f.gold = (f.gold || 0) + 6;
+      ADV.Audio.sfx('item');
+      if (sub && ADV.Mistake && ADV.Mistake.gain) ADV.Mistake.gain(sub, 2);   // 按时归还：对应科目小幅巩固
+      E().playAction(ent, 'laugh', 1.6);
+      await say({ name: '秦墨', text: '按期归还，不错。\n这是图书馆的守信奖励，收好。' });
+      logEvent(`按期归还了《${bk.name}》`);
+      save();
+      UI().toast(' 📚 按期还书 · 💰 +6 ');
+      return;
+    }
+    const i = await choose(['借阅一本', '就这样吧'], { caption: { name: '秦墨', text: '想借书？规矩只有一条——\n借期三天，按时归还。' } });
+    if (i !== 0) return;
+    const list = ADV.Books.byWhere('library');
+    const j = await choose(list.map(b => b.name), { caption: { name: '秦墨', text: '随便挑——课本、闲书都行。\n借期三天。' } });
+    if (j < 0 || j >= list.length) return;
+    const bk = list[j];
+    f.borrow = { id: bk.id, due: C.day + 3 };
+    ADV.Audio.sfx('item');
+    UI().toast(` 📚 借到《${bk.name}》· 三天内记得还 `);
+    logEvent(`向秦墨借了《${bk.name}》`);
+    save();
+    await say({ name: '秦墨', text: `《${bk.name}》登记在你名下了。\n三天后来还——读完了，它才真正是你的。` });
+  }
 
   /* ==================== 书的守护者们（新人物 + 任务） ==================== */
 
@@ -7555,7 +7660,7 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     }
     if (f.libDone) {
       await say({ name: '秦墨', text: '书架上又多了几本被读过的书。\n你的摘抄我看了，写得不错。' });
-      return;
+      return libMenu(ent);                                     // 任务完成后：常设借阅台
     }
     if (n >= 3) {
       f.libDone = true;
@@ -7569,9 +7674,10 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       UI().toast(' 💰 读书奖励 +40 ');
       logEvent('完成了秦墨的读书任务');
       save();
-      return;
+      return libMenu(ent);                                     // 领完奖顺势开放借阅台
     }
     await say({ name: '秦墨', text: `读完 ${n} / 3 本。\n书架在那边，自己去拿吧。` });
+    return libMenu(ent);                                       // 任务中也能先借书
   };
 
   // 小镇旧书摊 · 旧书翁：收摘抄 + 半价旧书
@@ -9380,7 +9486,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
-    themeWeek, upcomingEvents, achievements, ngStart, CLUBS, RECIPES, QUEST_POOL, RUMORS,
+    themeWeek, upcomingEvents, achievements, growthReport, ngStart, CLUBS, RECIPES, QUEST_POOL, RUMORS,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
     HOTBAR_SLOTS, hotbarCur, hotbarSelect, hotbarToolMatch,   // 工具热键栏（星露谷式快捷执行）
     systemTour, sysToured, totalKp, contestRank,          // 体验收束导览 / 结算单 / 钓鱼大赛评分（供测试）

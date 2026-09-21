@@ -4902,6 +4902,17 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.69] 玩法批次一：成长报告 / Mistake.gain 导出 / 金色传说成就');
+  {
+    const rep = A.Game.growthReport();
+    ok(rep && rep.rows.length === 4 && typeof rep.comment === 'string' && rep.comment.length > 0,
+      '成长报告：四行统计 + 老师评语（毕业仪式与成长页同源）');
+    ok(typeof A.Mistake.gain === 'function',
+      'Mistake.gain 导出（借书 buff 与按时归还奖励依赖）');
+    ok(A.Game.achievements().some(a => a.name === '金色传说'),
+      '成就表：金色传说（异色收集闭环）');
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

@@ -584,6 +584,13 @@ ADV.UI = (function () {
       text(g, `第${m.day}天`, x + 380, y + 64 + i * 32, 12, '#8a94c0', undefined, 'normal');
       text(g, m.text.slice(0, 20), x + 424, y + 64 + i * 32, 13, '#e8ecff', undefined, 'normal');
     });
+    // 期末成长报告条（与毕业报告同源数据，随时可看；窄列截断防压右侧大事记）
+    try {
+      const rep = ADV.Game.growthReport();
+      if (rep && rep.rows) rep.rows.forEach((r, i) => {
+        text(g, r.slice(0, 26), x + 40, y + h - 84 + i * 18, 12, '#cfe0ff', undefined, 'normal');
+      });
+    } catch (e) {}
     text(g, '答题/战斗/剧情/收集都会成长 · 五维解锁场景互动', x + w / 2, y + h - 12, 12, '#8a94c0', 'center', 'normal');
   }
   /* ---------- 技能页：农/矿/渔/战/交 五系专精（星露谷式） ---------- */

@@ -116,5 +116,5 @@ ADV.Mistake = (function () {
   }
 
   return { IVAL, CN2EN, EN2CN, TREE, NEED, answer, all, dueList, review, stats, quizStats,
-           kp, unlocked, totalNodes };
+           gain, kp, unlocked, totalNodes };
 })();
