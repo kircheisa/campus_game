@@ -52,14 +52,15 @@ ADV.Main = (function () {
       ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 1 ? ' 🎵 仅音效（音乐静音） ' : ' 🔇 已静音 ');
     }
     if (e.code === 'KeyV') {                                                  // V：虚拟按键开关
-      const hidden = document.body.classList.toggle('hidepad');
-      try { localStorage.setItem('campus_pad_hidden', hidden ? '1' : '0'); } catch (err) {}
-      ADV.UI.toast(hidden ? ' 🎮 虚拟按键：隐藏（画面更大） ' : ' 🎮 虚拟按键：显示 ');
+      padPref = document.body.classList.contains('nopad');                    // 当前隐藏 → 切为显示
+      try { localStorage.setItem('campus_pad_hidden', padPref ? '0' : '1'); } catch (err) {}
+      applyPad();
+      ADV.UI.toast(padPref ? ' 🎮 虚拟按键：显示 ' : ' 🎮 虚拟按键：隐藏（画面更大） ');
       fit();
     }
-    if (e.code === 'KeyQ') {                                                  // Q：HUD 折叠/展开
-      const mini = ADV.UI.toggleHud();
-      ADV.UI.toast(mini ? ' 📋 HUD：折叠为迷你条（Q 展开） ' : ' 📋 HUD：展开完整面板 ');
+    if (e.code === 'KeyQ') {                                                  // Q：HUD 三态循环（完整 → 迷你 → 隐藏）
+      const m = ADV.UI.toggleHud();
+      ADV.UI.toast(m === 'full' ? ' 📋 HUD：展开完整面板 ' : m === 'mini' ? ' 📋 HUD：折叠为迷你条（Q 隐藏） ' : ' 📋 HUD：已隐藏（Q 恢复） ');
     }
     if (e.code === 'KeyF' && state === 'play') toggleJournal();             // F：生活手册
     if (e.code === 'KeyL' && state === 'play' && !journalOpen) ADV.UI.toggleLog();   // L：对话回看
@@ -86,6 +87,9 @@ ADV.Main = (function () {
     if (k) { e.preventDefault(); held[k] = false; }
   });
   window.addEventListener('blur', () => { for (const k in held) held[k] = false; });
+  window.addEventListener('pagehide', () => {                                // 离开/切后台兜底存档（P2-24）
+    try { if (state === 'play' && !ADV.Game.busy && !ADV.UI.busy && !journalOpen) ADV.Game.save(); } catch (e) {}
+  });
 
   // 触屏虚拟按键
   document.querySelectorAll('#touch-ui .tk').forEach(btn => {
@@ -558,8 +562,8 @@ ADV.Main = (function () {
             if (pressed.right) { journalTab = ADV.UI.journalMove(journalTab, 'right'); ADV.Audio.sfx('cursor'); }
             if (pressed.up) { journalTab = ADV.UI.journalMove(journalTab, 'up'); ADV.Audio.sfx('cursor'); }
             if (pressed.down) { journalTab = ADV.UI.journalMove(journalTab, 'down'); ADV.Audio.sfx('cursor'); }
-            if (pressed.pageup) ADV.UI.journalPage(-1);   // 好友页翻页
-            if (pressed.pagedown) ADV.UI.journalPage(1);
+            if (pressed.pageup) ADV.UI.journalPage(-1, journalTab);   // 列表翻页（好友/任务/收藏/背包）
+            if (pressed.pagedown) ADV.UI.journalPage(1, journalTab);
             if (pressed.cancel) { journalOpen = false; ADV.Audio.sfx('cancel'); }
             ADV.Engine.update(dt, { held: {} });
             ADV.UI.update(dt, pressed);                   // 手册期间 toast 仍正常消退
@@ -615,11 +619,17 @@ ADV.Main = (function () {
   /* 触屏设备全程显示虚拟按键（body.touch）：标题/选人/说明/结局画面没有键盘，
    * 菜单也必须靠方向盘和 ●/✕ 操作，否则手机上无法开始游戏 */
   document.body.classList.toggle('touch', isTouch());
+  /* 虚拟按键显隐：padPref 为用户偏好（null=跟随设备默认：触屏显示/桌面隐藏），body.nopad 控制样式 */
+  let padPref = null;
+  function applyPad() {
+    document.body.classList.toggle('nopad', !(padPref === null ? isTouch() : padPref));
+  }
   if (mqTouch && mqTouch.addEventListener) mqTouch.addEventListener('change', e => {
     document.body.classList.toggle('touch', e.matches);
+    applyPad();
     fit();
   });
-  const padVisible = () => state === 'play' && !document.body.classList.contains('hidepad');
+  const padVisible = () => state === 'play' && !document.body.classList.contains('nopad');
   /* 实测虚拟按键在屏幕上的位置（自动兼容刘海/圆角安全区）；未显示时返回 null 走估算 */
   function measureControls() {
     try {
@@ -635,12 +645,17 @@ ADV.Main = (function () {
     const L = ADV.UI.layout(innerWidth, innerHeight, touchy, touchy ? measureControls() : null);
     canvas.style.width = L.cw + 'px';
     canvas.style.height = L.ch + 'px';
+    canvas.classList.toggle('soft', L.cw < W - 1);   // 缩到原生分辨率以下时关掉 pixelated，避免颗粒糊化（P2-21）
     ADV.UI.setTouch(touchy);
     ADV.UI.setSafePad(L.pad);                                   // 对话框/选项窗避开虚拟按键
   }
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', () => setTimeout(fit, 150));
-  try { if (localStorage.getItem('campus_pad_hidden') === '1') document.body.classList.add('hidepad'); } catch (e) {}
+  try {
+    const p = localStorage.getItem('campus_pad_hidden');
+    padPref = p === '1' ? false : p === '0' ? true : null;    // '1'=隐藏 '0'=显示 null=跟随设备默认
+  } catch (e) { padPref = null; }
+  applyPad();
   fit();
 
   /* ==================== 触屏/鼠标点按（换算成画布逻辑坐标后分发） ==================== */
@@ -714,8 +729,8 @@ ADV.Main = (function () {
         if (hit.t === 'close') { journalOpen = false; ADV.Audio.sfx('cancel'); }
         else if (hit.t === 'group') { journalTab = hit.tab; ADV.Audio.sfx('cursor'); }
         else if (hit.t === 'tab') { journalTab = hit.ti; ADV.Audio.sfx('cursor'); }
-        else if (hit.t === 'fup') ADV.UI.journalPage(-1);
-        else if (hit.t === 'fdown') ADV.UI.journalPage(1);
+        else if (hit.t === 'fup') ADV.UI.journalPage(-1, journalTab);
+        else if (hit.t === 'fdown') ADV.UI.journalPage(1, journalTab);
         return;
       }
       ADV.UI.tapAt(p.x, p.y);                       // 对话推进/选项/回看/拾取动画

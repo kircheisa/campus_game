@@ -29,6 +29,13 @@ ADV.Engine = (function () {
   };
   // 静态画布上次使用的季节签名（用于决定是否需要增量重建）
   let staticSig = null;
+  // 夜晚街区层离屏缓存：结果只随 map.id + 时段变化（P2-17，避免每帧全图扫描 + 重建门灯渐变）
+  let nightCv = null, nightSig = null;
+  const glowGrads = new Map();          // 灯光光晕渐变对象缓存（同坐标复用，键 x|y|r）
+  // 星空坐标预计算（原式确定性：i*197%W, i*131%(H/2)），绘制时只改 globalAlpha，不再每帧拼 40 个 rgba 字符串
+  const STARS = [];
+  for (let i = 0; i < 40; i++) STARS.push([(i * 197) % W, (i * 131) % (H / 2)]);
+  const fogGrads = {}, coldGrads = {};          // 天气渐变缓存（键：浓度档，仅两三档参数）
 
   // 季节内进度：每 10 天一季，返回 0~1；换季时自动触发过渡动画
   function seasonProgress() {
@@ -59,6 +66,8 @@ ADV.Engine = (function () {
   function loadMap(id, x, y, dir) {
     map = ADV.Maps.get(id);
     buildStatic();
+    nightCv = null; nightSig = null;      // 夜景层按新图重建（P2-17 缓存失效）
+    glowGrads.clear();                    // 灯光渐变按新图坐标重建
 
     player = {
       x, y, px: x * T, py: y * T, dir: dir || 'down', mv: null,
@@ -187,10 +196,19 @@ ADV.Engine = (function () {
 
   function isNight() { return !!(ADV.Cal && ADV.Cal.isNight()); }
 
-  /* ---------- 夜晚街区层（窗灯 / 店门面 / 灯光光晕） ---------- */
-  // 沿街住户窗子亮灯 + 店铺门面随深夜打烊，让同一张地图在时段里“换一次脸”
+  /* ---------- 夜晚街区层（窗灯 / 店门面 / 灯光光晕） ----------
+   * 沿街住户窗子亮灯 + 店铺门面随深夜打烊，让同一张地图在时段里“换一次脸”。
+   * 层内容只随地图与时段变化 → 画进离屏画布缓存，每帧只做一次 drawImage（P2-17） */
   function drawNightStreet(g) {
-    const p = ADV.Cal.period;
+    const sig = map.id + '_' + ADV.Cal.period;
+    if (!nightCv || nightSig !== sig) {
+      nightCv = cnv(map.w * T, map.h * T);
+      paintNightStreet(nightCv.getContext('2d'), ADV.Cal.period);
+      nightSig = sig;
+    }
+    g.drawImage(nightCv, 0, 0);
+  }
+  function paintNightStreet(g, p) {
     for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
       const t = map.g[y][x];
       if (t === 'wallWin' || t === 'aptWin') {
@@ -216,11 +234,16 @@ ADV.Engine = (function () {
     }
   }
 
-  // 灯光光晕：路灯与夜里点亮的物件在脚下投一圈暖光
+  // 灯光光晕：路灯与夜里点亮的物件在脚下投一圈暖光（渐变对象按坐标缓存复用）
   function drawGlow(g, x, y, r) {
-    const gr = g.createRadialGradient(x, y, 2, x, y, r);
-    gr.addColorStop(0, 'rgba(255,206,120,.40)');
-    gr.addColorStop(1, 'rgba(255,206,120,0)');
+    const key = x + '|' + y + '|' + r;
+    let gr = glowGrads.get(key);
+    if (!gr) {
+      gr = g.createRadialGradient(x, y, 2, x, y, r);
+      gr.addColorStop(0, 'rgba(255,206,120,.40)');
+      gr.addColorStop(1, 'rgba(255,206,120,0)');
+      glowGrads.set(key, gr);
+    }
     g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
   }
 
@@ -368,7 +391,11 @@ ADV.Engine = (function () {
     ADV.Audio.sfx('door');
     fadeTo(1, .32, () => {
       loadMap(d.to[0], d.to[1], d.to[2], d.to[3]);
-      fadeTo(0, .4, () => { ADV.Game.busy = false; ADV.Game.save(); });
+      // 存档延后一拍：避免把 JSON.stringify 排进淡入首帧造成过图瞬间微卡顿
+      fadeTo(0, .4, () => {
+        ADV.Game.busy = false;
+        setTimeout(() => { try { ADV.Game.save(); } catch (e) {} }, 0);
+      });
     });
   }
   function fadeTo(target, timeSec, cb) { fade.target = target; fade.speed = 1 / timeSec; fade.cb = cb; }
@@ -526,7 +553,9 @@ ADV.Engine = (function () {
   function findTarget(forHint) {
     if (!player || !map) return null;
     const [dx, dy] = DIRV[player.dir];
-    const fx = player.x + dx, fy = player.y + dy;
+    return computeTarget(player.x + dx, player.y + dy, !!forHint);
+  }
+  function computeTarget(fx, fy, forHint) {
     // forHint：提示层专用。随行小伙伴几乎永远贴在玩家身边，若参与提示判定，
     // 名牌 + Z 气泡会常驻屏幕——提示层跳过它（脚下重叠兜底除外），Z 键交互不受影响
     let npc = npcs.find(n => !n.hidden && n.x === fx && n.y === fy && !(forHint && n.buddy));
@@ -758,12 +787,12 @@ ADV.Engine = (function () {
       if (tint) { g.fillStyle = tint; g.fillRect(0, 0, W, H); }
       if (ADV.Cal.weather === '星空' && p >= 4) {
         g.fillStyle = 'rgba(8,10,40,.30)'; g.fillRect(0, 0, W, H);
-        for (let i = 0; i < 40; i++) {
-          const sx = (i * 197 % W), sy = (i * 131 % (H / 2));
-          const a = .4 + .4 * Math.sin(time * 2 + i);
-          g.fillStyle = `rgba(255,250,220,${a.toFixed(2)})`;
-          g.fillRect(sx, sy, 2, 2);
+        g.fillStyle = '#fffadc';
+        for (let i = 0; i < STARS.length; i++) {
+          g.globalAlpha = .4 + .4 * Math.sin(time * 2 + i);
+          g.fillRect(STARS[i][0], STARS[i][1], 2, 2);
         }
+        g.globalAlpha = 1;
       }
       const season = ADV.Cal.seasonEn();
       const pg = seasonProgress();
@@ -775,13 +804,17 @@ ADV.Engine = (function () {
       else st = null;
       if (st) { g.fillStyle = st; g.fillRect(0, 0, W, H); }
 
-      // 夏季雨雾全屏遮罩
+      // 夏季雨雾全屏遮罩（渐变按浓度档缓存，只有两档）
       if (season === 'summer' && (w === '小雨' || w === '暴雨')) {
         const fogA = w === '暴雨' ? 0.22 : 0.10;
-        const grd = g.createLinearGradient(0, 0, 0, H);
-        grd.addColorStop(0, `rgba(170,195,230,${(fogA * 0.7).toFixed(2)})`);
-        grd.addColorStop(0.5, `rgba(150,185,225,${fogA.toFixed(2)})`);
-        grd.addColorStop(1, `rgba(130,170,220,${(fogA * 1.15).toFixed(2)})`);
+        let grd = fogGrads[fogA];
+        if (!grd) {
+          grd = g.createLinearGradient(0, 0, 0, H);
+          grd.addColorStop(0, `rgba(170,195,230,${(fogA * 0.7).toFixed(2)})`);
+          grd.addColorStop(0.5, `rgba(150,185,225,${fogA.toFixed(2)})`);
+          grd.addColorStop(1, `rgba(130,170,220,${(fogA * 1.15).toFixed(2)})`);
+          fogGrads[fogA] = grd;
+        }
         g.fillStyle = grd; g.fillRect(0, 0, W, H);
         if (w === '暴雨') {
           g.globalAlpha = 0.18;
@@ -793,23 +826,30 @@ ADV.Engine = (function () {
           g.globalAlpha = 1;
         }
       }
-      // 冬季寒冷强化：边缘蓝色渐晕
+      // 冬季寒冷强化：边缘蓝色渐晕（渐变按浓度档缓存）
       if (season === 'winter') {
         const coldA = w === '雪' ? 0.22 : 0.13;
-        const vg = g.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, Math.max(W, H) * 0.72);
-        vg.addColorStop(0, 'rgba(160,200,255,0)');
-        vg.addColorStop(1, `rgba(120,160,230,${coldA.toFixed(2)})`);
+        let vg = coldGrads[coldA];
+        if (!vg) {
+          vg = g.createRadialGradient(W / 2, H / 2, 120, W / 2, H / 2, Math.max(W, H) * 0.72);
+          vg.addColorStop(0, 'rgba(160,200,255,0)');
+          vg.addColorStop(1, `rgba(120,160,230,${coldA.toFixed(2)})`);
+          coldGrads[coldA] = vg;
+        }
         g.fillStyle = vg; g.fillRect(0, 0, W, H);
       }
 
       const k = weatherPts.kind;
       if (k === 'rain') {
         const isStorm = w === '暴雨';
+        // 同一样式的雨滴合并为一条 path，一次 stroke（原来每滴 beginPath/stroke）
         g.strokeStyle = isStorm ? 'rgba(190,220,255,.65)' : 'rgba(170,200,240,.55)';
         g.lineWidth = isStorm ? 1.5 : 1;
+        g.beginPath();
         for (const p of weatherPts) {
-          g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - (isStorm ? 5 : 3), p.y - (isStorm ? 16 : 12)); g.stroke();
+          g.moveTo(p.x, p.y); g.lineTo(p.x - (isStorm ? 5 : 3), p.y - (isStorm ? 16 : 12));
         }
+        g.stroke();
         for (const s of splashPts) {
           const a = Math.max(0, 1 - s.t / s.life);
           const r = 1 + s.t * 22;
@@ -932,6 +972,79 @@ ADV.Engine = (function () {
     return (t < .25 ? 1 : t < .5 ? 0 : t < .75 ? 2 : 0);
   }
 
+  /* ---------- 单实体绘制（render 排序列表回调；不用闭包，降低每帧堆分配） ---------- */
+  // 物件：缓存键编码 + 夜灯先铺光 + 本体 + 石门宝石
+  function drawObj(g, o, meta, night) {
+    const key = o.kind === 'fountain' ? 'fountain' + (Math.floor(time * 2.2) % 2)
+      : o.kind === 'stoneDoor' ? 'stoneDoor'
+      : o.kind === 'altar' ? 'altar'
+      : o.kind === 'dog' ? 'dog'
+      : o.kind === 'sign' ? 'sign' : o.kind;
+    const opt = o.kind === 'sign' ? o.text
+      : o.kind === 'stoneDoor' ? o.open
+      : o.kind === 'altar' ? o.glow
+      : o.kind === 'chest' ? o.open
+      : o.kind === 'quizAltar' ? (o.tier * 2 + (o.lit ? 1 : 0))
+      : o.kind === 'sealGate' ? o.open
+      : o.kind === 'bossChest' ? o.open
+      : o.kind === 'dog' ? o.sleep
+      : o.kind === 'lamp' ? (night ? 1 : 0)
+      : o.kind === 'tree' ? o.v
+      : o.kind === 'plot' ? ((o.stage | 0) + (o.watered ? 10 : 0) + (o.fert ? 100 : 0) + (o.spk ? 1000 : 0))   // +10=浇过水，+100=施过肥，+1000=洒水器
+      : o.kind === 'scarecrow' ? (o.fixed ? 1 : 0)                   // 翻新后的稻草人
+      : o.kind === 'coop' ? o.hasChicken
+      : o.kind === 'cowShed' ? o.hasCow
+      : o.kind === 'sheepPen' ? o.hasSheep
+      : o.kind === 'buzz' ? ((ADV.Game.flags.buzzCaught || {})[o.bid] === (ADV.Cal ? ADV.Cal.day : 0))  // 今日捕过 → 虫子躲起来
+      : o.kind === 'critter' ? ((ADV.Game.flags.critterDay || {})[o.pid] === (ADV.Cal ? ADV.Cal.day : 0)) // 今日惊扰 → 窝点安静
+      : o.kind === 'ore' ? (o.tier | 0)                    // 矿石：档次编码进缓存键
+      : null;
+    // 季节性物件（tree/fruitTree/flowerbed）传季节参数，走多维缓存；其余物件保持旧签名
+    const seasonForObj = ADV.Cal ? ADV.Cal.seasonEn() : 'spring';
+    const pgForObj = seasonProgress();
+    const wForObj = ADV.Cal ? ADV.Cal.weather : '晴';
+    const c = (o.kind === 'tree' || o.kind === 'fruitTree' || o.kind === 'flowerbed')
+      ? ADV.Sprites.getObject(key, opt, seasonForObj, pgForObj, wForObj)
+      : ADV.Sprites.getObject(key, opt);
+    // 夜里点亮的灯 / 灯串：先铺一层暖光，再画本体
+    if (night && o.kind === 'lamp') drawGlow(g, o.x * T + 16, o.y * T + 8, 46);
+    else if (night && o.nightGlow) drawGlow(g, o.x * T + 16, o.y * T + 14, 34);
+    g.drawImage(c, o.x * T, o.y * T - (c.height - meta.h / T * T));
+    if (o.id === 'stoneDoor' && !o.open) drawDoorGems(g, o);
+  }
+  // 石门宝石（按收集进度点亮：数学/语文/科学/英语）
+  function drawDoorGems(g, o) {
+    const F = ADV.Game.flags;
+    const gems = [[24, 42, F.badges.math, '#5a8aff'], [40, 42, F.badges.chinese, '#ff6a7a'],
+                  [24, 60, F.badges.science, '#4ae86c'], [40, 60, F.badges.english, '#ffd94c']];
+    for (const [gx, gy, got, col] of gems) {
+      if (!got) continue;
+      const x = o.x * T + gx, y = o.y * T + gy;
+      g.fillStyle = col;
+      g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.8)';
+      g.fillRect(x - 1, y - 3, 2, 2);
+    }
+  }
+  // 角色：姿势图按实体 memo（避免每帧展开 palette 对象 + sprites 内 JSON.stringify 重建键）
+  function drawChar(g, e) {
+    let sh;
+    if (e.pose) {
+      if (e._poseKey !== e.pose) {
+        e._poseKey = e.pose;
+        e._poseSheet = e.cat ? ADV.Sprites.makeCatSheet(Object.assign({}, e.cat, { pose: e.pose }))
+                             : ADV.Sprites.makePoseSheet(ADV.Sprites.PALETTES[e.pal], e.pose);
+      }
+      sh = e._poseSheet;
+    } else sh = e.sheet;
+    const fh = sh.height / 4;
+    const row = { down: 0, left: 1, right: 2, up: 3 }[e.dir];
+    // 阴影
+    g.fillStyle = 'rgba(0,0,0,.25)';
+    g.beginPath(); g.ellipse(e.px + 16, e.py + 30, 10, 4, 0, 0, Math.PI * 2); g.fill();
+    g.drawImage(sh, frameOf(e) * 32, row * fh, 32, fh, e.px, e.py + T - fh, 32, fh);
+  }
+
   function render(g) {
     if (!map) return;
     const night = isNight();
@@ -942,88 +1055,27 @@ ADV.Engine = (function () {
     g.drawImage(staticCv, 0, 0);
     if (night && !map.indoor) drawNightStreet(g);
 
-    // 深度排序：物件按底边 y，角色按脚底 y
+    // 深度排序：物件按底边 y，角色按脚底 y（视口裁剪 + 扁平条目，见 drawObj/drawChar）
     const items = [];
+    const vx0 = cam.x - 192, vx1 = cam.x + W + 192, vy0 = cam.y - 160, vy1 = cam.y + H + 160;
     for (const o of map.objects) {
       if (!objVisible(o)) continue;
       if (o.kind === 'starFruit' && o.taken) continue;  // 已摘取的星之果实不再绘制
       const meta = OBJ_META[o.kind];
       if (!meta) continue;
-      items.push({
-        y: (o.y + meta.h / T - 1) * T + T,
-        draw: () => {
-          const key = o.kind === 'fountain' ? 'fountain' + (Math.floor(time * 2.2) % 2)
-            : o.kind === 'stoneDoor' ? 'stoneDoor'
-            : o.kind === 'altar' ? 'altar'
-            : o.kind === 'dog' ? 'dog'
-            : o.kind === 'sign' ? 'sign' : o.kind;
-          const opt = o.kind === 'sign' ? o.text
-            : o.kind === 'stoneDoor' ? o.open
-            : o.kind === 'altar' ? o.glow
-            : o.kind === 'chest' ? o.open
-            : o.kind === 'quizAltar' ? (o.tier * 2 + (o.lit ? 1 : 0))
-            : o.kind === 'sealGate' ? o.open
-            : o.kind === 'bossChest' ? o.open
-            : o.kind === 'dog' ? o.sleep
-            : o.kind === 'lamp' ? (night ? 1 : 0)
-            : o.kind === 'tree' ? o.v
-            : o.kind === 'plot' ? ((o.stage | 0) + (o.watered ? 10 : 0) + (o.fert ? 100 : 0) + (o.spk ? 1000 : 0))   // +10=浇过水，+100=施过肥，+1000=洒水器
-            : o.kind === 'scarecrow' ? (o.fixed ? 1 : 0)                   // 翻新后的稻草人
-            : o.kind === 'coop' ? o.hasChicken
-            : o.kind === 'cowShed' ? o.hasCow
-            : o.kind === 'sheepPen' ? o.hasSheep
-            : o.kind === 'buzz' ? ((ADV.Game.flags.buzzCaught || {})[o.bid] === (ADV.Cal ? ADV.Cal.day : 0))  // 今日捕过 → 虫子躲起来
-            : o.kind === 'critter' ? ((ADV.Game.flags.critterDay || {})[o.pid] === (ADV.Cal ? ADV.Cal.day : 0)) // 今日惊扰 → 窝点安静
-            : o.kind === 'ore' ? (o.tier | 0)                    // 矿石：档次编码进缓存键
-            : null;
-          // 季节性物件（tree/fruitTree/flowerbed）传季节参数，走多维缓存；其余物件保持旧签名
-          const seasonForObj = ADV.Cal ? ADV.Cal.seasonEn() : 'spring';
-          const pgForObj = seasonProgress();
-          const wForObj = ADV.Cal ? ADV.Cal.weather : '晴';
-          const c = (o.kind === 'tree' || o.kind === 'fruitTree' || o.kind === 'flowerbed')
-            ? ADV.Sprites.getObject(key, opt, seasonForObj, pgForObj, wForObj)
-            : ADV.Sprites.getObject(key, opt);
-          // 夜里点亮的灯 / 灯串：先铺一层暖光，再画本体
-          if (night && o.kind === 'lamp') drawGlow(g, o.x * T + 16, o.y * T + 8, 46);
-          else if (night && o.nightGlow) drawGlow(g, o.x * T + 16, o.y * T + 14, 34);
-          g.drawImage(c, o.x * T, o.y * T - (c.height - meta.h / T * T));
-          if (o.id === 'stoneDoor' && !o.open) drawDoorGems(g, o);
-        }
-      });
+      const ox = o.x * T, oy = o.y * T;
+      if (ox > vx1 || oy > vy1 || ox + 192 < vx0 || oy + 160 < vy0) continue;   // 视口外（含余量）不进列表
+      items.push({ y: (o.y + meta.h / T - 1) * T + T, o, meta });
     }
-    const drawChar = (e) => {
-      // 动作姿势进行中 → 使用姿势图（人物 makePoseSheet / 猫带 pose 的猫图）
-      const sh = e.pose
-        ? (e.cat ? ADV.Sprites.makeCatSheet({ ...e.cat, pose: e.pose })
-                 : ADV.Sprites.makePoseSheet(ADV.Sprites.PALETTES[e.pal], e.pose))
-        : e.sheet;
-      const fw = 32, fh = sh.height / 4;
-      const row = { down: 0, left: 1, right: 2, up: 3 }[e.dir];
-      // 阴影
-      g.fillStyle = 'rgba(0,0,0,.25)';
-      g.beginPath(); g.ellipse(e.px + 16, e.py + 30, 10, 4, 0, 0, Math.PI * 2); g.fill();
-      g.drawImage(sh, frameOf(e) * 32, row * fh, 32, fh, e.px, e.py + T - fh, 32, fh);
-    };
-    items.push({ y: player.py + T, draw: () => drawChar(player) });
-    for (const n of npcs) if (!n.hidden) items.push({ y: n.py + T, draw: () => drawChar(n) });
+    items.push({ y: player.py + T, e: player });
+    for (const n of npcs) {
+      if (n.hidden) continue;
+      if (n.py + T < vy0 - 96 || n.py > vy1 + 96) continue;      // 竖向远离视口的角色不画
+      items.push({ y: n.py + T, e: n });
+    }
 
     items.sort((a, b) => a.y - b.y);
-    for (const it of items) it.draw();
-
-    // 石门宝石（按收集进度点亮：数学/语文/科学/英语）
-    function drawDoorGems(g2, o) {
-      const F = ADV.Game.flags;
-      const gems = [[24, 42, F.badges.math, '#5a8aff'], [40, 42, F.badges.chinese, '#ff6a7a'],
-                    [24, 60, F.badges.science, '#4ae86c'], [40, 60, F.badges.english, '#ffd94c']];
-      for (const [gx, gy, got, col] of gems) {
-        if (!got) continue;
-        const x = o.x * T + gx, y = o.y * T + gy;
-        g2.fillStyle = col;
-        g2.beginPath(); g2.arc(x, y, 4, 0, Math.PI * 2); g2.fill();
-        g2.fillStyle = 'rgba(255,255,255,.8)';
-        g2.fillRect(x - 1, y - 3, 2, 2);
-      }
-    }
+    for (const it of items) { if (it.e) drawChar(g, it.e); else drawObj(g, it.o, it.meta, night); }
 
     // 粒子
     for (const p of particles) {
@@ -1068,10 +1120,11 @@ ADV.Engine = (function () {
     // 季节过渡彩色渐变遮罩（上层覆盖，1.5s 换季瞬间防止跳变）
     drawSeasonTransition(g);
 
-    // 闪光标记点（可拾取物 / 关键剧情物，未处理时脉动星光）
+    // 闪光标记点（可拾取物 / 关键剧情物，未处理时脉动星光；视口外的跳过）
     for (const o of map.objects) {
       if (!o.sparkle || o.taken) continue;
       const x = o.x * T + 16 - Math.round(cam.x), y = o.y * T + 14 - Math.round(cam.y);
+      if (x < -12 || x > W + 12 || y < -12 || y > H + 12) continue;
       const a = .5 + .5 * Math.sin(time * 4);
       g.fillStyle = `rgba(255,240,150,${a.toFixed(2)})`;
       g.fillRect(x - 2, y - 8, 4, 4); g.fillRect(x - 2, y + 4, 4, 4);

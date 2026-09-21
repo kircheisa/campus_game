@@ -353,7 +353,7 @@ ADV.UI = (function () {
   /* ---------- toast 渲染（独立于 render，由主循环画在最上层，避免被窗口盖住） ---------- */
   function renderToasts(g) {
     if (!ctx2d || !toasts.length) return;
-    const y0 = hudMini ? 86 : 240;       // 完整 HUD 展开时下移，避开左侧面板与小地图
+    const y0 = hudMode === 'full' ? 240 : 86;       // 完整 HUD 展开时下移，避开左侧面板与小地图
     toasts.forEach((tm, i) => {
       const a = tm.t < .2 ? tm.t / .2 : (tm.t > tm.dur - .5 ? Math.max(0, 1 - (tm.t - (tm.dur - .5)) / .5) : 1);
       g.save(); g.globalAlpha = a;
@@ -489,14 +489,17 @@ ADV.UI = (function () {
     return tab;
   }
 
-  /* ---------- 好友页滚动（好友多于一屏时 PgUp/PgDn 或点箭头翻页） ---------- */
+  /* ---------- 手册页内滚动（好友页 / 任务·背包等长列表共用 PgUp/PgDn） ---------- */
   const FRIEND_ROWS = 7;                  // 好友页一屏可显示的行数（双列 → 14 人）
+  const LIST_STEP = 7;                    // 任务/背包列表每次滚动的行数
   let friendScroll = 0;
-  function journalPage(dir) {             // dir: +1 下翻 / -1 上翻
-    friendScroll = Math.max(0, friendScroll + dir * FRIEND_ROWS);
-    return friendScroll;
+  let listScroll = 0;                     // 任务/背包等列表页的页内滚动行
+  function journalPage(dir, tab) {        // dir: +1 下翻 / -1 上翻；tab=0 好友页，其余滚动通用列表
+    if (tab === 0) friendScroll = Math.max(0, friendScroll + dir * FRIEND_ROWS);
+    else listScroll = Math.max(0, listScroll + dir * LIST_STEP);
+    return tab === 0 ? friendScroll : listScroll;
   }
-  function resetJournalScroll() { friendScroll = 0; }
+  function resetJournalScroll() { friendScroll = 0; listScroll = 0; }
   function journalPageMax(rows) { return Math.max(0, rows - FRIEND_ROWS); }
   function renderJournal(g, friends, BOND, tab, ctx2) {
     tab = Math.max(0, Math.min(TAB_META.length - 1, tab || 0));
@@ -576,7 +579,7 @@ ADV.UI = (function () {
     // 大事记（右半）
     text(g, '🌱 成长大事记', x + 380, y + 34, 17, '#ffe9a8', undefined, 'left');
     const log = G.log.slice(0, 11);
-    if (!log.length) text(g, '你的故事，从今天开始……', x + 380, y + 64, 14, '#667', undefined, 'normal');
+    if (!log.length) text(g, '你的故事，从今天开始……', x + 380, y + 64, 14, '#9aa0c0', undefined, 'normal');
     log.forEach((m, i) => {
       text(g, `第${m.day}天`, x + 380, y + 64 + i * 32, 12, '#8a94c0', undefined, 'normal');
       text(g, m.text.slice(0, 20), x + 424, y + 64 + i * 32, 13, '#e8ecff', undefined, 'normal');
@@ -627,7 +630,7 @@ ADV.UI = (function () {
     up.rows.forEach((r, i) => {
       const cy = y + 36 + i * 52;
       text(g, r.tag, x + 40, cy, 16, r.evs.length ? '#ffe9a8' : '#8a94c0');
-      if (!r.evs.length) text(g, '（平平常常的一天）', x + 110, cy, 14, '#667', undefined, 'normal');
+      if (!r.evs.length) text(g, '（平平常常的一天）', x + 110, cy, 14, '#9aa0c0', undefined, 'normal');
       r.evs.slice(0, 3).forEach((e, j) => text(g, e, x + 110, cy + j * 17, 13, '#e8ecff', undefined, 'normal'));
     });
     text(g, '睡一觉推进一天 · 事件都在路上', x + w / 2, y + h - 14, 13, '#8a94c0', 'center', 'normal');
@@ -639,7 +642,7 @@ ADV.UI = (function () {
     text(g, `🏆 成就 ${done}/${list.length}`, x + 40, y, 19, '#ffe9a8', undefined, 'left');
     list.forEach((a, i) => {
       const cx = x + 40 + (i % 2) * 330, cy = y + 34 + ((i / 2) | 0) * 30;
-      g.globalAlpha = a.done ? 1 : .4;
+      g.globalAlpha = a.done ? 1 : .65;    // 未达成也保持可读（原 .4 近乎隐形，P2-22）
       text(g, (a.done ? '★ ' : '☆ ') + a.name, cx, cy, 15, a.done ? '#ffe9a8' : '#8890b0', undefined, 'left');
       text(g, a.desc, cx + 150, cy, 12, '#8a94c0', undefined, 'normal');
       g.globalAlpha = 1;
@@ -710,16 +713,17 @@ ADV.UI = (function () {
       text(g, '推荐路线：家 -> 小镇东口 -> 校园喷泉', x + w / 2, y + 132, 13, '#8a94c0', 'center', 'normal');
     else if (stage === 'settle')
       text(g, '推荐路线：喷泉 -> 教学楼/图书馆 -> 校务板 -> 回家', x + w / 2, y + 132, 13, '#8a94c0', 'center', 'normal');
-    list.slice(0, 14).forEach((s, i) => {
+    const vis = 14;                                        // 页内滚动（P2-23：不再静默截断）
+    listScroll = Math.max(0, Math.min(listScroll, Math.max(0, list.length - vis)));
+    const start = listScroll;
+    const oy = stage === 'full' ? 112 : 156;
+    list.slice(start, start + vis).forEach((s, i) => {
       const main = s.startsWith('【主线】');
       const chapterLine = s.startsWith('【章节】');
-      const oy = stage === 'full' ? 112 : 156;
       text(g, s, x + 44, y + oy + i * 30, chapterLine ? 17 : (main ? 19 : 16), chapterLine ? '#7ab0ff' : (main ? '#ffe9a8' : '#e8ecff'), undefined, 'left');
     });
-    if (list.length > 14) {
-      const oy = stage === 'full' ? 112 : 156;
-      text(g, `……还有 ${list.length - 14} 项`, x + 44, y + oy + 14 * 30, 14, '#8a94c0', undefined, 'left');
-    }
+    if (list.length > vis)
+      text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 项 · PgUp/PgDn 翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
     text(g, stage === 'full' ? '睡一觉后，会提示今日目标' : '第一天不用赶进度，先熟悉校园和人', x + w / 2, y + h - 30, 13, '#8a94c0', 'center');
   }
   function renderFriends(g, friends, BOND, x, y, w, h) {
@@ -773,13 +777,15 @@ ADV.UI = (function () {
     ADV.Collect.CATS.forEach(([cat, label, icon], ci) => {
       const cy = y + 74 + ci * rowH;
       const n = ADV.Collect.catCount(cat), total = ADV.Collect.totalOf(cat);
-      text(g, `${icon} ${label}  ${n}/${total}`, x + 40, cy, tight ? 16 : many ? 17 : 20, n >= total ? '#4ae86c' : '#ffe9a8');
+      const all = ADV.Collect.DB[cat].length;
+      // 超过 10 项只展示前 10 个名字——头部标注收录总数，不再无提示截断（P2-23）
+      text(g, `${icon} ${label}  ${n}/${total}${all > 10 ? `（收录 ${all} 种，列前 10）` : ''}`, x + 40, cy, tight ? 16 : many ? 17 : 20, n >= total ? '#4ae86c' : '#ffe9a8');
       const list = ADV.Collect.DB[cat].slice(0, 10);
       list.forEach((it, i) => {
         const got = ADV.Collect.has(cat, it.id);
         g.globalAlpha = got ? 1 : .35;
         const oy = tight ? 20 : many ? 23 : 30;
-        text(g, got ? it.name : '？？？', x + 44 + (i % 5) * 128, cy + oy + ((i / 5) | 0) * 16, tight ? 11 : many ? 12 : 13, got ? '#fff' : '#667', undefined, 'left');
+        text(g, got ? it.name : '？？？', x + 44 + (i % 5) * 128, cy + oy + ((i / 5) | 0) * 16, tight ? 11 : many ? 12 : 13, got ? '#fff' : '#9aa0c0', undefined, 'left');
         g.globalAlpha = 1;
       });
     });
@@ -829,10 +835,15 @@ ADV.UI = (function () {
     text(g, '💰 金币：' + (ADV.Game.flags.gold || 0), x + 40, y + 70, 20, '#ffd94c');
     const list = ADV.Collect.bagList();
     if (!list.length) { text(g, '背包空空～小镇礼品店逛逛？', x + w / 2, y + 140, 16, '#8890b0', 'center'); return; }
-    list.slice(0, 12).forEach((it, i) => {
+    const vis = 12;                                        // 页内滚动（P2-23：不再静默截断）
+    listScroll = Math.max(0, Math.min(listScroll, Math.max(0, list.length - vis)));
+    const start = listScroll;
+    list.slice(start, start + vis).forEach((it, i) => {
       const cx = x + 40 + (i % 2) * 330, cy = y + 106 + ((i / 2) | 0) * 30;
       text(g, `${it.gift ? '🎁' : '·'} ${it.name} ×${it.n}`, cx, cy, 16, '#fff', undefined, 'left');
     });
+    if (list.length > vis)
+      text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 件 · PgUp/PgDn 翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
     text(g, 'G 键面向 NPC 送礼（生日当天翻倍）', x + w / 2, y + h - 30, 14, '#8a94c0', 'center');
   }
 
@@ -865,18 +876,23 @@ ADV.UI = (function () {
   }
 
   /* ---------- 游戏内 HUD（徽章进度 / 地点名 / 操作提示） ---------- */
-  /* ---------- HUD：默认折叠为一条迷你信息条，Q 键展开完整面板 ---------- */
-  let hudMini = true;
+  /* ---------- HUD：Q 键三态循环——完整面板 → 迷你条 → 完全隐藏 → 完整面板 ---------- */
+  let hudMode = 'mini';                   // 'full' | 'mini' | 'hidden'
   function toggleHud() {
-    hudMini = !hudMini;
-    try { localStorage.setItem('campus_hud_mini', hudMini ? '1' : '0'); } catch (e) {}
-    return hudMini;
+    hudMode = hudMode === 'full' ? 'mini' : hudMode === 'mini' ? 'hidden' : 'full';
+    try { localStorage.setItem('campus_hud', hudMode); } catch (e) {}
+    return hudMode;
   }
   function loadHudPref() {
-    try { if (localStorage.getItem('campus_hud_mini') === '0') hudMini = false; } catch (e) {}
+    try {
+      const v = localStorage.getItem('campus_hud');
+      if (v === 'full' || v === 'mini' || v === 'hidden') hudMode = v;
+      else if (localStorage.getItem('campus_hud_mini') === '0') hudMode = 'full';   // 旧偏好迁移
+    } catch (e) {}
   }
 
   function renderHUD(g, flags, mapName, muted) {
+    if (hudMode === 'hidden') return;     // 完全隐藏（Q 恢复）
     const gems = [
       ['数学', flags.badges.math, '#5a8aff'],
       ['语文', flags.badges.chinese, '#ff6a7a'],
@@ -884,7 +900,7 @@ ADV.UI = (function () {
       ['英语', flags.badges.english, '#ffd94c']
     ];
 
-    if (hudMini) {
+    if (hudMode === 'mini') {
       // —— 迷你条：徽章点 + 金币 + 宝藏图 + 日期天气，一行搞定 ——
       g.font = FONT(13);
       const cal = ADV.Cal ? ADV.Cal.label() : '';
@@ -903,6 +919,7 @@ ADV.UI = (function () {
         g.globalAlpha = got ? 1 : .35;
         ADV.Sprites.drawGem(g, gx, 29, c, got, 6);
         g.globalAlpha = 1;
+        text(g, n[0], gx, 30, 8, got ? '#101430' : '#c8cfec', 'center', 'normal');   // 首字冗余：不依赖颜色区分（P2-22）
       });
       let tx = 30 + 4 * 18 + 8;
       g.font = FONT(13);
@@ -987,9 +1004,11 @@ ADV.UI = (function () {
       const mx = W - mw - 20, my = 58;
       drawWindow(g, mx - 5, my - 5, mw + 10, mh + 10);
       g.drawImage(miniCv, mx, my);
-      for (const n of m.npcs) {                       // NPC：青色点
+      for (const n of m.npcs) {                       // NPC：青色圆点（门保持金色方点——形状+颜色双编码）
         g.fillStyle = '#6ee8ff';
-        g.fillRect(mx + n.x * miniSc - 1, my + n.y * miniSc - 1, 3, 3);
+        g.beginPath();
+        g.arc(mx + n.x * miniSc + .5, my + n.y * miniSc + .5, 1.8, 0, Math.PI * 2);
+        g.fill();
       }
       const pl = ADV.Engine.player;                   // 玩家：白色脉动点
       const pa = .55 + .45 * Math.sin(performance.now() / 180);
@@ -1050,7 +1069,7 @@ ADV.UI = (function () {
     renderHotbar, toggleHotbar,
     renderToasts, renderLog, toggleLog, tapAt, journalHit, journalPage, resetJournalScroll, pushHistory,
     get hotbarOn() { return hotbarOn; },
-    get hudMini() { return hudMini; },
+    get hudMode() { return hudMode; },            // 'full' | 'mini' | 'hidden'（主循环据此跳过渲染）
     get busy() { return !!(active || itemAnim); },
     get activeInfo() { return active ? { type: active.type, index: active.index, n: active.options ? active.options.length : undefined, ci: active.cancelIndex } : (itemAnim ? { type: 'anim' } : null); },   // 供 e2e 诊断：当前窗口类型/选项数/高亮/取消位
     get toastCount() { return toasts.length; },   // 供冒烟测试断言队列

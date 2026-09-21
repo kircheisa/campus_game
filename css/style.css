@@ -15,16 +15,17 @@ body { display: flex; align-items: center; justify-content: center;
   image-rendering: crisp-edges;
   box-shadow: 0 0 60px rgba(80, 120, 255, .18);
 }
+/* 画布被缩小到原生分辨率以下时（小屏），pixelated 反而让画面发糊——切回平滑插值（P2-21） */
+#game.soft { image-rendering: auto; }
 
 /* ---------- 触屏虚拟按键 ----------
  * 尺寸与 js/ui.js 的 CTL 常量保持一致（dpad 3×46+2×4=146，abtns 2×56+10=122，贴边 8px），
  * 对话框会让出同样宽度的安全区（safePad），避免按键压住文字。
- * 进入正式游玩即显示（桌面端也可点击）；触屏设备全程显示——标题/选人/说明/结局
- * 画面同样需要方向键和 ●/✕ 操作菜单，否则手机上无法开始游戏。
- * V 键可隐藏（记住偏好）。 */
+ * 触屏设备默认显示（标题/选人/说明/结局画面没有键盘，菜单必须靠方向盘和 ●/✕ 操作），
+ * 桌面端默认隐藏（只保留右上工具条），V 键随时切换并记住偏好。 */
 #touch-ui { display: none; position: absolute; inset: 0; pointer-events: none; touch-action: none; }
 body.playing #touch-ui, body.touch #touch-ui { display: block; }
-body.hidepad #touch-ui { display: none; }           /* V 键：隐藏虚拟按键 */
+body.nopad #dpad, body.nopad #abtns { display: none; }   /* V 键：隐藏方向盘/功能键，工具条保留 */
 #dpad {
   position: absolute; pointer-events: auto;
   left: calc(8px + env(safe-area-inset-left, 0px));

@@ -564,12 +564,19 @@ ADV.AI = (function () {
     return { ...q, ai: false };
   }
 
+  let fallbackWarned = false;
+  function noteFallback(reason) {          // 降级到题库时提示一次，别让玩家误以为题目是 AI 现编（P2-24）
+    if (fallbackWarned || !ADV.UI || !ADV.UI.toast) return;
+    fallbackWarned = true;
+    ADV.UI.toast(' 📚 ' + reason + '，本题改用校园题库 ');
+  }
+
   async function question(subject, diff, seed) {
-    if (!available()) return bank(subject, diff, seed);
+    if (!available()) { noteFallback('AI 出题未开启'); return bank(subject, diff, seed); }
     const ck = subject + '|' + diff;
     const cached = seed == null ? cacheGet(ck) : null;   // 每日一题（带 seed）跳过缓存，保证按天轮转
     if (cached) { remember(cached); return { ...cached, ai: true, cached: true }; }
-    if (!dailyOK()) return bank(subject, diff, seed);     // 今日 AI 次数用完，走题库兜底
+    if (!dailyOK()) { noteFallback('今日 AI 题额度已用完'); return bank(subject, diff, seed); }     // 今日 AI 次数用完，走题库兜底
     usedN++;
     if (ADV.UI && ADV.UI.toast) ADV.UI.toast(' 🤖 老师正在现场构思新题…… ');   // 网络等待有反馈，不再像卡死
     const sys = '你是小学出题老师。只输出 JSON：{"q":"题干","opts":["A","B","C"],"a":0}。' +
@@ -587,6 +594,7 @@ ADV.AI = (function () {
         err = new Error('parse fail');
       } catch (e) { err = e; }
     }
+    noteFallback('AI 出题暂时连不上');
     return bank(subject, diff, seed);
   }
 
