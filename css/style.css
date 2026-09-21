@@ -1,0 +1,99 @@
+/* 校园大冒险 —— 页面样式 */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; background: #0b0c14; overflow: hidden; }
+body { display: flex; align-items: center; justify-content: center;
+       font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+       overscroll-behavior: none; touch-action: none;
+       -webkit-tap-highlight-color: transparent; }
+
+#wrap { position: relative; width: 100%; height: 100%; }
+
+#game {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: #101018;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  box-shadow: 0 0 60px rgba(80, 120, 255, .18);
+}
+
+/* ---------- 触屏虚拟按键 ----------
+ * 尺寸与 js/ui.js 的 CTL 常量保持一致（dpad 3×46+2×4=146，abtns 2×56+10=122，贴边 8px），
+ * 对话框会让出同样宽度的安全区（safePad），避免按键压住文字。
+ * 进入正式游玩即显示（桌面端也可点击）；触屏设备全程显示——标题/选人/说明/结局
+ * 画面同样需要方向键和 ●/✕ 操作菜单，否则手机上无法开始游戏。
+ * V 键可隐藏（记住偏好）。 */
+#touch-ui { display: none; position: absolute; inset: 0; pointer-events: none; touch-action: none; }
+body.playing #touch-ui, body.touch #touch-ui { display: block; }
+body.hidepad #touch-ui { display: none; }           /* V 键：隐藏虚拟按键 */
+#dpad {
+  position: absolute; pointer-events: auto;
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-areas: ". u ." "l . r" ". d .";
+  grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px);
+  gap: 4px;
+}
+#abtns {
+  position: absolute; pointer-events: auto;
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  display: grid; grid-template-columns: repeat(2, 56px); gap: 10px;   /* 2×2：疾挥 / ✕● */
+}
+.tk {
+  border: 2px solid rgba(232, 212, 138, .8); border-radius: 10px;
+  background: rgba(18, 24, 72, .42); color: #ffe9a8;
+  font-size: 20px; user-select: none; -webkit-user-select: none;
+  touch-action: none; backdrop-filter: blur(2px);
+  -webkit-tap-highlight-color: transparent;
+}
+.tk:active { background: rgba(80, 100, 220, .7); }
+#abtns .tk { display: block; width: 56px; height: 56px; margin: 0; border-radius: 50%; font-size: 22px; }
+
+/* 顶部工具条：手册 / 小地图 / 音量（画布顶部中央是空的，不压 HUD 与地点名） */
+#toolbar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(6px + env(safe-area-inset-top, 0px));
+  display: flex; gap: 8px; pointer-events: auto;
+}
+.tb {
+  width: 44px; height: 44px; border-radius: 11px; font-size: 20px;
+  border: 2px solid rgba(232, 212, 138, .8);
+  background: rgba(18, 24, 72, .42); color: #ffe9a8;
+  user-select: none; -webkit-user-select: none; touch-action: none; backdrop-filter: blur(2px);
+  -webkit-tap-highlight-color: transparent;
+}
+.tb:active { background: rgba(80, 100, 220, .7); }
+/* 战斗 / 小游戏 / 阅读器接管画面时收起工具条（避免压住敌方血条与标题） */
+body.modal #toolbar { display: none; }
+
+/* 矮屏（小屏手机横屏）：按键再收一档，给对话框留出空间 */
+@media (hover: none) and (pointer: coarse) and (max-height: 380px) {
+  #dpad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
+  #abtns { grid-template-columns: repeat(2, 48px); gap: 8px; }
+  #abtns .tk { width: 48px; height: 48px; font-size: 19px; }
+  .tb { width: 38px; height: 38px; font-size: 17px; border-radius: 9px; }
+}
+
+/* 竖屏提示：整宽横幅（不压工具条，工具条会下移一档），约 9 秒后自动淡出 */
+#rotate-tip { display: none; }
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  #rotate-tip {
+    display: block; position: absolute; left: 10px; right: 10px;
+    top: calc(8px + env(safe-area-inset-top, 0px));
+    padding: 8px 14px; border-radius: 10px; text-align: center; line-height: 1.45;
+    background: rgba(18, 24, 72, .9); color: #ffe9a8; font-size: 15px;
+    border: 1px solid rgba(232, 212, 138, .6); pointer-events: none; z-index: 98;
+    animation: tipFade 9s ease forwards;
+  }
+  #rotate-tip span { display: block; font-size: 12px; color: #aab4d4; }
+  #toolbar { top: calc(66px + env(safe-area-inset-top, 0px)); }   /* 让开提示横幅 */
+}
+@keyframes tipFade { 0%, 72% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
+/* 运行错误提示（便于排查） */
+#errbox {
+  position: absolute; left: 10px; bottom: 10px; max-width: 80%;
+  background: rgba(120, 20, 20, .92); color: #fff; font-size: 12px;
+  padding: 8px 12px; border-radius: 6px; white-space: pre-wrap; z-index: 99;
+}

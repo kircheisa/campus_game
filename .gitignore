@@ -1,0 +1,14 @@
+# 本地运行/调试产物
+*_out.txt
+*_err.txt
+%TEMP%*
+nul
+
+# 调试用临时脚本
+tools/_dump*.js
+
+# Windows / 系统文件
+*.lnk
+Thumbs.db
+Desktop.ini
+.DS_Store

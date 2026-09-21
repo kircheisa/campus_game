@@ -1,0 +1,1 @@
+npx skills add https://github.com/Meowa-AI/meowa-skills --skill game-assets      用你的Agent美化你的游戏
