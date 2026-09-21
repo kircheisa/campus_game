@@ -97,3 +97,23 @@ body.modal #toolbar { display: none; }
   background: rgba(120, 20, 20, .92); color: #fff; font-size: 12px;
   padding: 8px 12px; border-radius: 6px; white-space: pre-wrap; z-index: 99;
 }
+
+/* 启动画面：遮住脚本加载期的白屏/半成品画面，主循环首帧后移除 */
+#splash {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; background: linear-gradient(180deg, #5aa8e8 0%, #a8d8f5 62%, #d8f0ff 100%);
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+#splash .sp-title {
+  font-size: clamp(34px, 8vw, 72px); font-weight: 900; letter-spacing: .08em; color: #ffb43a;
+  text-shadow: 0 3px 0 #b45a2a, 0 6px 14px rgba(30, 20, 60, .45);
+}
+#splash .sp-sub { font-size: clamp(12px, 2.2vw, 16px); letter-spacing: .4em; color: rgba(255, 255, 255, .9); }
+#splash .sp-loading { margin-top: 26px; font-size: clamp(13px, 2.4vw, 17px); color: #3a4a80; animation: spPulse 1.2s ease-in-out infinite; }
+#splash .sp-dots i { font-style: normal; animation: spDot 1.2s infinite; }
+#splash .sp-dots i:nth-child(2) { animation-delay: .2s; }
+#splash .sp-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes spPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes spDot { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }

@@ -7718,19 +7718,31 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     await say({ text: `共 ${list.length} 篇日记 · 写作星 ${f.diaryStars || 0} 颗` });
   }
 
-  /* ---------- 商店 ---------- */
+  /* ---------- 商店（列表显示已持有；选中后可买 1 或一次买到金币上限） ---------- */
   async function shop(stock, name) {
-    const list = stock.filter(id => ADV.Collect.count(id) >= 0);
+    const list = stock.slice();
     while (true) {
-      const i = await choose(list.map(id => `${ADV.Collect.itemInfo(id).name}  💰${ADV.Collect.itemInfo(id).price}`).concat(['离开']),
+      const i = await choose(list.map(id => {
+        const info = ADV.Collect.itemInfo(id);
+        const own = ADV.Collect.count(id);
+        return `${info.name}  💰${info.price}${own ? `（已有 ×${own}）` : ''}`;
+      }).concat(['离开']),
         { caption: { name, text: `金币：${F().gold}\n要买点什么？` } });
       if (i >= list.length) return;
       const id = list[i], info = ADV.Collect.itemInfo(id);
-      if (F().gold < info.price) { ADV.Audio.sfx('wrong'); await say({ name, text: '金币不够啦～' }); continue; }
-      F().gold -= info.price;
-      ADV.Collect.addItem(id, 1);
+      const own = ADV.Collect.count(id);
+      const afford = Math.max(0, Math.floor(F().gold / info.price));   // 金币买得起的最大数量
+      const opts = [`买 1（💰${info.price}）`];
+      if (afford > 1) opts.push(`买 ${afford} 个（💰${afford * info.price}，买到上限）`);
+      opts.push('返回');
+      const j = await choose(opts, { caption: { name, text: `${info.name}（已有 ×${own}）\n身上金币 💰${F().gold}` } });
+      if (j >= opts.length - 1) continue;
+      const n = j === 0 ? 1 : afford;
+      if (n < 1 || F().gold < info.price * n) { ADV.Audio.sfx('wrong'); await say({ name, text: '金币不够啦～' }); continue; }
+      F().gold -= info.price * n;
+      ADV.Collect.addItem(id, n);
       ADV.Audio.sfx('item');
-      UI().toast(` 买入 ${info.name}（余 💰${F().gold}）`);
+      UI().toast(` 买入 ${info.name} ×${n}（余 💰${F().gold}）`);
       save();
     }
   }
@@ -8478,6 +8490,26 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
   };
 
   /* ==================== 存档 ==================== */
+  let _hasSave = null;               // hasSave 结果缓存（save / 导入后失效）
+  let _storageOk = null;             // localStorage 可用性探测（缓存）
+  let _saveWarned = false;           // 存储失败只提醒一次，别每步都弹
+
+  function storageOk() {             // 隐私模式等场景 localStorage 会直接抛错
+    if (_storageOk !== null) return _storageOk;
+    try { localStorage.setItem('__adv_probe', '1'); localStorage.removeItem('__adv_probe'); _storageOk = true; }
+    catch (e) { _storageOk = false; }
+    return _storageOk;
+  }
+
+  /* 存档语义校验：JSON 合法 ≠ 档案可用（防损坏档把游戏带崩） */
+  function validSave(d) {
+    return !!(d && typeof d === 'object'
+      && (d.v === 1 || !d.v)
+      && (!d.map || typeof d.map === 'string')
+      && d.flags && typeof d.flags === 'object'
+      && (!d.friends || typeof d.friends === 'object'));
+  }
+
   function save() {
     try {
       const p = ADV.Engine.player;
@@ -8492,19 +8524,47 @@ growth: ADV.Growth ? ADV.Growth.dump() : null,
 skills: ADV.Skills ? ADV.Skills.dump() : null
 };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    } catch (e) { /* 忽略存储错误 */ }
+      _hasSave = true;
+    } catch (e) {
+      // 存储失败（隐私模式/配额满）不再静默：提示一次 + 指路手动备份
+      if (!_saveWarned) {
+        _saveWarned = true;
+        try { UI().toast(' ⚠ 进度无法保存（浏览器存储不可用），可在标题页「导出存档」手动备份 '); } catch (e2) {}
+      }
+    }
   }
   function load() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const d = JSON.parse(raw);
+      if (!validSave(d)) return null;
       // 旧档升级：合并全部默认旗标，保证新增字段存在
       if (d && d.flags) d.flags = { ...blankFlags(), ...d.flags, badges: { ...blankFlags().badges, ...d.flags.badges } };
       return d;
     } catch (e) { return null; }
   }
-  function hasSave() { return !!load(); }
+  function hasSave() {
+    if (_hasSave === null) _hasSave = !!load();      // 标题页每帧都问，缓存避免反复解析大 JSON
+    return _hasSave;
+  }
+
+  /* —— 存档导出 / 导入（Base64 文本，可粘贴备份 / 换设备） —— */
+  function exportSave() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) throw new Error('还没有存档');
+    return btoa(unescape(encodeURIComponent(raw)));
+  }
+  function importSave(code) {
+    try {
+      const raw = decodeURIComponent(escape(atob(String(code).trim())));
+      const d = JSON.parse(raw);
+      if (!validSave(d)) return false;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+      _hasSave = null;                                // 缓存失效
+      return true;
+    } catch (e) { return false; }
+  }
 
   function newGame(hero, withIntro) {
     state.hero = hero;
@@ -8524,7 +8584,12 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     if (ADV.Cal && d.cal) ADV.Cal.load(d.cal);
     if (ADV.Growth && d.growth) ADV.Growth.load(d.growth);
     if (ADV.Skills && d.skills) ADV.Skills.load(d.skills);
-    ADV.Engine.loadMap(d.map, d.x, d.y, d.dir);
+    try {
+      ADV.Engine.loadMap(d.map, d.x, d.y, d.dir);
+    } catch (e) {                                        // 旧档地图已不存在：落回家，不再崩溃
+      ADV.Engine.loadMap('homeIn', 18, 11, 'up');
+      try { UI().toast(' ⚠ 存档地图缺失，已送回家中 '); } catch (e2) {}
+    }
     return true;
   }
 
@@ -9313,6 +9378,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
 
   return {
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
+    exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
     themeWeek, upcomingEvents, achievements, ngStart, CLUBS, RECIPES, QUEST_POOL, RUMORS,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）

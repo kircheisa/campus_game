@@ -6,8 +6,9 @@
  * ========================================================= */
 window.ADV = window.ADV || {};
 ADV.Audio = (function () {
-  let ctx = null, master = null, bgmBus = null;
+  let ctx = null, master = null, bgmBus = null, musicBus = null;
   let volMode = 0;               // 音量三档：0 全开 / 1 仅音效 / 2 静音（M 键循环）
+  try { const v = parseInt(localStorage.getItem('campus_vol'), 10); if (v === 0 || v === 1 || v === 2) volMode = v; } catch (e) {}
   let bgmName = null, bgmTimer = null, step = 0, nextT = 0;
 
   // 每步为 8 分音符，数字为 MIDI 音高，0 为休止
@@ -98,13 +99,18 @@ ADV.Audio = (function () {
     if (ctx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
-    ctx = new AC();
-    master = ctx.createGain();
-    master.gain.value = volMode === 2 ? 0 : 0.9;
-    master.connect(ctx.destination);
-    bgmBus = ctx.createGain();                          // BGM/环境音独立总线：可单独压低
-    bgmBus.gain.value = volMode === 1 ? 0 : 1;
-    bgmBus.connect(master);
+    try {
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = volMode === 2 ? 0 : 0.9;
+      master.connect(ctx.destination);
+      bgmBus = ctx.createGain();                          // 音乐/环境音总线：仅音效档整体静音
+      bgmBus.gain.value = volMode === 1 ? 0 : 1;
+      bgmBus.connect(master);
+      musicBus = ctx.createGain();                        // BGM 旋律独立子总线：换曲时可淡入淡出
+      musicBus.gain.value = 1;
+      musicBus.connect(bgmBus);
+    } catch (e) { ctx = null; master = null; bgmBus = null; musicBus = null; return; }
     // 切到后台标签页时挂起声音（回来自动恢复），避免后台 BGM 卡顿
     if (typeof document !== 'undefined' && document.addEventListener)
       document.addEventListener('visibilitychange', () => {
@@ -158,17 +164,40 @@ ADV.Audio = (function () {
   function playBgm(name) {
     init(); resume();
     if (bgmName === name) return;
+    // 旧曲淡出（0.3s）后再断开；静音/仅音效档直接切，不做无意义的淡
+    if (musicBus && ctx) {
+      const oldBus = musicBus;
+      if (volMode === 0 && ctx.state !== 'closed') {
+        try {
+          const t0 = ctx.currentTime;
+          oldBus.gain.cancelScheduledValues(t0);
+          oldBus.gain.setValueAtTime(oldBus.gain.value, t0);
+          oldBus.gain.linearRampToValueAtTime(0.0001, t0 + 0.3);
+          setTimeout(() => { try { oldBus.disconnect(); } catch (e) {} }, 1000);
+        } catch (e) { try { oldBus.disconnect(); } catch (e2) {} }
+      } else { try { oldBus.disconnect(); } catch (e) {} }
+    }
     stopBgm();
     bgmName = name;
     if (!ctx || !name || !BGM[name]) return;
+    // 新总线淡入：旋律从 0.4s 后进入，与旧曲淡出交叠，切换不再"啪"一声硬切
+    const fade = volMode === 0 && !!musicBus;
+    if (fade) {
+      try {
+        const t0 = ctx.currentTime;
+        musicBus.gain.cancelScheduledValues(t0);
+        musicBus.gain.setValueAtTime(0.0001, t0);
+        musicBus.gain.linearRampToValueAtTime(1, t0 + 0.9);
+      } catch (e) {}
+    }
     const bgm = BGM[name];
     const stepDur = 30 / bgm.bpm;
-    step = 0; nextT = ctx.currentTime + 0.08;
+    step = 0; nextT = ctx.currentTime + (fade ? 0.4 : 0.08);
     bgmTimer = setInterval(() => {
       while (nextT < ctx.currentTime + 0.2) {
         const i = step % bgm.lead.length;
-        if (bgm.lead[i]) tone(mf(bgm.lead[i]), nextT, stepDur * .9, bgm.leadType || 'square', .032, bgmBus);
-        if (bgm.bass[i])  tone(mf(bgm.bass[i]),  nextT, stepDur * 1.7, 'triangle', .05, bgmBus);
+        if (bgm.lead[i]) tone(mf(bgm.lead[i]), nextT, stepDur * .9, bgm.leadType || 'square', .032, musicBus || bgmBus);
+        if (bgm.bass[i])  tone(mf(bgm.bass[i]),  nextT, stepDur * 1.7, 'triangle', .05, musicBus || bgmBus);
         nextT += stepDur; step++;
       }
     }, 60);
@@ -179,15 +208,16 @@ ADV.Audio = (function () {
     bgmTimer = null; bgmName = null;
   }
 
-  /* ---------- 音量三档（M 键循环：全开 → 仅音效 → 静音） ---------- */
+  /* ---------- 音量三档（M 键循环：全开 → 仅音效 → 静音；偏好持久化） ---------- */
   function applyVolume() {
     if (master) master.gain.value = volMode === 2 ? 0 : 0.9;
     if (bgmBus) bgmBus.gain.value = volMode === 1 ? 0 : 1;
   }
-  function cycleVolume() { volMode = (volMode + 1) % 3; applyVolume(); return volMode; }
+  function saveVolPref() { try { localStorage.setItem('campus_vol', String(volMode)); } catch (e) {} }
+  function cycleVolume() { volMode = (volMode + 1) % 3; applyVolume(); saveVolPref(); return volMode; }
   function toggleMute() {                               // 兼容旧调用：静音 ↔ 恢复
     volMode = volMode === 2 ? 0 : 2;
-    applyVolume();
+    applyVolume(); saveVolPref();
     return volMode === 2;
   }
 

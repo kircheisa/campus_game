@@ -313,21 +313,21 @@ ADV.Engine = (function () {
       if (stepEntity(player, dt)) onArrive();
       return;
     }
-    let dir = null;
-    if (input.held.up) dir = 'up';
-    else if (input.held.down) dir = 'down';
-    else if (input.held.left) dir = 'left';
-    else if (input.held.right) dir = 'right';
-    if (!dir) return;
+    const dirs = ['up', 'down', 'left', 'right'].filter(d => input.held[d]);
+    if (!dirs.length) return;
     const dur = input.held.dash ? .13 : .22;
-    if (startMove(player, dir, dur)) {
-      // 脚步声：按脚下材质分三种（草地软 / 硬地板脆 / 洞穴带回声）
-      const tile = map.g[player.y] && map.g[player.y][player.x] || '';
-      const surface = /^cave/.test(tile) ? 'cave' : map.indoor ? 'floor' : 'grass';
-      ADV.Audio.sfx('step', surface);
-      // 跑步扬尘：脚下冒两粒小灰点
-      if (input.held.dash) for (let i = 0; i < 2; i++) particles.push(newDust());
+    // 贴墙滑动：同时按住多个方向时逐个尝试（斜推遇墙会沿墙走，不再原地卡死）
+    let moved = false;
+    for (const dir of dirs) {
+      if (startMove(player, dir, dur)) { moved = true; break; }
     }
+    if (!moved) { player.dir = dirs[0]; return; }   // 四面全被挡：至少面朝第一个按住的方向
+    // 脚步声：按脚下材质分三种（草地软 / 硬地板脆 / 洞穴带回声）
+    const tile = map.g[player.y] && map.g[player.y][player.x] || '';
+    const surface = /^cave/.test(tile) ? 'cave' : map.indoor ? 'floor' : 'grass';
+    ADV.Audio.sfx('step', surface);
+    // 跑步扬尘：脚下冒两粒小灰点
+    if (input.held.dash) for (let i = 0; i < 2; i++) particles.push(newDust());
   }
 
   function onArrive() {

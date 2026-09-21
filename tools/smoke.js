@@ -99,6 +99,7 @@ let choosePick = null;          // 测试可临时指定选项索引（opts => i
     }
     if (!choosePick && opts[opts.length - 1] === '离开') target = opts.length - 1;   // 商店：自动离开
     const plan = [];
+    if (opt && opt.caption) plan.push({ cancel: true, ok: false, down: false });   // 说明分页阶段：X 直接跳到选项
     for (let i = 0; i < target; i++) plan.push({ down: true, ok: false });
     plan.push({ ok: true, down: false });
     pressQueue = plan;
@@ -1143,11 +1144,11 @@ async function pump(promise, maxSteps) {
   while (!saidDone && ++sfr < 400) { A.UI.update(1 / 60, { ok: true }); A.UI.render(miniCtx); }
   await new Promise(r => setImmediate(r));          // 让 resolve 的微任务跑完再断言
   ok(saidDone, '对话窗口：带说话人头像渲染并翻页结束');
-  ['第一条', '第二条', '第三条', '第四条'].forEach(t => A.UI.toast(t));
-  ok(A.UI.toastCount === 3, 'Toast 队列：连发四条只保留最新三条');
-  for (let i = 0; i < 260; i++) A.UI.update(1 / 60, {});
-  A.UI.render(miniCtx);
-  ok(A.UI.toastCount === 0, 'Toast 队列：2.4 秒后全部消退');
+  ['第一条', '第二条', '第三条', '第四条', '第五条', '第六条'].forEach(t => A.UI.toast(t));
+  ok(A.UI.toastCount === 5, 'Toast 队列：连发六条只保留最新五条');
+  for (let i = 0; i < 320; i++) A.UI.update(1 / 60, {});
+  A.UI.renderToasts(miniCtx);
+  ok(A.UI.toastCount === 0, 'Toast 队列：按时长（随文本伸缩）全部消退');
   A.UI.renderHUD(miniCtx, A.Game.flags, '校园', false);
   ok(true, 'HUD：日历行天气图标渲染不崩溃');
 
@@ -3822,7 +3823,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
 
       // —— 礼品店：三件新农资上架购买 ——
       F50.gold = 500;
-      const picks50 = [23, 24, 25, 26];                 // 洒水器 → 肥料 → 工具包 → 离开（追加在货架尾部）
+      const picks50 = [23, 0, 24, 0, 25, 0, 26];        // 洒水器→买1 → 肥料→买1 → 工具包→买1 → 离开（新流程含数量子菜单）
       choosePick = () => (picks50.length ? picks50.shift() : 26);
       await pump(A.Game.S.giftShop(), 5000);
       choosePick = null;

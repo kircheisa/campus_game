@@ -13,7 +13,7 @@ ADV.AI = (function () {
     apiKey: 'sk-cad6eb7bb67f48e1a651912c272a7ffe',
     baseUrl: 'https://api.deepseek.com',
     models: ['deepseek-flash', 'deepseek-chat'],
-    timeoutMs: 20000
+    timeoutMs: 8000            // 等太久不如做题库题：8 秒拿不到就用兜底
   };
   let enabled = true, workingModel = null;
 
@@ -571,6 +571,7 @@ ADV.AI = (function () {
     if (cached) { remember(cached); return { ...cached, ai: true, cached: true }; }
     if (!dailyOK()) return bank(subject, diff, seed);     // 今日 AI 次数用完，走题库兜底
     usedN++;
+    if (ADV.UI && ADV.UI.toast) ADV.UI.toast(' 🤖 老师正在现场构思新题…… ');   // 网络等待有反馈，不再像卡死
     const sys = '你是小学出题老师。只输出 JSON：{"q":"题干","opts":["A","B","C"],"a":0}。' +
       'a 是正确选项下标。题目有趣、贴近校园生活，可以用同学名字编情境。不要输出别的文字。';
     const avoid = RECENT.length ? `\n刚出过这些题，请换着出：${RECENT.slice(-6).join('；')}` : '';

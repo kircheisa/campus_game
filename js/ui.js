@@ -138,10 +138,13 @@ ADV.UI = (function () {
       const lines = wrap(g, opt.text, msgTextW(pv), 21);
       // 每页最多 3 行
       for (let i = 0; i < lines.length; i += 3) active.pages.push(lines.slice(i, i + 3));
+      pushHistory(name, opt.text);        // 进对话历史，供 L 键回看
     });
   }
 
-  /* ---------- 选项（可附带说明文字，仿 RMZ 选择+消息并存） ---------- */
+  /* ---------- 选项（可附带说明文字，仿 RMZ 选择+消息并存）
+   * 说明文字分页展示（每页 3 行，不再截断）；选项超过 6 条时窗口内滚动 ---------- */
+  const CHOOSE_VIEW = 6;                  // 选项窗最多同时显示的行数
   function choose(options, opt) {
     opt = opt || {};
     return new Promise(res => {
@@ -151,14 +154,37 @@ ADV.UI = (function () {
         index: opt.defaultIndex || 0,
         cancelIndex: opt.cancelIndex != null ? opt.cancelIndex : -1,
         caption: opt.caption || null,
+        capPages: [], capPage: 0, capDone: !opt.caption, capPv: null,
+        sc: 0, t: 0,
         w: 0
       };
       const g = ctx2d;
       let maxW = 60;
       g.font = FONT(20);
       options.forEach(o => maxW = Math.max(maxW, g.measureText(o).width));
-      active.w = maxW + 90;
+      active.w = Math.min(maxW + 90, W - (safePad + 10) - 24);
+      if (active.caption) {
+        const cn = active.caption.name || '';
+        pushHistory(cn, active.caption.text);
+        active.capPv = (cn && ADV.Maps && ADV.Maps.portraitOf) ? ADV.Maps.portraitOf(cn) : null;
+        const lines = wrap(g, active.caption.text, msgW() - 60 - (active.capPv ? 62 : 0), 21);
+        for (let i = 0; i < lines.length; i += 3) active.capPages.push(lines.slice(i, i + 3));
+      }
     });
+  }
+  /* 光标移动后把滚动起点 sc 夹回可视窗口 */
+  function clampChooseScroll(a) {
+    const view = Math.min(a.options.length, CHOOSE_VIEW);
+    a.sc = Math.max(0, Math.min(a.sc, a.options.length - view));
+    if (a.index < a.sc) a.sc = a.index;
+    if (a.index >= a.sc + view) a.sc = a.index - view + 1;
+  }
+  /* 选项窗几何（渲染与触屏命中共用同一套计算） */
+  function chooseGeom(a) {
+    const view = Math.min(a.options.length, CHOOSE_VIEW);
+    const w = a.w, h = view * 40 + 26;
+    const x = W - w - (safePad + 10), y = H - 200 - h;
+    return { x, y, w, h, view };
   }
 
   /* ---------- 道具 / 徽章获得 ---------- */
@@ -168,12 +194,33 @@ ADV.UI = (function () {
   }
 
   function toast(t) {
-    toasts.push({ text: t, t: 0 });
-    if (toasts.length > 3) toasts.shift();   // 超过 3 条时挤掉最旧的
+    // 时长随文本长度伸缩（读得完再消失），队列上限放宽到 5 条
+    toasts.push({ text: t, t: 0, dur: 2.2 + Math.min(2.2, String(t).length / 14) });
+    if (toasts.length > 5) toasts.shift();   // 超过 5 条时挤掉最旧的
+  }
+
+  /* ---------- 对话历史（L 键回看） ---------- */
+  const msgHistory = [];              // [{name, text}] 最多 60 条
+  let logOpen = false, logScroll = 0;
+  function pushHistory(name, text) {
+    msgHistory.push({ name: name || '', text: String(text || '') });
+    if (msgHistory.length > 60) msgHistory.shift();
+  }
+  function toggleLog(force) {
+    logOpen = force != null ? !!force : !logOpen;
+    if (logOpen) logScroll = 0;
+    if (ADV.Audio && ADV.Audio.sfx) ADV.Audio.sfx(logOpen ? 'ok' : 'cancel');
+    return logOpen;
   }
 
   /* ---------- 输入处理（由主循环转发） ---------- */
   function handleInput(press) {
+    if (logOpen) {                                        // 回看模式：冻结其它输入，↑↓ 翻阅
+      if (press.up) logScroll += 3;
+      if (press.down) logScroll = Math.max(0, logScroll - 3);
+      if (press.ok || press.cancel) toggleLog(false);
+      return;
+    }
     if (active && active.type === 'say') {
       if (press.ok) {
         ADV.Audio.sfx('ok');
@@ -185,8 +232,19 @@ ADV.UI = (function () {
         }
       }
     } else if (active && active.type === 'choose') {
-      if (press.up) { active.index = (active.index + active.options.length - 1) % active.options.length; ADV.Audio.sfx('cursor'); }
-      if (press.down) { active.index = (active.index + 1) % active.options.length; ADV.Audio.sfx('cursor'); }
+      if (!active.capDone) {                              // 说明文字分页中：Z 翻页，X/Esc 直接跳到选项
+        if (press.ok || press.cancel) {
+          if (press.cancel || active.capPage >= active.capPages.length - 1) active.capDone = true;
+          else active.capPage++;
+          ADV.Audio.sfx('ok');
+        }
+        return;
+      }
+      const n = active.options.length;
+      if (press.up) { active.index = (active.index + n - 1) % n; clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
+      if (press.down) { active.index = (active.index + 1) % n; clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
+      if (press.pageup) { active.index = Math.max(0, active.index - CHOOSE_VIEW); clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
+      if (press.pagedown) { active.index = Math.min(n - 1, active.index + CHOOSE_VIEW); clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
       if (press.ok) { const i = active.index; const r = active.res; active = null; ADV.Audio.sfx('ok'); r(i); }
       else if (press.cancel && active.cancelIndex >= 0) {
         const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i);
@@ -199,7 +257,7 @@ ADV.UI = (function () {
   function update(dt, press, held) {
     for (let i = toasts.length - 1; i >= 0; i--) {
       toasts[i].t += dt;
-      if (toasts[i].t > 2.4) toasts.splice(i, 1);
+      if (toasts[i].t > toasts[i].dur) toasts.splice(i, 1);
     }
     if (itemAnim) itemAnim.t += dt;
     if (active && active.type === 'say') {
@@ -210,6 +268,7 @@ ADV.UI = (function () {
         if (active.shown >= total) { active.shown = total; active.done = true; }
       }
     }
+    if (active && active.type === 'choose') active.t += dt;   // 供说明文字▼闪烁
     handleInput(press);
   }
 
@@ -242,11 +301,8 @@ ADV.UI = (function () {
         text(g, '▼', x + w - 38, y + h - 30, 17, '#ffe9a8', 'center');
     }
 
-    // 选项窗口（若带 caption，则先绘制消息窗）
+    // 选项窗口（若带 caption，则先绘制消息窗；说明文字分页，不截断）
     if (active && active.type === 'choose') {
-      const n = active.options.length;
-      const w = active.w, h = n * 40 + 26;
-      const x = W - w - (safePad + 10), y = H - 200 - h;
       if (active.caption) {
         const cx = msgX(), cy = H - 172, cw = msgW(), ch = 140;
         drawWindow(g, cx, cy, cw, ch);
@@ -255,22 +311,29 @@ ADV.UI = (function () {
           const nw = active.caption.name.length * 22 + 30;
           drawWindow(g, cx + 14, cy - 20, nw, 36);
           text(g, active.caption.name, cx + 14 + nw / 2, cy - 12, 19, '#ffe9a8', 'center');
-          const pv = (ADV.Maps && ADV.Maps.portraitOf) ? ADV.Maps.portraitOf(active.caption.name) : null;
-          if (pv) tx = cx + 22 + drawPortrait(g, pv, cx + 22, cy + 20) + 6;
+          if (active.capPv) tx = cx + 22 + drawPortrait(g, active.capPv, cx + 22, cy + 20) + 6;
         }
-        const lines = wrap(g, active.caption.text, cw - 60 - (tx - cx > 30 ? 62 : 0), 21);
-        lines.slice(0, 3).forEach((ln, i) => text(g, ln, tx, cy + 22 + i * 36, 21));
+        const lines = active.capPages[active.capPage] || [];
+        lines.forEach((ln, i) => text(g, ln, tx, cy + 22 + i * 36, 21));
+        if (!active.capDone && Math.floor(active.t * 2.4) % 2 === 0)
+          text(g, '▼', cx + cw - 38, cy + ch - 30, 17, '#ffe9a8', 'center');
+        if (!active.capDone && active.capPages.length > 1)
+          text(g, `${active.capPage + 1}/${active.capPages.length}`, cx + cw - 20, cy + 10, 12, '#8a94c0', 'right', 'normal');
       }
-      drawWindow(g, x, y, w, h);
-      active.options.forEach((o, i) => {
-        const oy = y + 16 + i * 40;
+      const gm = chooseGeom(active);
+      drawWindow(g, gm.x, gm.y, gm.w, gm.h);
+      if (active.sc > 0) text(g, '▲', gm.x + gm.w - 26, gm.y + 6, 14, '#ffe9a8', 'center', 'normal');
+      if (active.sc + gm.view < active.options.length) text(g, '▼', gm.x + gm.w - 26, gm.y + gm.h - 22, 14, '#ffe9a8', 'center', 'normal');
+      for (let vi = 0; vi < gm.view; vi++) {
+        const i = active.sc + vi, o = active.options[i];
+        const oy = gm.y + 16 + vi * 40;
         if (i === active.index) {
           g.fillStyle = 'rgba(120,150,255,.25)';
-          g.fillRect(x + 10, oy - 4, w - 20, 36);
-          text(g, '▶', x + 24, oy, 19, '#ffe9a8');
+          g.fillRect(gm.x + 10, oy - 4, gm.w - 20, 36);
+          text(g, '▶', gm.x + 24, oy, 19, '#ffe9a8');
         }
-        text(g, o, x + 52, oy, 20, i === active.index ? '#ffe9a8' : '#fff');
-      });
+        text(g, o, gm.x + 52, oy, 20, i === active.index ? '#ffe9a8' : '#fff');
+      }
     }
 
     // 道具获得
@@ -285,18 +348,108 @@ ADV.UI = (function () {
       text(g, '按 Z / 空格 继续', x + w / 2, y + h / 2 + 14, 15, '#aab4d4', 'center', 'normal');
       g.restore();
     }
+  }
 
-    // toast 队列（自 y=86 向下堆叠）
+  /* ---------- toast 渲染（独立于 render，由主循环画在最上层，避免被窗口盖住） ---------- */
+  function renderToasts(g) {
+    if (!ctx2d || !toasts.length) return;
+    const y0 = hudMini ? 86 : 240;       // 完整 HUD 展开时下移，避开左侧面板与小地图
     toasts.forEach((tm, i) => {
-      const a = tm.t < .2 ? tm.t / .2 : (tm.t > 1.9 ? Math.max(0, 1 - (tm.t - 1.9) / .5) : 1);
+      const a = tm.t < .2 ? tm.t / .2 : (tm.t > tm.dur - .5 ? Math.max(0, 1 - (tm.t - (tm.dur - .5)) / .5) : 1);
       g.save(); g.globalAlpha = a;
       g.font = FONT(16);
       const w = g.measureText(tm.text).width + 50;
-      const ty = 86 + i * 46;
+      const ty = y0 + i * 46;
       drawWindow(g, (W - w) / 2, ty, w, 38);
       text(g, tm.text, W / 2, ty + 10, 16, '#ffe9a8', 'center');
       g.restore();
     });
+  }
+
+  /* ---------- 对话回看浮层（L 键；由主循环画在所有层之上） ---------- */
+  function renderLog(g) {
+    if (!logOpen || !ctx2d) return;
+    g.fillStyle = 'rgba(6,8,24,.78)'; g.fillRect(0, 0, W, H);
+    const w = 720, h = 540, x = (W - w) / 2, y = (H - h) / 2;
+    drawWindow(g, x, y, w, h);
+    text(g, '📜 对话回看', x + 28, y + 16, 18, '#ffe9a8');
+    text(g, `共 ${msgHistory.length} 条 · ↑↓ 翻阅 · L / Z 关闭`, x + w - 28, y + 22, 13, '#8a94c0', 'right', 'normal');
+    const lh = 24, maxLines = Math.floor((h - 70) / lh);
+    const rows = [];
+    for (const m of msgHistory) {
+      const lines = wrap(g, m.text, w - 90, 15);
+      lines.forEach((ln, i) => rows.push({ name: i === 0 ? m.name : '', s: ln }));
+    }
+    logScroll = Math.max(0, Math.min(logScroll, Math.max(0, rows.length - maxLines)));
+    const start = Math.max(0, rows.length - maxLines - logScroll);
+    g.save(); g.beginPath(); g.rect(x + 16, y + 44, w - 32, h - 60); g.clip();
+    for (let vi = 0; vi < maxLines; vi++) {
+      const r = rows[start + vi];
+      if (!r) continue;
+      const ry = y + 52 + vi * lh;
+      let tx = x + 28;
+      if (r.name) { text(g, r.name + '：', tx, ry, 14, '#ffe9a8', undefined, 'left'); tx += g.measureText(r.name + '：').width; }
+      text(g, r.s, tx, ry, 15, '#e8ecff', undefined, 'left');
+    }
+    g.restore();
+    if (start > 0) text(g, '▲', x + w / 2, y + 44, 13, '#ffe9a8', 'center', 'normal');
+    if (start + maxLines < rows.length) text(g, '▼', x + w / 2, y + h - 22, 13, '#ffe9a8', 'center', 'normal');
+  }
+
+  /* ---------- 触屏/鼠标点按命中（px,py 为画布逻辑坐标；由 main.js 换算后调用）
+   * 返回 true 表示这次点按被 UI 接管（对话推进/选项/回看/拾取动画） ---------- */
+  function tapAt(px, py) {
+    if (logOpen) { toggleLog(false); return true; }
+    if (itemAnim) {
+      if (itemAnim.t > .5) { const r = itemAnim.res; itemAnim = null; ADV.Audio.sfx('ok'); r(); }
+      return true;
+    }
+    if (active && active.type === 'say') { handleInput({ ok: true }); return true; }
+    if (active && active.type === 'choose') {
+      if (!active.capDone) { handleInput({ ok: true }); return true; }   // 点任意处 = 翻说明页
+      const gm = chooseGeom(active);
+      const inWin = px >= gm.x && px <= gm.x + gm.w && py >= gm.y && py <= gm.y + gm.h;
+      if (!inWin) {                                                      // 窗外 = 取消（若有取消位）
+        if (active.cancelIndex >= 0) { const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i); }
+        return true;
+      }
+      if (py <= gm.y + 28 && active.sc > 0) { active.sc--; ADV.Audio.sfx('cursor'); return true; }                                       // ▲
+      if (py >= gm.y + gm.h - 28 && active.sc + gm.view < active.options.length) { active.sc++; ADV.Audio.sfx('cursor'); return true; }  // ▼
+      const vi = Math.floor((py - (gm.y + 12)) / 40);
+      if (vi >= 0 && vi < gm.view) {
+        const i = active.sc + vi;
+        if (i === active.index) handleInput({ ok: true });
+        else { active.index = i; clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
+      }
+      return true;
+    }
+    return false;   // 无窗口接管：调用方可继续处理场景点击
+  }
+
+  /* ---------- 手册点按命中（与 renderJournal 几何一致；动作由 main.js 应用） ---------- */
+  function journalHit(tab, px, py) {
+    tab = Math.max(0, Math.min(TAB_META.length - 1, tab || 0));
+    const w = 720, h = 540, x = (W - w) / 2, y = (H - h) / 2;
+    if (px < x || px > x + w || py < y || py > y + h) return { t: 'close' };
+    let gi = JOURNAL_GROUPS.findIndex(gr => gr.tabs.indexOf(tab) >= 0);
+    if (gi < 0) gi = 0;
+    for (let i = 0; i < JOURNAL_GROUPS.length; i++) {
+      const gx = x + 28 + i * 86, gy = y + 14;
+      if (px >= gx - 8 && px <= gx + 66 && py >= gy && py <= gy + 24) return { t: 'group', gi: i, tab: JOURNAL_GROUPS[i].tabs[0] };
+    }
+    const gr = JOURNAL_GROUPS[gi];
+    for (let si = 0; si < gr.tabs.length; si++) {
+      const tx = x + 444 + si * 70, ty = y + 18;
+      if (px >= tx - 8 && px <= tx + 58 && py >= ty - 4 && py <= ty + 20) return { t: 'tab', ti: gr.tabs[si] };
+    }
+    if (tab === 0) {                                                     // 好友页滚动箭头
+      const cy2 = y + 70, ch2 = h - 84;
+      if (px >= x + w - 50 && px <= x + w - 18) {
+        if (py >= cy2 + 70 && py <= cy2 + 104) return { t: 'fup' };
+        if (py >= cy2 + ch2 - 62 && py <= cy2 + ch2 - 28) return { t: 'fdown' };
+      }
+    }
+    return null;   // 窗口内非可点区域：不动作
   }
 
   /* ---------- 手册（F 键） ----------
@@ -335,6 +488,16 @@ ADV.UI = (function () {
     if (key === 'up') return JOURNAL_GROUPS[Math.max(0, gi - 1)].tabs[0];
     return tab;
   }
+
+  /* ---------- 好友页滚动（好友多于一屏时 PgUp/PgDn 或点箭头翻页） ---------- */
+  const FRIEND_ROWS = 7;                  // 好友页一屏可显示的行数（双列 → 14 人）
+  let friendScroll = 0;
+  function journalPage(dir) {             // dir: +1 下翻 / -1 上翻
+    friendScroll = Math.max(0, friendScroll + dir * FRIEND_ROWS);
+    return friendScroll;
+  }
+  function resetJournalScroll() { friendScroll = 0; }
+  function journalPageMax(rows) { return Math.max(0, rows - FRIEND_ROWS); }
   function renderJournal(g, friends, BOND, tab, ctx2) {
     tab = Math.max(0, Math.min(TAB_META.length - 1, tab || 0));
     let gi = JOURNAL_GROUPS.findIndex(gr => gr.tabs.indexOf(tab) >= 0);
@@ -358,7 +521,7 @@ ADV.UI = (function () {
       text(g, (ti === tab ? '▶ ' : '') + TAB_META[ti].label, tx, ty, 16, ti === tab ? '#ffe9a8' : GROUP_COLOR[picked.group]);
     });
     text(g, picked.hint, x + w - 26, y + 46, 13, GROUP_COLOR[picked.group], 'right', 'normal');
-    text(g, '← → 切页 · ↑ ↓ 切组 · F 关闭', x + w - 26, y + h - 26, 13, '#8a94c0', 'right', 'normal');
+    text(g, '← → 切页 · ↑ ↓ 切组' + (tab === 0 ? ' · PgUp/PgDn 翻好友' : '') + ' · F 关闭', x + w - 26, y + h - 26, 13, '#8a94c0', 'right', 'normal');
     if (tab === 0) renderFriends(g, friends, BOND, x, cy, w, ch);
     else if (tab === 1 && ADV.Game && ADV.Game.questList) renderQuests(g, x, cy, w, ch);
     else if (tab === 2 && ADV.Game && ADV.Game.upcomingEvents) renderCalendar(g, x, cy + 60, w, ch - 80);
@@ -563,12 +726,18 @@ ADV.UI = (function () {
     text(g, '每天第一次正式聊天更有效；做对选择、同行、送礼会更快增进好感', x + w / 2, y + 54, 14, '#aab4d4', 'center');
     const ids = Object.keys(friends);
     if (!ids.length) { text(g, '还没有认识的朋友，去校园里走走吧～', x + w / 2, y + 130, 18, '#8890b0', 'center'); return; }
+    const rows = Math.ceil(ids.length / 2);
+    friendScroll = Math.max(0, Math.min(friendScroll, journalPageMax(rows)));
     const colW = (w - 60) / 2;
+    g.save(); g.beginPath(); g.rect(x + 16, y + 76, w - 32, h - 88); g.clip();
     ids.forEach((id, i) => {
       const b = BOND && BOND[id];
       if (!b) return;
       const f = friends[id];
-      const cx = x + 30 + (i % 2) * colW, cy = y + 88 + ((i / 2) | 0) * 62;
+      const row = (i / 2) | 0;
+      const cy = y + 88 + row * 62 - friendScroll * 62;
+      if (cy < y + 60 || cy > y + h - 30) return;          // 视口外的行不画
+      const cx = x + 30 + (i % 2) * colW;
       text(g, b.name, cx, cy, 18, '#fff');
       const hearts = Math.round(f.love / 10);
       text(g, '♥'.repeat(Math.max(0, hearts)) + '♡'.repeat(Math.max(0, 10 - hearts)), cx + 96, cy + 1, 15, hearts >= 7 ? '#ff8ab0' : '#d8c078');
@@ -577,6 +746,13 @@ ADV.UI = (function () {
       const stage = ['初识', '相识', '知己', '挚友'][Math.min(3, f.stage)] || '初识';
       text(g, `${stage} · 故事 ${f.stage}/${b.stages.length} · 好感 ${f.love}${bdayTag}`, cx, cy + 26, 12, '#8a94c0');
     });
+    g.restore();
+    if (rows > FRIEND_ROWS) {                              // 滚动指示 + 行号
+      const max = journalPageMax(rows);
+      text(g, '▲', x + w - 34, y + 82, 15, friendScroll > 0 ? '#ffe9a8' : '#5a6288', 'center');
+      text(g, '▼', x + w - 34, y + h - 50, 15, friendScroll < max ? '#ffe9a8' : '#5a6288', 'center');
+      text(g, `${friendScroll + 1}-${Math.min(rows, friendScroll + FRIEND_ROWS)}/${rows} 行 · PgUp/PgDn`, x + w - 48, y + h - 26, 11, '#8a94c0', 'right', 'normal');
+    }
   }
   function renderCollect(g, x, y, w, h) {
     // 顶部：总收集进度条 + 百分比（页签栏下方，分类列表上方）
@@ -872,6 +1048,7 @@ ADV.UI = (function () {
     say, choose, itemGet, toast, update, render, renderHUD, renderJournal, renderCollect, journalMove, setCtx, drawWindow, text,
     toggleMinimap, layout, setSafePad, getSafePad, setTouch, CTL, toggleHud, loadHudPref,
     renderHotbar, toggleHotbar,
+    renderToasts, renderLog, toggleLog, tapAt, journalHit, journalPage, resetJournalScroll, pushHistory,
     get hotbarOn() { return hotbarOn; },
     get hudMini() { return hudMini; },
     get busy() { return !!(active || itemAnim); },
@@ -880,6 +1057,9 @@ ADV.UI = (function () {
     get minimapOn() { return minimapOn; },        // 供冒烟测试断言开关
     get safePad() { return safePad; },            // 供冒烟测试断言安全区
     get touchUI() { return touchUI; },
+    get logOpen() { return logOpen; },            // 对话回看开合（主循环据此冻结移动）
+    get historyCount() { return msgHistory.length; },
+    get friendScroll() { return friendScroll; },
     get msgRect() { return { x: msgX(), y: H - 192, w: msgW(), h: 160 }; }   // 含姓名牌（供布局测试）
   };
 })();

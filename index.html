@@ -17,6 +17,7 @@
       <button class="tb" data-t="map" title="小地图">🗺</button>
       <button class="tb" data-t="hotbar" title="工具栏">🛠</button>
       <button class="tb" data-t="vol" title="音量">🔊</button>
+      <button class="tb" data-t="fs" title="全屏">⛶</button>
     </div>
     <div id="dpad">
       <button class="tk" data-k="up"    style="grid-area:u">▲</button>
@@ -35,21 +36,28 @@
   <div id="rotate-tip">请横屏游玩 📱↔️<br><span>Turn your device sideways for the best view</span></div>
 </div>
 
-<script src="js/audio.js?v=20260912i"></script>
-<script src="js/sprites.js?v=20260912i"></script>
-<script src="js/maps.js?v=20260912i"></script>
-<script src="js/ui.js?v=20260913a"></script>
-<script src="js/engine.js?v=20260912i"></script>
-<script src="js/cal.js?v=20260912i"></script>
-<script src="js/books.js?v=20260912i"></script>
-<script src="js/collect.js?v=20260912i"></script>
-<script src="js/mistake.js?v=20260912i"></script>
-<script src="js/growth.js?v=20260913a"></script>
-<script src="js/skills.js?v=20260913a"></script>
-<script src="js/ai.js?v=20260913a"></script>
-<script src="js/battle.js?v=20260912i"></script>
-<script src="js/minigame.js?v=20260912i"></script>
-<script src="js/game.js?v=20260912i"></script>
-<script src="js/main.js?v=20260912i"></script>
+<!-- 启动画面：脚本加载完成、主循环画出第一帧后由 main.js 移除 -->
+<div id="splash">
+  <div class="sp-title">校园大冒险</div>
+  <div class="sp-sub">CAMPUS ADVENTURE</div>
+  <div class="sp-loading">加载中<span class="sp-dots"><i>.</i><i>.</i><i>.</i></span></div>
+</div>
+
+<script src="js/audio.js?v=20260914a" defer></script>
+<script src="js/sprites.js?v=20260914a" defer></script>
+<script src="js/maps.js?v=20260914a" defer></script>
+<script src="js/ui.js?v=20260914a" defer></script>
+<script src="js/engine.js?v=20260914a" defer></script>
+<script src="js/cal.js?v=20260914a" defer></script>
+<script src="js/books.js?v=20260914a" defer></script>
+<script src="js/collect.js?v=20260914a" defer></script>
+<script src="js/mistake.js?v=20260914a" defer></script>
+<script src="js/growth.js?v=20260914a" defer></script>
+<script src="js/skills.js?v=20260914a" defer></script>
+<script src="js/ai.js?v=20260914a" defer></script>
+<script src="js/battle.js?v=20260914a" defer></script>
+<script src="js/minigame.js?v=20260914a" defer></script>
+<script src="js/game.js?v=20260914a" defer></script>
+<script src="js/main.js?v=20260914a" defer></script>
 </body>
 </html>
