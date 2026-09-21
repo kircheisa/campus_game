@@ -462,6 +462,73 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     }
   }
 
+  /* ==================== C1 学科奥赛线 ====================
+   * 每季一场奥赛（科目按季轮换）：季节第 1-3 天在教室「奥赛公告栏」报名 →
+   * 第 4-7 天备战期（讨教/作业/试炼里答对本科题攒备战度，满 3 点首错不计）→
+   * 第 8 天开考：五题连答按错误数定名次。状态 f.olymp[seasonEn] = { reg, prep, rank } 只增不改。 */
+  const OLYMP = {
+    spring: { en: 'math',    cn: '数学', teacher: '王老师' },
+    summer: { en: 'science', cn: '科学', teacher: '陈老师' },
+    autumn: { en: 'chinese', cn: '语文', teacher: '李老师' },
+    winter: { en: 'english', cn: '英语', teacher: '吴老师' }
+  };
+  const OLYMP_SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  const OLYMP_RANK_CN = { 4: '冠军 🥇', 3: '亚军 🥈', 2: '季军 🥉', 1: '优秀奖' };
+  function olympState() {
+    const f = F(), C = ADV.Cal;
+    const se = C.seasonEn();
+    f.olymp = f.olymp || {};
+    return { f, C, se, cfg: OLYMP[se], sd: ((C.day - 1) % 10) + 1, st: f.olymp[se] || null };
+  }
+  // 备战度：备战期（第 4-7 天）答对本科题 +1（ask() 统一挂接）
+  function olympPrepTick(subject, correct) {
+    if (!correct || !subject) return;
+    const o = olympState();
+    if (!o.st || !o.st.reg || o.st.rank != null) return;
+    if (o.sd < 4 || o.sd > 7) return;
+    if (o.cfg && o.cfg.en === subject) {
+      o.st.prep = (o.st.prep || 0) + 1;
+      if (o.st.prep % 3 === 0) UI().toast(` 🏆 奥赛备战：${o.cfg.cn}专项答对（备战度 ${o.st.prep}）`);
+    }
+  }
+  // 开考：五题连答（备战满 3 点首错不计），错误数定名次
+  async function olympContest() {
+    const o = olympState(), f = o.f, cfg = o.cfg, stt = o.st;
+    stt.rank = 0;                                                // 先占位防重入
+    await say({ name: cfg.teacher, text: `【${o.C.season()}季 · ${cfg.cn}奥赛】现在开考！\n五道题连答——错得越少，名次越高。` });
+    const wrongs = { n: 0 };
+    let forgiven = (stt.prep || 0) >= 3;                         // 备战充分：首错当面划掉
+    const qs = seededShuffle(QUIZ[cfg.en], o.C.day * 17 + cfg.en.length).slice(0, 5);
+    for (let i = 0; i < qs.length; i++) {
+      await ask(cfg.teacher, qs[i], wrongs, null, cfg.en);
+      if (forgiven && wrongs.n > 0) {
+        forgiven = false; wrongs.n = 0;
+        await say({ name: cfg.teacher, text: '备战期的努力我看见了——\n这题当我没看见，稳住！' });
+      }
+    }
+    const rank = wrongs.n === 0 ? 4 : wrongs.n <= 1 ? 3 : wrongs.n <= 2 ? 2 : 1;
+    stt.rank = rank;
+    const RW = { 4: [60, 6], 3: [30, 3], 2: [15, 1], 1: [5, 0] };
+    const [g, cup] = RW[rank];
+    f.gold = (f.gold || 0) + g;
+    if (cup) addCup(cup);
+    ADV.Audio.sfx(rank >= 3 ? 'fanfare' : 'correct');
+    await say({ name: cfg.teacher, text: `成绩公布——${OLYMP_RANK_CN[rank]}！\n（奖金 💰 +${g}${cup ? ` · 学院分 +${cup}` : ''}）` });
+    if (rank === 4) {
+      f.olympGold = (f.olympGold || 0) + 1;
+      f.olympWins = f.olympWins || {};
+      f.olympWins[cfg.en] = true;
+      if (!ADV.Collect.has('photos', 'p_olymp')) {
+        ADV.Collect.gain('photos', 'p_olymp');
+        await ADV.UI.itemGet('回忆照片 · 奥赛领奖台', '#ffd94c');
+      }
+      logEvent(`夺得${o.C.season()}季${cfg.cn}奥赛冠军`);
+    } else {
+      logEvent(`参加了${o.C.season()}季${cfg.cn}奥赛（${OLYMP_RANK_CN[rank]}）`);
+    }
+    save();
+  }
+
   // 单题闯关：问题与选项同屏显示，答错给提示再答，直到答对
   async function ask(teacherName, item, wrongs, npc, subject) {
     const P = () => E().player;
@@ -470,6 +537,7 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     while (true) {
       const i = await choose(q2.opts, { cancelIndex: -1, caption: { name: teacherName, text: item.q } });
       if (ADV.Mistake) ADV.Mistake.answer(subject || '综合', q2, i);   // 学习闭环：统计+错题入本
+      olympPrepTick(subject, i === q2.a);                            // 奥赛备战：备战期答对本科题攒备战度
       if (i === q2.a) {
         ADV.Audio.sfx('correct');
         E().playAction(P(), 'laugh', 1.0);                       // 玩家开心欢呼
@@ -1996,6 +2064,42 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     await say({ text: '巨大的岩壁封住了洞口，\n上面刻着三个菱形凹槽……' });
     await say({ text: `（宝藏图碎片：${F().mapPieces || 0} / 3）\n听说体育老师、音乐老师和洞口的老矿工\n手里各有一张。` });
   };
+  /* —— S1 工具锻造：矿石找老矿工升级农具/钓竿（存档只增：f.toolLv） ——
+   * 宽口锄＝翻土顺带翻好十字邻格；三嘴壶＝浇水一次浇左右三格；硬调竿＝搏鱼网口加宽。 —— */
+  const FORGES = [
+    { key: 'hoe', name: '宽口锄', tool: '锄头', ores: { copperOre: 3 }, gold: 30,
+      desc: '十字耕地——翻这一格，顺带把邻格也翻好' },
+    { key: 'can', name: '三嘴壶', tool: '水壶', ores: { ironOre: 3 }, gold: 50,
+      desc: '一次浇三格——左右田垄一起喝饱' },
+    { key: 'rod', name: '硬调竿', tool: '鱼竿', ores: { goldOre: 2, gemStone: 1 }, gold: 80,
+      desc: '硬调大物竿——搏鱼时网口大一圈' }
+  ];
+  async function forgeMenu(ent) {
+    const f = F();
+    f.toolLv = f.toolLv || {};
+    const rows = FORGES.filter(x => !f.toolLv[x.key]);
+    if (!rows.length) { await say({ name: '老矿工', text: '你手上的家伙什，\n比我当年那套还齐——没啥可锻的喽。' }); return; }
+    const opts = rows.map(x => {
+      const oreTxt = Object.keys(x.ores).map(id => `${ADV.Collect.itemInfo(id).name}×${x.ores[id]}`).join('+');
+      return `${x.tool} → ${x.name}（${oreTxt} + 💰${x.gold}）`;
+    }).concat(['今天不锻']);
+    const i = await choose(opts, { caption: { name: '老矿工', text: '矿石别只顾着卖——\n好钢，得用在刀刃上。\n要锻哪件？' } });
+    if (i < 0 || i >= rows.length) return;
+    const x = rows[i];
+    const lack = Object.keys(x.ores).find(id => ADV.Collect.count(id) < x.ores[id]);
+    if (lack) { await say({ name: '老矿工', text: `${ADV.Collect.itemInfo(lack).name}不够——凑齐再来。\n矿道越深，矿石越好。` }); return; }
+    if ((f.gold || 0) < x.gold) { await say({ name: '老矿工', text: `工钱 💰${x.gold}……先去攒攒。` }); return; }
+    Object.keys(x.ores).forEach(id => ADV.Collect.useItem(id, x.ores[id]));
+    f.gold -= x.gold;
+    f.toolLv[x.key] = 1;
+    ADV.Audio.sfx('item');
+    E().playAction(ent, 'laugh', 1.6);
+    await say({ name: '老矿工', text: `好嘞——「${x.name}」锻好了！\n${x.desc}。` });
+    await ADV.UI.itemGet(x.name, '#d9873a');
+    logEvent(`请老矿工把${x.tool}锻成了${x.name}`);
+    save();
+  }
+
   S.miner = async (ent) => {
     await teachRecipe('miner');                                   // 老矿工的炖菜
     E().emote(ent, '?');
@@ -2054,6 +2158,11 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
         }
       } else {
         await say({ name: '老矿工', text: '洞里石头滑，走慢点。\n见到黄金小猫像，替我瞅一眼。' });
+      }
+      // 锻造台：带着矿石（或已锻过）才开炉，平时不打扰
+      const tl = F().toolLv || {};
+      if (FORGES.some(x => tl[x.key]) || ['copperOre', 'ironOre', 'goldOre', 'gemStone'].some(id => ADV.Collect.count(id) > 0)) {
+        await forgeMenu(ent);
       }
     }
   };
@@ -3633,9 +3742,12 @@ logEvent('在矿道里敲到了矿石');
     logEvent('在校园草丛里翻找了一通');
     save();
   };
-  // 渔获表：[鱼, 权重]；挂蚯蚓后稀有鱼权重翻倍
+  // 渔获表：[鱼, 权重]；挂蚯蚓后稀有鱼权重翻倍；夜钓/雨夜限定鱼按时段并入（S3）
   const FISH_TABLE = [['f1', 26], ['f2', 18], ['f3', 14], ['f4', 12], ['f5', 10], ['f6', 8], ['f8', 8], ['f7', 3]];
+  const FISH_NIGHT = { f9: 4 };                    // 夜钓限定：月光鱼
+  const FISH_RAINNIGHT = { f10: 2 };               // 雨夜双限定：霓虹鲤（传说）
   function rollFish(bait, rain) {
+    const night = ADV.Cal.isNight();
     const ex = ADV.Skills ? ADV.Skills.fishBoost() : 0;   // 知性/渔汛技能：稀有鱼权重再放大
     const boost = (bait ? 1 : 0) + (rain ? 1 : 0) + ex;
     const golden = ADV.Skills && ADV.Skills.goldenFish(); // 金鳞传说：金色鱼权重翻倍
@@ -3644,6 +3756,8 @@ logEvent('在矿道里敲到了矿石');
       if (id === 'f7' && golden) ww *= 2;
       return [id, ww];
     });
+    if (night) for (const id in FISH_NIGHT) table.push([id, FISH_NIGHT[id] * (1 + boost)]);
+    if (night && rain) for (const id in FISH_RAINNIGHT) table.push([id, FISH_RAINNIGHT[id] * (1 + boost)]);
     const total = table.reduce((s2, x) => s2 + x[1], 0);
     let r = Math.random() * total;
     for (const [id, w] of table) { r -= w; if (r <= 0) return id; }
@@ -3666,8 +3780,9 @@ if (slot.n >= rodCap) { await say({ text: '（今天钓得够多了，\n鱼儿�
     }
     slot.n += 1;
     const rainy = /雨/.test(ADV.Cal.weather);   // 雨天鱼儿活跃：搏鱼更轻松、稀有鱼更多
-await say({ text: `浮漂一沉——就是现在！\n（今日第 ${slot.n}/${rodCap} 竿${bait ? ' · 挂着蚯蚓' : ''}${rainy ? ' · 雨天鱼正活跃' : ''}）` });
-const win = await new Promise(res => ADV.Mini.start('fish', res, { easy: bait || rainy || !!(ADV.Skills && ADV.Skills.fishEasy()) }));
+    const night = ADV.Cal.isNight();            // 夜钓：限定鱼种才肯咬钩（S3）
+await say({ text: `浮漂一沉——就是现在！\n（今日第 ${slot.n}/${rodCap} 竿${bait ? ' · 挂着蚯蚓' : ''}${rainy ? ' · 雨天鱼正活跃' : ''}${night ? ' · 夜钓正当时' : ''}）` });
+const win = await new Promise(res => ADV.Mini.start('fish', res, { easy: bait || rainy || !!(ADV.Skills && ADV.Skills.fishEasy()), wide: !!(f.toolLv && f.toolLv.rod) }));
     if (!win) {
       ADV.Audio.sfx('wrong');
       await say({ text: bait ? '噗通——鱼把蚯蚓叼走了，钩却空了！\n（下一次抓准时机）' : '噗通——鱼跑了！\n（时机再准一点，或者挂条蚯蚓？）' });
@@ -3683,6 +3798,12 @@ const sp = ADV.Collect.info('fish', rollFish(bait, rainy));
     if (sp.id === 'f7') {
       f.gold = (f.gold || 0) + 50;
       await say({ text: '水里金光一闪——\n你钓上了一条金色的鱼！\n（传说会有好运……卖了 💰 +50）' });
+    } else if (sp.id === 'f9') {
+      await say({ text: `${isNew ? '🆕 新品种！' : ''}月光鱼——银鳞在夜里泛着微光。\n（白天它从不咬钩，只有夜晚才现身）` });
+    } else if (sp.id === 'f10') {
+      f.gold = (f.gold || 0) + 80;
+      logEvent('在雨夜钓到了传说中的霓虹鲤');
+      await say({ text: `${isNew ? '🆕 新品种！' : ''}整条河安静了一瞬——\n雨夜传说·霓虹鲤上钩了！\n（围观的同学轰动了，奖金 💰 +80）` });
     } else {
       await say({ text: `${isNew ? '🆕 新品种！' : ''}${sp.name}，入手！\n（鲜鱼可以卖钱、喂猫，或交给食堂阿姨做菜）` });
     }
@@ -3697,7 +3818,7 @@ const sp = ADV.Collect.info('fish', rollFish(bait, rainy));
   /* —— 周末补全：周日钓鱼大赛（河畔报到处，day%7===0 且白天开赛）。
    *    三竿计分：钓得的鱼按稀有度折「磅数」——合计 ≥60 冠军 / ≥40 亚军 / 其余重在参与 —— */
   function contestRank(v) { return v >= 60 ? 2 : v >= 40 ? 1 : 0; }
-  const FISH_SCORE = { f1: 10, f2: 14, f3: 18, f4: 22, f5: 26, f6: 30, f8: 30, f7: 50 };
+  const FISH_SCORE = { f1: 10, f2: 14, f3: 18, f4: 22, f5: 26, f6: 30, f8: 30, f7: 50, f9: 34, f10: 70 };
   S.fishContest = async () => {
     const f = F(), C = ADV.Cal;
     if (C.day % 7 !== 0) { await say({ text: '（河畔的石阶空荡荡的。\n【周日钓鱼大赛】只在周日白天开赛）' }); return; }
@@ -5715,6 +5836,10 @@ E().playAction(E().player, 'laugh', 1.6);
       ['集市常客', (f.fleaVisits || 0) >= 3, '逛满 3 个周日跳蚤集市'],
       ['捕虫高手', (f.catchTotal || 0) >= 10, '累计收服 10 只小家伙（球/网/笼都算）'],
       ['金色传说', C.shinyCount() >= 3, '图鉴里集齐 3 只金色异色个体（高档工具更容易遇见）'],
+      ['夜钓客', C.has('fish', 'f9'), '钓到只在夜晚咬钩的月光鱼'],
+      ['雨夜传说', C.has('fish', 'f10'), '雨夜里钓到传说中的霓虹鲤'],
+      ['奥赛金牌', (f.olympGold || 0) >= 1, '拿下一场学科奥赛冠军'],
+      ['全能学霸', Object.keys(f.olympWins || {}).length >= 3, '三个学科的奥赛都拿过冠军'],
       ['珍稀架收藏家', f.legendTrio, '集齐传说三只（月光凤蝶 · 锦鲤苗 · 山神小狐狸）'],
       ['早睡早起', f.graduated && ADV.Cal.sleepDebt === 0, '零睡眠债迎来毕业'],
       ['毕业快乐', f.graduated, '迎来毕业结局'],
@@ -5946,6 +6071,17 @@ if (ADV.Growth) ADV.Growth.addDim('body', 2, '农场丰收');
 p.st = 1;
 ADV.Audio.sfx('dig');
 if (ADV.Skills) ADV.Skills.add('farm', 3, '翻土');
+      if (f.toolLv && f.toolLv.hoe) {                          // 宽口锄：十字耕地，顺带翻好邻格
+        const col = o.pid % 4;
+        let extra = 0;
+        [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1, o.pid >= 4 ? o.pid - 4 : -1, o.pid < 8 ? o.pid + 4 : -1]
+          .forEach(id => {
+            if (id < 0) return;
+            const q = f.farm[id] || (f.farm[id] = { st: 0, wd: 0, crop: '' });
+            if (q.st === 0) { q.st = 1; extra++; }
+          });
+        if (extra) { C.costEnergy(extra); UI().toast(` ⛏ 宽口锄十字耕地：顺带翻好了 ${extra} 格 `); }
+      }
 await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那儿买当季种子吧）' });
       syncPlot(o); save();
       return;
@@ -5993,6 +6129,16 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     C.costEnergy(1);
     p.wd = C.day;
     ADV.Audio.sfx('water');
+    if (f.toolLv && f.toolLv.can) {                              // 三嘴壶：左右田垄一起浇
+      const col = o.pid % 4;
+      let wet = 0;
+      [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1].forEach(id => {
+        if (id < 0) return;
+        const q = f.farm[id];
+        if (q && q.crop && q.st >= 1 && q.st < 3 && q.wd !== C.day) { q.wd = C.day; wet++; }
+      });
+      if (wet) UI().toast(` 🪣 三嘴壶：左右 ${wet} 格也一起喝饱了 `);
+    }
     let boosted = false;
     if ((F().badges.science || F().club === '科学社') && Math.random() < .5) {
       p.st += 1;                                        // 科学加成：多喝一口，快长一天
@@ -7578,6 +7724,49 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     const i = await choose(opts, { caption: { name: '课桌 · 课本', text: '课本摊在桌上——\n（上课得知识点，读课本让对应考试更简单）' } });
     if (i === 0) { await takeClass(); return; }
     if (i > 0 && i <= list.length) await readBook(list[i - 1].id);
+  };
+
+  // —— C1 学科奥赛：教室公告栏（报名 / 备战进度 / 开赛 / 荣誉回眸） ——
+  S.olympBoard = async () => {
+    const o = olympState();
+    const cfg = o.cfg, stt = o.st;
+    const nextSe = OLYMP_SEASONS[(OLYMP_SEASONS.indexOf(o.se) + 1) % 4];
+    if (stt && stt.rank) {                                       // 本季已完赛：荣誉栏
+      await say({ name: '🏆 奥赛公告栏', text: `【${o.C.season()}季 · ${cfg.cn}奥赛】\n荣誉栏上钉着你的名字：${OLYMP_RANK_CN[stt.rank]}！\n（下一季：${OLYMP[nextSe].cn}奥赛）` });
+      return;
+    }
+    if (!stt || !stt.reg) {
+      if (o.sd <= 3) {                                           // 报名窗口（每季头 3 天）
+        const go = await choose([`报名${cfg.cn}奥赛！`, '先不报'], { caption: { name: '🏆 奥赛公告栏', text: `【每季一场 · 学科奥赛】\n本季：${cfg.cn}（主考 ${cfg.teacher}）\n第 8 天在这里开考——报名免费！` } });
+        if (go !== 0) return;
+        o.f.olymp[o.se] = { reg: true, prep: 0 };
+        ADV.Audio.sfx('item');
+        await say({ name: '🏆 奥赛公告栏', text: `报名成功！\n备战期（第 4-7 天）多答${cfg.cn}题攒备战度——\n攒满 3 点，赛场上首错不计！` });
+        logEvent(`报名了${o.C.season()}季${cfg.cn}奥赛`);
+        save();
+        return;
+      }
+      await say({ name: '🏆 奥赛公告栏', text: `本季${cfg.cn}奥赛报名已截止。\n下一季：【${OLYMP[nextSe].cn}奥赛】——\n季初头 3 天来报名！` });
+      return;
+    }
+    if (o.sd <= 3) {                                             // 已报名，还没开备战
+      await say({ name: '🏆 奥赛公告栏', text: `已报名${cfg.cn}奥赛 ✓\n备战期第 4 天开始——\n到时候找${cfg.teacher}老师多练题吧。` });
+      return;
+    }
+    if (o.sd <= 7) {                                             // 备战期：看进度 + 指路
+      const have = stt.prep || 0, need = Math.max(0, 3 - have);
+      const go = await choose(['知道了，这就去练', '先这样'], { caption: { name: '🏆 奥赛公告栏', text: `【备战期 · ${cfg.cn}】\n备战度 ${have} / 3${need ? `（再答对 ${need} 道${cfg.cn}题即满）` : '（已满：赛场上首错不计！）'}` } });
+      if (go !== 0) return;
+      await say({ name: '🏆 奥赛公告栏', text: `找${cfg.teacher}老师讨教、做今日作业、\n闯一场正式试炼——答对${cfg.cn}题都算备战！` });
+      return;
+    }
+    if (o.sd === 8) {                                            // 比赛日
+      const go = await choose(['开始比赛！', '今天先算了'], { caption: { name: '🏆 奥赛公告栏', text: `【比赛日 · ${cfg.cn}奥赛】\n五题连答，${cfg.teacher}老师主考。\n备战度 ${stt.prep || 0}${(stt.prep || 0) >= 3 ? '（首错不计）' : ''}` } });
+      if (go !== 0) return;
+      await olympContest();
+      return;
+    }
+    await say({ name: '🏆 奥赛公告栏', text: `第 8 天的比赛日你没来……\n${cfg.teacher}老师叹了口气：\n「下次可别错过了。」` });
   };
 
   /* —— 图书借阅：在秦墨处借书，借期 3 天；借期内带着对应课本上课，知识点收益 +50%；
@@ -9486,7 +9675,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
-    themeWeek, upcomingEvents, achievements, growthReport, ngStart, CLUBS, RECIPES, QUEST_POOL, RUMORS,
+    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
     HOTBAR_SLOTS, hotbarCur, hotbarSelect, hotbarToolMatch,   // 工具热键栏（星露谷式快捷执行）
     systemTour, sysToured, totalKp, contestRank,          // 体验收束导览 / 结算单 / 钓鱼大赛评分（供测试）

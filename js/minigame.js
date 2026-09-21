@@ -63,13 +63,14 @@ ADV.Mini = (function () {
     } else if (kind === 'fish') {
       // 垂钓搏鱼：等咬 → 提竿 → 按住收线把鱼控制在网里，充满进度条
       const easy = !!(opt && opt.easy);
+      const wide = !!(opt && opt.wide);                        // 硬调竿：网口更宽（S1 工具升级）
       const big = Math.random() < (easy ? .18 : .35);          // 大鱼：冲得更凶
       act = {
         kind, onDone, phase: 'wait', easy, big,
         waitT: easy ? 1 + Math.random() : 1.3 + Math.random() * 1.4,
         biteT: easy ? .95 : .7,
         fishY: .5, fishV: 0, dartT: 0, zoneC: 160,
-        ZH: easy ? 112 : 92, fishSpd: (easy ? 150 : 185) * (big ? 1.2 : 1),
+        ZH: easy ? 112 : (wide ? 110 : 92), fishSpd: (easy ? 150 : 185) * (big ? 1.2 : 1),
         zoneSpd: easy ? 320 : 330, gain: easy ? .3 : .25,
         prog: .35, t: 25, ripple: 0, outT: 0,
         msg: '耐心等鱼上钩……浮漂下沉时，马上按 Z / ● 提竿！'

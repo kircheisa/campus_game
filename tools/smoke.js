@@ -4913,6 +4913,21 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       '成就表：金色传说（异色收集闭环）');
   }
 
+  console.log('\n[5.70] 玩法批次二：奥赛线 / 夜钓限定 / 工具锻造');
+  {
+    ok(A.Game.OLYMP && ['spring', 'summer', 'autumn', 'winter'].every(s => A.Game.OLYMP[s] && A.Game.OLYMP[s].en && A.Game.OLYMP[s].teacher),
+      '奥赛线：四季科目/主考配置齐备（公告栏报名-备战-开赛）');
+    ok(A.Maps.get('classroom').objects.some(o => o.s === 'olympBoard'),
+      '教室：奥赛公告栏交互点已挂');
+    ok(A.Game.FORGES && A.Game.FORGES.length === 3 && A.Game.FORGES.every(x => x.ores && x.gold > 0),
+      '工具锻造：宽口锄/三嘴壶/硬调竿三件套配置');
+    ok(A.Collect.DB.fish.some(x => x.id === 'f9' && /夜/.test(x.desc)) && A.Collect.DB.fish.some(x => x.id === 'f10' && /雨夜/.test(x.desc)),
+      '渔获图鉴：月光鱼（夜钓限定）+ 霓虹鲤（雨夜传说）入册');
+    ['夜钓客', '雨夜传说', '奥赛金牌', '全能学霸'].forEach(n => {
+      ok(A.Game.achievements().some(a => a.name === n), `成就表：${n}`);
+    });
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
