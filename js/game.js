@@ -150,6 +150,39 @@ ADV.Game = (function () {
     ]
   };
 
+  /* 奥赛专项题库（C1 深化）：每科一组比日常题更有区分度的题——
+   * 奥赛五题 = 主池抽 3 + 专项抽 2（都按当日种子轮换），专项题只进赛场不进课堂。 */
+  const OLYMP_QUIZ = {
+    math: [
+      { q: '【奥赛专项】按规律填数：1、2、4、8、16、？', opts: ['24', '32', '20'], a: 1 },
+      { q: '【奥赛专项】鸡兔同笼：3 个头、8 只脚，兔子有几只？', opts: ['1 只', '2 只', '3 只'], a: 0 },
+      { q: '【奥赛专项】小明把糖分给 3 位同学每人 4 颗，还剩 2 颗——原来有几颗？', opts: ['12 颗', '14 颗', '10 颗'], a: 1 },
+      { q: '【奥赛专项】时钟 3 点整，时针与分针的夹角是多少度？', opts: ['90°', '80°', '100°'], a: 0 },
+      { q: '【奥赛专项】一根木头锯成 4 段要锯几次？', opts: ['3 次', '4 次', '5 次'], a: 0 }
+    ],
+    chinese: [
+      { q: '【奥赛专项】"欲把西湖比西子"的下一句是？', opts: ['淡妆浓抹总相宜', '山色空蒙雨亦奇', '水光潋滟晴方好'], a: 0 },
+      { q: '【奥赛专项】"但愿人长久"的下一句是？', opts: ['千里共婵娟', '天涯共此时', '月有阴晴圆缺'], a: 0 },
+      { q: '【奥赛专项】"春风又绿江南岸"中"绿"字好在哪里？', opts: ['把春风写活了，像有动作', '只是说了颜色', '读起来顺口而已'], a: 0 },
+      { q: '【奥赛专项】对对子："绿水"对哪一项最工整？', opts: ['青山', '蓝天', '操场'], a: 0 },
+      { q: '【奥赛专项】"三顾茅庐"请出的贤才是？', opts: ['诸葛亮', '周瑜', '庞统'], a: 0 }
+    ],
+    science: [
+      { q: '【奥赛专项】一天中影子最短的时刻大约是？', opts: ['正午', '清晨', '傍晚'], a: 0 },
+      { q: '【奥赛专项】光在镜面上反射时，入射角与反射角的关系是？', opts: ['相等', '入射角更大', '反射角更大'], a: 0 },
+      { q: '【奥赛专项】发生月食时，地球处在什么位置？', opts: ['太阳和月亮之间', '月亮和太阳的同一侧', '月亮的正后方'], a: 0 },
+      { q: '【奥赛专项】铁生锈属于哪一种变化？', opts: ['化学变化', '物理变化', '没有变化'], a: 0 },
+      { q: '【奥赛专项】离地面越高，大气压强会怎样？', opts: ['越小', '越大', '不变'], a: 0 }
+    ],
+    english: [
+      { q: '【奥赛专项】"library" 的意思是？', opts: ['图书馆', '实验室', '医院'], a: 0 },
+      { q: '【奥赛专项】He ___ to school by bus.（第三人称单数）', opts: ['goes', 'go', 'going'], a: 0 },
+      { q: '【奥赛专项】There ___ a book on the desk.', opts: ['is', 'are', 'be'], a: 0 },
+      { q: '【奥赛专项】"How many" 后面应该接？', opts: ['可数名词复数', '不可数名词', '动词原形'], a: 0 },
+      { q: '【奥赛专项】Which one is a subject（科目）?', opts: ['science', 'banana', 'Sunday'], a: 0 }
+    ]
+  };
+
   /* ==================== 剧本辅助 ==================== */
   const UI = () => ADV.UI;
   const say = o => UI().say(o);
@@ -498,9 +531,14 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     await say({ name: cfg.teacher, text: `【${o.C.season()}季 · ${cfg.cn}奥赛】现在开考！\n五道题连答——错得越少，名次越高。` });
     const wrongs = { n: 0 };
     let forgiven = (stt.prep || 0) >= 3;                         // 备战充分：首错当面划掉
-    const qs = seededShuffle(QUIZ[cfg.en], o.C.day * 17 + cfg.en.length).slice(0, 5);
-    for (let i = 0; i < qs.length; i++) {
-      await ask(cfg.teacher, qs[i], wrongs, null, cfg.en);
+    // 五题 = 主池抽 3 + 奥赛专项抽 2（各按当日种子轮换；专项库缺科时优雅降级为主池 5 题）
+    const OQ = OLYMP_QUIZ[cfg.en] || [];
+    const qs = seededShuffle(QUIZ[cfg.en], o.C.day * 17 + cfg.en.length).slice(0, 3)
+      .concat(OQ.length ? seededShuffle(OQ, o.C.day * 23 + cfg.en.charCodeAt(0)).slice(0, 2) : []);
+    const qs2 = seededShuffle(qs, o.C.day * 31 + cfg.en.length * 7);     // 专项位次也按日轮换
+    await say({ name: cfg.teacher, text: `【${o.C.season()}季 · ${cfg.cn}奥赛】现在开考！\n五道题连答${OQ.length ? '（含两道奥赛专项）' : ''}——错得越少，名次越高。` });
+    for (let i = 0; i < qs2.length; i++) {
+      await ask(cfg.teacher, qs2[i], wrongs, null, cfg.en);
       if (forgiven && wrongs.n > 0) {
         forgiven = false; wrongs.n = 0;
         await say({ name: cfg.teacher, text: '备战期的努力我看见了——\n这题当我没看见，稳住！' });
@@ -773,12 +811,38 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
   };
 
   // —— 三位老师的试炼 ——
+  /* —— C2 办公时间专属台词：四位老师各三段（作业开场 / 全对夸奖 / 首错宽慰），
+   * 午休（period 2）在 trial() 里自动生效；提为数据表便于校对与测试。 —— */
+  const OFFICE_LINES = {
+    math: {
+      hwOffice: '午休跑来问题目？好学的孩子。\n数学办公室随时开放——今日三题，全对双倍奖励！',
+      hwGreatOffice: '全对！中午来攻关的孩子最有数学家潜质。\n办公时间作业：金币 +16 · 学院分 +2，双倍收好！',
+      officeIntro: '午休是我的办公时间——答错了没关系，\n我当面给你画张图，把它讲透。'
+    },
+    chinese: {
+      hwOffice: '午休的图书馆正安静，正适合答疑。\n今日三道语文题，全对奖励翻倍。',
+      hwGreatOffice: '全对——腹有诗书气自华。\n办公时间作业：金币 +16 · 学院分 +2，请收好。',
+      officeIntro: '午休正好是我的办公时间。\n答错了也不打紧——我把那一句，慢慢讲给你听。'
+    },
+    science: {
+      hwOffice: '哈哈，午休跑实验室来答疑！有精神！\n今天也留了三道科学题，全对双倍奖励！',
+      hwGreatOffice: '漂亮！这就是科学精神！\n办公时间作业：金币 +16 · 学院分 +2，双倍到手！',
+      officeIntro: '现在是办公时间——大胆试，大胆错！\n实验失败不可怕，我陪你重新验证一遍。'
+    },
+    english: {
+      hwOffice: 'Office hour! 午休来练英语，very good!\n今日作业三道题，全对奖励翻倍哦！',
+      hwGreatOffice: 'Perfect score! 全对！\n办公时间作业：金币 +16 · 学院分 +2，双倍拿好！',
+      officeIntro: "It's my office hour——\n错了也没关系，我再讲一遍给你听。 See you!"
+    }
+  };
+
   S.teacherMath = ent => trial({
     teacher: '王老师', npcId: 'teacher_math',
     intro: ['同学你好，我是数学王老师。\n想要数学徽章？先通过我的试炼！',
             '三道题，答对才能获得徽章。\n深呼吸，我们开始吧！'],
     subject: 'math', badge: '数学', gemColor: '#5a8aff',
-    again: '数学之美在于思考。徽章已是你的了，去帮助别的同学吧！'
+    again: '数学之美在于思考。徽章已是你的了，去帮助别的同学吧！',
+    ...OFFICE_LINES.math
   });
 
   S.teacherCn = ent => trial({
@@ -786,7 +850,8 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     intro: ['嘘——图书馆要安静。\n我是李老师，守着语文徽章的人。',
             '答对三道语文题，徽章便归于你。\n请开始你的背诵与赏析。'],
     subject: 'chinese', badge: '语文', gemColor: '#ff6a7a',
-    again: '腹有诗书气自华。徽章已是你的了，多来读书哦。'
+    again: '腹有诗书气自华。徽章已是你的了，多来读书哦。',
+    ...OFFICE_LINES.chinese
   });
 
   S.teacherSci = ent => trial({
@@ -794,7 +859,8 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     intro: ['欢迎来到实验室！我是陈老师。\n科学徽章？哈哈，有胆量来试炼！',
             '观察、思考、验证——\n三道科学题，开始！'],
     subject: 'science', badge: '科学', gemColor: '#4ae86c',
-    again: '保持好奇心！科学徽章已是你的了。'
+    again: '保持好奇心！科学徽章已是你的了。',
+    ...OFFICE_LINES.science
   });
 
   S.teacherEn = ent => trial({
@@ -806,7 +872,8 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     hw: 'Practice makes perfect!\n今日作业三道题，全对有惊喜哦！',
     hwDone: 'Well done! 今天的作业完成啦，See you tomorrow!',
     hwGreat: 'Perfect! 全对！这份奖励送给你，\nKeep it up!',
-    after: '你的冒险故事，用英语说就是——Amazing！\n继续向前吧，孩子！'
+    after: '你的冒险故事，用英语说就是——Amazing！\n继续向前吧，孩子！',
+    ...OFFICE_LINES.english
   });
 
   /* —— 自然魔法课 · 蒲老师：动物学/昆虫学教学 + 每日问答 + 捕捉作业 —— */
@@ -5837,7 +5904,7 @@ E().playAction(E().player, 'laugh', 1.6);
       成长: '第一天的你，连校门朝哪开都不知道。\n现在的你，能给新同学画一张藏宝图了。\n这就叫长大。'
     };
     await say({ text: tails[f.endingType] });
-    const rep = growthReport();                                  // 期末成长报告：四年数据一页看完
+    const rep = growthReport(true);                              // 期末成长报告：四年数据一页看完（force 取新鲜值）
     await say({ name: '📋 期末成长报告', text: `—— 这一学期，你留下了这些脚印 ——\n${rep.rows.join('\n')}` });
     await say({ name: '✉️ 老师评语', text: rep.comment });
     logEvent('领取了学期成长报告');
@@ -5850,7 +5917,11 @@ E().playAction(E().player, 'laugh', 1.6);
   }
 
   // —— 期末成长报告：聚合一学期的学习/收集/社交/财务数据 + 五维之最 + 老师评语 ——
-  function growthReport() {
+  // 手册成长页每帧调用——500ms TTL 备忘（毕业结算用 force 取新鲜值）。
+  let repCache = null, repAt = 0;
+  function growthReport(force) {
+    const now = Date.now();
+    if (!force && repCache && now - repAt < 500) return repCache;
     const f = F(), C = ADV.Cal, Cl = ADV.Collect;
     let qn = 0, qok = 0;                                         // 全学期答题聚合（quizLog 按日累计）
     Object.values(f.quizLog || {}).forEach(r => { qn += r.n; qok += r.ok; });
@@ -5876,6 +5947,7 @@ E().playAction(E().player, 'laugh', 1.6);
       art: { by: '美术老师', text: '你看世界的角度很特别。把这个角度留住，别让它被磨平。' }
     };
     const cm = comments[top] || comments.knowledge;
+    if (!force) { repCache = { rows, comment: `「${cm.text}」——${cm.by}`, top }; repAt = now; }
     return { rows, comment: `「${cm.text}」——${cm.by}`, top };
   }
 
@@ -7726,12 +7798,25 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
   }
 
   // 翻开一本书：交给阅读器（↑↓选句 / ←→翻页 / Z 摘抄 / X 合上）→ 读后思考题
+  // C3 经典借阅 buff：借阅期内的经典古籍（cat=classic），每天首读一遍「读有所悟」——学院分 +1。
+  // 课本的 buff 是上课 +50% 知识点（BOOK_SUBJECT），经典的 buff 在阅读本身——两条口径互补。
+  function classicReadTick(bookId) {
+    const f = F(), C = ADV.Cal, bk = ADV.Books && ADV.Books.DB[bookId], br = f.borrow;
+    if (!bk || bk.cat !== 'classic' || !br || br.id !== bookId) return false;
+    if (!C || C.day > br.due || f.classicReadDay === C.day) return false;
+    f.classicReadDay = C.day;
+    addCup(1);
+    UI().toast(' 📜 读有所悟 · 学院分 +1（借阅经典当日首读） ');
+    return true;
+  }
+
   async function readBook(bookId) {
     const f = F();
     const bk = ADV.Books && ADV.Books.DB[bookId];
     if (!bk) { await say({ text: '（这本书暂时读不出什么名堂）' }); return; }
     await say({ text: `📖 ${bk.name}\n${bk.intro}` });
     await new Promise(res => ADV.Books.start(bookId, res));       // 阅读器接管主循环
+    classicReadTick(bookId);                                      // 经典借阅 buff：当日首读结算
     const marks = ((f.read || {})[bookId] || {}).marks || [];
     if (marks.length >= 1) grantTalent('read');                   // 阅读达人：摘抄至少一句
     if (!ADV.Collect.has('books', bookId)) ADV.Collect.gain('books', bookId);
@@ -7875,7 +7960,8 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     await say({ name: '🏆 奥赛公告栏', text: `第 8 天的比赛日你没来……\n${cfg.teacher}老师叹了口气：\n「下次可别错过了。」` });
   };
 
-  /* —— 图书借阅：在秦墨处借书，借期 3 天；借期内带着对应课本上课，知识点收益 +50%；
+  /* —— 图书借阅：在秦墨处借书，借期 3 天。课本借期内带去上课，知识点收益 +50%（BOOK_SUBJECT）；
+        经典古籍借期内每天首读一遍「读有所悟」学院分 +1（classicReadTick）；
         按时归还另有小奖励，超期会被罚金收书。 —— */
   const BOOK_SUBJECT = { tb_chinese: 'chinese', tb_math: 'math', tb_science: 'science', tb_english: 'english' };
   const SUB_CN = { chinese: '语文', math: '数学', science: '科学', english: '英语' };
@@ -7896,9 +7982,12 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     if (f.borrow) {
       const bk = ADV.Books.DB[f.borrow.id];
       const sub = BOOK_SUBJECT[f.borrow.id];
+      const perk = sub
+        ? `\n（带着它上${SUB_CN[sub]}课，知识点 +50%）`
+        : (bk.cat === 'classic' ? '\n（经典古籍：借期内每天首读一遍，学院分 +1）' : '');
       const left = f.borrow.due - C.day;
       const i = await choose(['归还这本书', '继续带着'], {
-        caption: { name: '秦墨', text: `借阅中：《${bk.name}》· 还期剩 ${left} 天${sub ? `\n（带着它上${SUB_CN[sub]}课，知识点 +50%）` : ''}` }
+        caption: { name: '秦墨', text: `借阅中：《${bk.name}》· 还期剩 ${left} 天${perk}` }
       });
       if (i !== 0) { await say({ name: '秦墨', text: left <= 1 ? '明天就到期了，别忘了。' : '好书不厌百回读，拿稳了。' }); return; }
       f.borrow = null;
@@ -9781,7 +9870,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
-    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive, olympPrepTick,
+    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, OLYMP_QUIZ, OFFICE_LINES, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive, olympPrepTick, classicReadTick,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
     HOTBAR_SLOTS, hotbarCur, hotbarSelect, hotbarToolMatch,   // 工具热键栏（星露谷式快捷执行）
     systemTour, sysToured, totalKp, contestRank,          // 体验收束导览 / 结算单 / 钓鱼大赛评分（供测试）

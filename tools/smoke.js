@@ -86,7 +86,7 @@ let choosePick = null;          // 测试可临时指定选项索引（opts => i
     if (choosePick) { try { target = choosePick(opts, opt) || 0; } catch (e) { target = 0; } }
     const cap = choosePick ? null : (opt && opt.caption && opt.caption.text);
     if (cap) {
-      const pools = [...Object.values(A.Game.QUIZ), A.Game.RIDDLES, A.Game.MECHANISMS || [], ...Object.values(A.AI.BANK), A.Game.SPELLS || []];
+      const pools = [...Object.values(A.Game.QUIZ), ...Object.values(A.Game.OLYMP_QUIZ || {}), A.Game.RIDDLES, A.Game.MECHANISMS || [], ...Object.values(A.AI.BANK), A.Game.SPELLS || []];
       outer: for (const set of pools) {
         for (const q of set) if (cap.startsWith(q.q) || q.q.startsWith(cap.replace(/\n[\s\S]*$/, ''))) {
           // 选项可能被洗牌：优先按正确项文本定位，失配再回退原下标
@@ -111,7 +111,7 @@ let choosePick = null;          // 测试可临时指定选项索引（opts => i
 function pickCorrectByCaption(opts, opt) {
   const cap = opt && opt.caption && opt.caption.text;
   if (cap) {
-    const pools = [...Object.values(A.Game.QUIZ), A.Game.RIDDLES, A.Game.MECHANISMS || [], ...Object.values(A.AI.BANK)];
+    const pools = [...Object.values(A.Game.QUIZ), ...Object.values(A.Game.OLYMP_QUIZ || {}), A.Game.RIDDLES, A.Game.MECHANISMS || [], ...Object.values(A.AI.BANK)];
     for (const set of pools) {
       for (const q of set) {
         if (cap.startsWith(q.q) || q.q.startsWith(cap.replace(/\n[\s\S]*$/, ''))) {
@@ -5071,6 +5071,91 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       F72.buff = JSON.parse(keepP472.buff);
       A.Cal.load(calP472);
     }
+  }
+
+  console.log('\n[5.73] 玩法批次四：奥赛专项题库 + 办公时间台词 + 经典借阅 buff + 聚合缓存');
+  {
+    const F73 = A.Game.flags;
+    // —— C1 奥赛专项题库：数据面 ——
+    const OQ73 = A.Game.OLYMP_QUIZ;
+    const subs73 = Object.keys(A.Game.OLYMP).map(s => A.Game.OLYMP[s].en);
+    ok(OQ73 && subs73.every(s => Array.isArray(OQ73[s]) && OQ73[s].length >= 4
+      && OQ73[s].every(q => q.q && q.opts.length === 3 && q.a >= 0 && q.a < 3)),
+      '奥赛专项题库：四季科目各 ≥4 题（三选项、答案下标合法）');
+    ok(String(A.Game.S.olympBoard).includes('olympContest') && String(A.Game.OLYMP_QUIZ.math[0].q).startsWith('【奥赛专项】'),
+      '奥赛专项题库：题面带【奥赛专项】前缀（与课堂题同源不同池）');
+    // —— C1 功能面：比赛日整场驱动（主池3 + 专项2 混抽 → 全对夺冠） ——
+    const cal73 = A.Cal.dump();
+    const keep73 = {
+      olymp: JSON.stringify(F73.olymp || null), gold: F73.gold, cup: F73.cup,
+      olympGold: F73.olympGold, olympWins: JSON.stringify(F73.olympWins || null),
+      borrow: JSON.stringify(F73.borrow || null), classicReadDay: F73.classicReadDay,
+      col: JSON.stringify(F73.col || null),
+    };
+    const hadCP73 = choosePick;
+    try {
+      choosePick = null;                                         // 交还答题拦截器：按题库推断正确项
+      A.Cal.load({ day: 8, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });   // 春季 sd8 = 比赛日
+      F73.olymp = { spring: { reg: true, prep: 3, rank: null } };
+      const gold73 = F73.gold;
+      await pump(A.Game.S.olympBoard(), 8000);                   // 比赛日整场（5 题 + 演讲页）
+      ok(F73.olymp.spring.rank === 4 && F73.gold === gold73 + 60,
+        '奥赛开考：五题连答（含专项）全对夺冠——rank 4 · 奖金 +60');
+      ok(F73.olympWins && F73.olympWins.math === true, '奥赛冠军：f.olympWins 记当科 en（全能学霸成就口径）');
+    } finally {
+      choosePick = hadCP73;
+      F73.olymp = JSON.parse(keep73.olymp);
+      F73.gold = keep73.gold; F73.cup = keep73.cup;
+      F73.olympGold = keep73.olympGold; F73.olympWins = JSON.parse(keep73.olympWins);
+      F73.borrow = JSON.parse(keep73.borrow); F73.classicReadDay = keep73.classicReadDay;
+      F73.col = JSON.parse(keep73.col);
+      A.Cal.load(cal73);
+    }
+    // —— C2 办公时间专属台词：午休（period 2）驱动作业流程，开口第一句即人设台词 ——
+    const cal73c = A.Cal.dump();
+    const keep73c = {
+      hw: JSON.stringify(F73.homeworkDay || null), badges: JSON.stringify(F73.badges || null),
+      final: F73.finalPassed,
+    };
+    const realSay73 = A.UI.say, hadCP73b = choosePick;
+    const said73 = [];
+    try {
+      A.UI.say = o => { said73.push(o.text || ''); return Promise.resolve(); };
+      choosePick = () => 1;                                      // 选「今天先告辞……」尽早退出
+      A.Cal.load({ day: 8, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      F73.homeworkDay = {}; F73.badges = { math: true }; F73.finalPassed = false;
+      await pump(A.Game.S.teacherMath({}), 4000);
+      ok(said73.indexOf(A.Game.OFFICE_LINES.math.hwOffice) >= 0,
+        '办公时间台词：午休进办公室，王老师开口即 hwOffice 专属台词（数据表接线生效）');
+    } finally {
+      A.UI.say = realSay73; choosePick = hadCP73b;
+      F73.homeworkDay = JSON.parse(keep73c.hw); F73.badges = JSON.parse(keep73c.badges);
+      F73.finalPassed = keep73c.final;
+      A.Cal.load(cal73c);
+    }
+    // —— C3 经典借阅 buff：classicReadTick 功能驱动 ——
+    const cup73 = F73.cup, cal73b = A.Cal.dump();
+    try {
+      A.Cal.load({ day: 8, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      F73.borrow = { id: 'lunyu', due: 11 };                     // 借阅期内（day 8 ≤ due 11）
+      const t1 = A.Game.classicReadTick('lunyu');
+      const t2 = A.Game.classicReadTick('lunyu');                // 同日二读不再计
+      ok(t1 === true && t2 === false && F73.cup === cup73 + 1 && F73.classicReadDay === 8,
+        '经典借阅 buff：借期内每日首读「读有所悟」学院分 +1（同日不重复）');
+      F73.borrow = { id: 'tb_math', due: 11 };
+      ok(A.Game.classicReadTick('tb_math') === false, '经典借阅 buff：课本走上课 +50% 口径，不叠阅读奖励');
+    } finally {
+      F73.borrow = JSON.parse(keep73.borrow); F73.classicReadDay = keep73.classicReadDay;
+      F73.cup = cup73;
+      A.Cal.load(cal73b);
+    }
+    // —— S1/S2 展示与缓存 ——
+    ok(A.Game.RECIPES.length <= 9, '背包食谱区：RECIPES 共 ≤9 道（3×3 栅格全展示）');
+    const ag73a = A.Growth.aggregate(), ag73b = A.Growth.aggregate();
+    ok(ag73a === ag73b, '成长聚合缓存：aggregate() 500ms TTL 内复用同一对象');
+    const rep73a = A.Game.growthReport(), rep73b = A.Game.growthReport(), rep73c = A.Game.growthReport(true);
+    ok(rep73a === rep73b && rep73c !== rep73a && rep73c.rows.length === 4,
+      '成长报告缓存：growthReport() TTL 内复用，force 取新鲜值（毕业结算口径）');
   }
 
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);

@@ -867,13 +867,14 @@ ADV.UI = (function () {
       text(g, `📖 食谱 ${known.length}/${R.length} · 料理吃下当天生效`, x + 40, ry, 15, '#ffe9a8', undefined, 'left');
       if (on.length)
         text(g, '今日：' + on.map(k => `${BM[k].icon}${BM[k].name}`).join(' '), x + w - 44, ry, 14, '#4ae86c', 'right', 'normal');
-      known.slice(0, 6).forEach((r, i) => {
+      // 3×3 栅格（RECIPES 共 9 道，全部铺得下；超出兜底折行提示）
+      known.slice(0, 9).forEach((r, i) => {
         const t = DBF[r.id], m = t && BM[t];
         const live = t && f.buff && f.buff[t] === ADV.Cal.day;
         text(g, `《${r.name}》${m ? m.icon : '🍽'}${live ? '✓' : ''}`, x + 44 + (i % 3) * 260, ry + 24 + ((i / 3) | 0) * 22, 13, live ? '#4ae86c' : '#e8ecff', undefined, 'left');
       });
-      if (known.length > 6)
-        text(g, `……已学 ${known.length} 道，做过的都记得`, x + 44 + 2 * 260, ry + 46, 13, '#9aa0c0', undefined, 'left');
+      if (known.length > 9)
+        text(g, `……已学 ${known.length} 道，做过的都记得`, x + 44 + 2 * 260, ry + 24 + 3 * 22, 13, '#9aa0c0', undefined, 'left');
     } catch (e) {}
   }
 

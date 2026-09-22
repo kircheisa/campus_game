@@ -67,18 +67,24 @@ ADV.Growth = (function () {
     return st.dim[dim] >= need;
   }
 
-  /* ---------- 聚合刷新（毕业结局/手册页用：从既有 flag 反推展示值） ---------- */
+  /* ---------- 聚合刷新（毕业结局/手册页用：从既有 flag 反推展示值） ----------
+   * 手册成长页每帧调用——加 500ms TTL 备忘，把重算压到每秒至多两次（对齐 17-19 缓存思路）。 */
+  let aggCache = null, aggAt = 0;
   function aggregate() {
+    const now = Date.now();
+    if (aggCache && now - aggAt < 500) return aggCache;
     const F = ADV.Game.flags, C = ADV.Collect, M = ADV.Mistake;
     const nodes = M ? M.totalNodes() : 0;
     const stages = Object.values((ADV.Game && ADV.Game.friends) || {}).reduce((s, r) => s + (r.stage || 0), 0);
-    return {
+    aggCache = {
       knowledge: Math.min(100, st.dim.knowledge + nodes * 3),
       body: Math.min(100, st.dim.body + ((F.martial || {}).lvl || 0) * 6 + (F.senseiWin ? 10 : 0)),
       mind: Math.min(100, st.dim.mind + ((F.diary || []).length) * 2 + (F.rumorTruth ? 8 : 0)),
       bond: Math.min(100, st.dim.bond + stages * 2 + (Object.keys(F.hang || {}).length) * 3),
       art: Math.min(100, st.dim.art + (C ? C.catCount('scenes') * 3 : 0) + (F.clubLv || 0) * 5 + Object.keys(F.recipes || {}).length * 4)
     };
+    aggAt = now;
+    return aggCache;
   }
 
   function dump() { return JSON.parse(JSON.stringify(st)); }
@@ -87,11 +93,13 @@ ADV.Growth = (function () {
     st.xp = d.xp || 0; st.lv = Math.min(30, d.lv || 1);
     st.dim = { knowledge: 0, body: 0, mind: 0, bond: 0, art: 0, ...(d.dim || {}) };
     st.log = d.log || []; st.relic = d.relic || '';
+    aggCache = null;                                             // 存档切换：聚合缓存作废
   }
   function reset(relic) {
     st.xp = 0; st.lv = 1; st.log = [];
     st.dim = { knowledge: 0, body: 0, mind: 0, bond: 0, art: 0 };
     st.relic = relic || '';
+    aggCache = null;
     // NG+ 信物：三选一起步加成
     if (relic === 'notebook') st.dim.knowledge = 10;
     if (relic === 'bandage') st.dim.body = 10;
