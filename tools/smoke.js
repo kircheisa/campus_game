@@ -4947,6 +4947,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       buff: JSON.stringify(F71.buff || null), quizLog: JSON.stringify(F71.quizLog || null),
       wrong: JSON.stringify(F71.wrong || null), kp: JSON.stringify(F71.kp || null),
       col: JSON.stringify(F71.col || null), gold: F71.gold, buddy: F71.buddy,
+      dailyDone: JSON.stringify(F71.dailyDone || null),
     };
     const rnd71 = Math.random;                             // 真实随机（finally 恢复用）
     try {
@@ -5011,7 +5012,64 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       F71.quizLog = JSON.parse(keep71.quizLog);
       F71.wrong = JSON.parse(keep71.wrong);
       F71.kp = JSON.parse(keep71.kp);
+      F71.dailyDone = JSON.parse(keep71.dailyDone);
       A.Cal.load(cal71);
+    }
+  }
+
+  console.log('\n[5.72] 体验优化批次：锻造 II 级 + 随堂备战度 + 每日请求已成交');
+  {
+    const F72 = A.Game.flags;
+    // —— S1 锻造 II 级（数据面 + 场景源串） ——
+    ok(A.Game.FORGES.length === 3 && A.Game.FORGES.every(x => x.next && x.next.name && x.next.ores && Object.keys(x.next.ores).length && x.next.gold >= 100),
+      '锻造 II 级：三件套各带 next 配置（矿耗 + 工钱 ≥100）');
+    ok(String(A.Game.S.farmPlot).includes('hoeLv >= 2') && String(A.Game.S.farmPlot).includes('canLv >= 2'),
+      '锻造 II 级：翻土/浇水分支各接整垄（I 级旧口径保留）');
+    ok(String(A.Game.S.fish).includes('wide: (f.toolLv && f.toolLv.rod) || 0'),
+      '锻造 II 级：鱼窗按竿等级传值（I=110 / II=128，minigame 侧分级）');
+    // —— C1 随堂练习攒备战度（olympPrepTick 已导出，直接功能驱动） ——
+    const cal72 = A.Cal.dump();
+    const keep72 = JSON.stringify(F72.olymp || null);
+    try {
+      A.Cal.load({ day: 5, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });   // 春季 sd5 = 备战期
+      F72.olymp = {};
+      F72.olymp.spring = { reg: true, prep: 0, rank: null };
+      A.Game.olympPrepTick('math', true);
+      const ok1 = F72.olymp.spring.prep === 1;
+      A.Game.olympPrepTick('math', false);
+      A.Game.olympPrepTick('chinese', true);
+      ok(ok1 && F72.olymp.spring.prep === 1, '奥赛备战度：备战期随堂练习通过 +1（答错/非当季不计数）');
+      ok(String(A.Game.S._examAsk).includes('olympPrepTick'), '随堂练习：examAsk 整卷通过挂上备战度钩子（S._examAsk 钩子）');
+    } finally {
+      F72.olymp = JSON.parse(keep72);
+      A.Cal.load(cal72);
+    }
+    // —— P4 每日请求「已成交」持久化（快照还原） ——
+    const keepP472 = {
+      col: JSON.stringify(F72.col || null), gold: F72.gold, buddy: F72.buddy,
+      dailyDone: JSON.stringify(F72.dailyDone || null), buff: JSON.stringify(F72.buff || null),
+    };
+    const calP472 = A.Cal.dump();
+    const rnd72 = Math.random;
+    try {
+      Math.random = () => .99;                               // 异色 roll 必不中（同 [5.71] 定桩惯例）
+      A.Cal.load({ day: 40, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      F72.col = {}; F72.buddy = null; F72.gold = 300; F72.dailyDone = null;
+      A.Collect.gainCritter('i1', false);
+      const r72 = A.Collect.doDailyOffer();
+      ok(r72.ok && F72.dailyDone && F72.dailyDone.day === 40 && F72.dailyDone.want,
+        '每日请求：成交后写入 f.dailyDone（day+want，过夜自然失效）');
+      const r72b = A.Collect.doDailyOffer();
+      ok(!r72b.ok && /已经成交/.test(r72b.msg), '每日请求：同一天重复请求拒绝（已成交口径）');
+      ok(String(A.Game.S.exchange).includes('已成交 ✓'), '图鉴交换：菜单展示「已成交 ✓」状态');
+    } finally {
+      Math.random = rnd72;
+      F72.col = JSON.parse(keepP472.col);
+      F72.gold = keepP472.gold;
+      F72.buddy = keepP472.buddy;
+      F72.dailyDone = JSON.parse(keepP472.dailyDone);
+      F72.buff = JSON.parse(keepP472.buff);
+      A.Cal.load(calP472);
     }
   }
 

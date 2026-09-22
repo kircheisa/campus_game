@@ -2064,24 +2064,36 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     await say({ text: '巨大的岩壁封住了洞口，\n上面刻着三个菱形凹槽……' });
     await say({ text: `（宝藏图碎片：${F().mapPieces || 0} / 3）\n听说体育老师、音乐老师和洞口的老矿工\n手里各有一张。` });
   };
-  /* —— S1 工具锻造：矿石找老矿工升级农具/钓竿（存档只增：f.toolLv） ——
-   * 宽口锄＝翻土顺带翻好十字邻格；三嘴壶＝浇水一次浇左右三格；硬调竿＝搏鱼网口加宽。 —— */
+  /* —— S1 工具锻造：矿石找老矿工升级农具/钓竿（存档只增：f.toolLv 0/1/2） ——
+   * 一级：宽口锄＝翻土顺带翻好十字邻格；三嘴壶＝浇水一次浇左右三格；硬调竿＝搏鱼网口加宽。
+   * 二级：开垄锄＝整行翻土；五嘴壶＝整行浇水；龙骨大物竿＝网口再加宽。 —— */
   const FORGES = [
     { key: 'hoe', name: '宽口锄', tool: '锄头', ores: { copperOre: 3 }, gold: 30,
-      desc: '十字耕地——翻这一格，顺带把邻格也翻好' },
+      desc: '十字耕地——翻这一格，顺带把邻格也翻好',
+      next: { name: '开垄锄', ores: { ironOre: 4, copperOre: 2 }, gold: 120,
+        desc: '整垄耕地——一行四格，一锄到底' } },
     { key: 'can', name: '三嘴壶', tool: '水壶', ores: { ironOre: 3 }, gold: 50,
-      desc: '一次浇三格——左右田垄一起喝饱' },
+      desc: '一次浇三格——左右田垄一起喝饱',
+      next: { name: '五嘴壶', ores: { goldOre: 1, ironOre: 3 }, gold: 150,
+        desc: '整垄浇灌——一行四格一起喝饱' } },
     { key: 'rod', name: '硬调竿', tool: '鱼竿', ores: { goldOre: 2, gemStone: 1 }, gold: 80,
-      desc: '硬调大物竿——搏鱼时网口大一圈' }
+      desc: '硬调大物竿——搏鱼时网口大一圈',
+      next: { name: '龙骨大物竿', ores: { gemStone: 2, goldOre: 3 }, gold: 200,
+        desc: '搏鱼网口再加宽——大物也难脱身' } }
   ];
   async function forgeMenu(ent) {
     const f = F();
     f.toolLv = f.toolLv || {};
-    const rows = FORGES.filter(x => !f.toolLv[x.key]);
-    if (!rows.length) { await say({ name: '老矿工', text: '你手上的家伙什，\n比我当年那套还齐——没啥可锻的喽。' }); return; }
+    const rows = [];
+    FORGES.forEach(x => {
+      const lv = f.toolLv[x.key] || 0;
+      if (lv === 0) rows.push({ key: x.key, tier: 1, label: `${x.tool} → ${x.name}`, ores: x.ores, gold: x.gold, desc: x.desc });
+      else if (lv === 1 && x.next) rows.push({ key: x.key, tier: 2, label: `${x.tool} II → ${x.next.name}`, ores: x.next.ores, gold: x.next.gold, desc: x.next.desc });
+    });
+    if (!rows.length) { await say({ name: '老矿工', text: '你手上的家伙什，\n已经锻到我手艺的顶了——没啥可锻的喽。' }); return; }
     const opts = rows.map(x => {
       const oreTxt = Object.keys(x.ores).map(id => `${ADV.Collect.itemInfo(id).name}×${x.ores[id]}`).join('+');
-      return `${x.tool} → ${x.name}（${oreTxt} + 💰${x.gold}）`;
+      return `${x.label}（${oreTxt} + 💰${x.gold}）`;
     }).concat(['今天不锻']);
     const i = await choose(opts, { caption: { name: '老矿工', text: '矿石别只顾着卖——\n好钢，得用在刀刃上。\n要锻哪件？' } });
     if (i < 0 || i >= rows.length) return;
@@ -2091,12 +2103,12 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     if ((f.gold || 0) < x.gold) { await say({ name: '老矿工', text: `工钱 💰${x.gold}……先去攒攒。` }); return; }
     Object.keys(x.ores).forEach(id => ADV.Collect.useItem(id, x.ores[id]));
     f.gold -= x.gold;
-    f.toolLv[x.key] = 1;
+    f.toolLv[x.key] = x.tier;
     ADV.Audio.sfx('item');
     E().playAction(ent, 'laugh', 1.6);
-    await say({ name: '老矿工', text: `好嘞——「${x.name}」锻好了！\n${x.desc}。` });
-    await ADV.UI.itemGet(x.name, '#d9873a');
-    logEvent(`请老矿工把${x.tool}锻成了${x.name}`);
+    await say({ name: '老矿工', text: `好嘞——「${x.label.split('→ ')[1]}」锻好了！\n${x.desc}。` });
+    await ADV.UI.itemGet(x.label.split('→ ')[1], '#d9873a');
+    logEvent(`请老矿工把${x.tool}${x.tier === 2 ? '升到 II 级' : '锻成了' + x.label.split('→ ')[1]}`);
     save();
   }
 
@@ -3782,7 +3794,7 @@ if (slot.n >= rodCap) { await say({ text: '（今天钓得够多了，\n鱼儿�
     const rainy = /雨/.test(ADV.Cal.weather);   // 雨天鱼儿活跃：搏鱼更轻松、稀有鱼更多
     const night = ADV.Cal.isNight();            // 夜钓：限定鱼种才肯咬钩（S3）
 await say({ text: `浮漂一沉——就是现在！\n（今日第 ${slot.n}/${rodCap} 竿${bait ? ' · 挂着蚯蚓' : ''}${rainy ? ' · 雨天鱼正活跃' : ''}${night ? ' · 夜钓正当时' : ''}）` });
-const win = await new Promise(res => ADV.Mini.start('fish', res, { easy: bait || rainy || !!(ADV.Skills && ADV.Skills.fishEasy()), wide: !!(f.toolLv && f.toolLv.rod) }));
+const win = await new Promise(res => ADV.Mini.start('fish', res, { easy: bait || rainy || !!(ADV.Skills && ADV.Skills.fishEasy()), wide: (f.toolLv && f.toolLv.rod) || 0 }));
     if (!win) {
       ADV.Audio.sfx('wrong');
       await say({ text: bait ? '噗通——鱼把蚯蚓叼走了，钩却空了！\n（下一次抓准时机）' : '噗通——鱼跑了！\n（时机再准一点，或者挂条蚯蚓？）' });
@@ -4453,13 +4465,18 @@ E().playAction(E().player, 'laugh', 1.6);
     const f = F(), CO = ADV.Collect;
     while (true) {
       const off = CO.dailyOffer();
+      const done71 = f.dailyDone && f.dailyDone.day === ADV.Cal.day &&
+                     off && f.dailyDone.want === off.want;   // 今日请求已成交（不刷新新单）
       const opts = ['定向交换（指定想要的目标）'];
-      if (off) opts.push(`今日请求：${CO.critter(off.give).name} ⇄ ${CO.critter(off.want).name}（免费）`);
+      if (off) opts.push(done71
+        ? `今日请求：${CO.critter(off.give).name} ⇄ ${CO.critter(off.want).name}（已成交 ✓）`
+        : `今日请求：${CO.critter(off.give).name} ⇄ ${CO.critter(off.want).name}（免费）`);
       opts.push('回柜台');
       const a = await choose(opts, { caption: { name: '阿橘',
         text: `图鉴交换所开张啦——重复的小伙伴别闲着，\n换个新面孔给图鉴添一页！\n（金币：${f.gold}）` } });
       if (opts[a] === '回柜台') return;
       if (off && a === 1) {                            // 每日请求：免费一换一
+        if (done71) { await say({ name: '阿橘', text: '今天的免费请求已经成交啦——\n明天再来，阿橘给你换新鲜货！' }); continue; }
         const sure = await choose(['成交！', '再看看'], { caption: { name: '阿橘',
           text: `今天我正想要一只${CO.critter(off.give).name}——\n作为回礼，${CO.critter(off.want).name}（${'★'.repeat(CO.critter(off.want).rar)}）跟你回家，分文不取！` } });
         if (sure !== 0) continue;
@@ -6146,16 +6163,19 @@ if (ADV.Growth) ADV.Growth.addDim('body', 2, '农场丰收');
 p.st = 1;
 ADV.Audio.sfx('dig');
 if (ADV.Skills) ADV.Skills.add('farm', 3, '翻土');
-      if (f.toolLv && f.toolLv.hoe) {                          // 宽口锄：十字耕地，顺带翻好邻格
+      const hoeLv = (f.toolLv && f.toolLv.hoe) || 0;
+      if (hoeLv) {                                             // 宽口锄 I：十字耕地 / II 开垄锄：整垄翻土
         const col = o.pid % 4;
+        const ids = hoeLv >= 2
+          ? [0, 1, 2, 3].map(k => o.pid - col + k)
+          : [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1, o.pid >= 4 ? o.pid - 4 : -1, o.pid < 8 ? o.pid + 4 : -1];
         let extra = 0;
-        [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1, o.pid >= 4 ? o.pid - 4 : -1, o.pid < 8 ? o.pid + 4 : -1]
-          .forEach(id => {
-            if (id < 0) return;
-            const q = f.farm[id] || (f.farm[id] = { st: 0, wd: 0, crop: '' });
-            if (q.st === 0) { q.st = 1; extra++; }
-          });
-        if (extra) { C.costEnergy(extra); UI().toast(` ⛏ 宽口锄十字耕地：顺带翻好了 ${extra} 格 `); }
+        ids.forEach(id => {
+          if (id < 0 || id === o.pid) return;
+          const q = f.farm[id] || (f.farm[id] = { st: 0, wd: 0, crop: '' });
+          if (q.st === 0) { q.st = 1; extra++; }
+        });
+        if (extra) { C.costEnergy(extra); UI().toast(hoeLv >= 2 ? ` ⛏ 开垄锄整垄耕地：一行顺带翻好了 ${extra} 格 ` : ` ⛏ 宽口锄十字耕地：顺带翻好了 ${extra} 格 `); }
       }
 await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那儿买当季种子吧）' });
       syncPlot(o); save();
@@ -6204,15 +6224,17 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     C.costEnergy(1);
     p.wd = C.day;
     ADV.Audio.sfx('water');
-    if (f.toolLv && f.toolLv.can) {                              // 三嘴壶：左右田垄一起浇
+    const canLv = (f.toolLv && f.toolLv.can) || 0;
+    if (canLv) {                                               // 三嘴壶 I：左右田垄 / II 五嘴壶：整垄浇灌
       const col = o.pid % 4;
+      const ids = canLv >= 2 ? [0, 1, 2, 3].map(k => o.pid - col + k) : [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1];
       let wet = 0;
-      [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1].forEach(id => {
-        if (id < 0) return;
+      ids.forEach(id => {
+        if (id < 0 || id === o.pid) return;
         const q = f.farm[id];
         if (q && q.crop && q.st >= 1 && q.st < 3 && q.wd !== C.day) { q.wd = C.day; wet++; }
       });
-      if (wet) UI().toast(` 🪣 三嘴壶：左右 ${wet} 格也一起喝饱了 `);
+      if (wet) UI().toast(canLv >= 2 ? ` 🪣 五嘴壶整垄浇灌：一行 ${wet} 格也一起喝饱了 ` : ` 🪣 三嘴壶：左右 ${wet} 格也一起喝饱了 `);
     }
     let boosted = false;
     if ((F().badges.science || F().club === '科学社') && Math.random() < .5) {
@@ -6652,10 +6674,14 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
   /* 多题考试：同一题答错现场重答（直至答对） */
   async function examAsk(label, subject, diff, seed) {
     while (true) {
-      if (await examOnce(label, subject, diff, seed)) return true;
+      if (await examOnce(label, subject, diff, seed)) {
+        olympPrepTick(subject, true);                       // 随堂练习整卷通过也攒奥赛备战度（口径：一次练习 +1）
+        return true;
+      }
       await say({ name: label, text: '再想想～答错不扣分，但要重答哦。' });
     }
   }
+  S._examAsk = examAsk;                                    // 测试钩子（同 S._petGift 惯例）
   /* —— 学业奖励汇入精灵线（s13.2）：考试好成绩，老师和阿橘送驯兽好礼 —— */
   async function petExamGift(tier) {
     const CO = ADV.Collect;
@@ -9755,7 +9781,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
-    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive,
+    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive, olympPrepTick,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
     HOTBAR_SLOTS, hotbarCur, hotbarSelect, hotbarToolMatch,   // 工具热键栏（星露谷式快捷执行）
     systemTour, sysToured, totalKp, contestRank,          // 体验收束导览 / 结算单 / 钓鱼大赛评分（供测试）

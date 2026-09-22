@@ -623,6 +623,8 @@ ADV.Collect = (function () {
     return { give: give.id, want: want.id };
   }
   function doDailyOffer() {
+    const F = ADV.Game.flags, day = ADV.Cal ? ADV.Cal.day : 0;
+    if (F.dailyDone && F.dailyDone.day === day) return { ok: false, msg: '（今天的免费请求已经成交啦——明天再来看新单子。）' };
     const off = dailyOffer();
     if (!off) return { ok: false, msg: '（暂时凑不出一单交换——先去草丛里认识新伙伴吧。）' };
     const e = critterEntry(off.give);
@@ -631,6 +633,7 @@ ADV.Collect = (function () {
     const r = exchangeCritter(off.give, off.want);
     if (r.ok) {
       ADV.Game.flags.gold = g0;                        // 每日请求免换资：定向交换扣掉的如数退回
+      F.dailyDone = { day, want: off.want };           // 已成交标记：当天不再刷新新单（f.dailyDone 只增不改）
       r.msg = `阿橘如愿抱走了${critter(off.give).name}——作为回礼，「${critter(off.want).name}」跟你回家！\n（每日免费请求，分文不取）`;
     }
     return r;

@@ -781,6 +781,7 @@ ADV.UI = (function () {
     const many = nCat > 6;                          // 7 类时压缩行距
     const tight = nCat > 7;                         // 8 类时再压缩一档
     const rowH = tight ? 50 : many ? 60 : 82;
+    const LIMIT_BADGE = { f9: '🌙', f10: '🌧' };     // 限定渔获徽记：时段/天气线索（对照虫图鉴「出现线索」口径）
     ADV.Collect.CATS.forEach(([cat, label, icon], ci) => {
       const cy = y + 74 + ci * rowH;
       const n = ADV.Collect.catCount(cat), total = ADV.Collect.totalOf(cat);
@@ -790,9 +791,10 @@ ADV.UI = (function () {
       const list = ADV.Collect.DB[cat].slice(0, 10);
       list.forEach((it, i) => {
         const got = ADV.Collect.has(cat, it.id);
+        const bdg = LIMIT_BADGE[it.id] || '';
         g.globalAlpha = got ? 1 : .35;
         const oy = tight ? 20 : many ? 23 : 30;
-        text(g, got ? it.name : '？？？', x + 44 + (i % 5) * 128, cy + oy + ((i / 5) | 0) * 16, tight ? 11 : many ? 12 : 13, got ? '#fff' : '#9aa0c0', undefined, 'left');
+        text(g, (got ? it.name : '？？？') + (bdg ? ' ' + bdg : ''), x + 44 + (i % 5) * 128, cy + oy + ((i / 5) | 0) * 16, tight ? 11 : many ? 12 : 13, got ? '#fff' : '#9aa0c0', undefined, 'left');
         g.globalAlpha = 1;
       });
     });
@@ -919,6 +921,14 @@ ADV.UI = (function () {
     } catch (e) {}
   }
 
+  /* 当日生效的料理 buff 图标串（🧠🍖👟），无则空串——HUD 两态共用 */
+  function activeBuffIcons() {
+    try {
+      const f = ADV.Game && ADV.Game.flags, BM = ADV.Game && ADV.Game.BUFF_META;
+      if (!f || !BM || !f.buff || !ADV.Cal) return '';
+      return Object.keys(BM).filter(k => f.buff[k] === ADV.Cal.day).map(k => BM[k].icon).join('');
+    } catch (e) { return ''; }
+  }
   function renderHUD(g, flags, mapName, muted) {
     if (hudMode === 'hidden') return;     // 完全隐藏（Q 恢复）
     const gems = [
@@ -934,12 +944,14 @@ ADV.UI = (function () {
       const cal = ADV.Cal ? ADV.Cal.label() : '';
       const goldT = '💰' + (flags.gold || 0);
       const mapT = '🗺' + (flags.mapPieces || 0) + '/3';
+      const buffT = activeBuffIcons();
       const calT = cal.replace('｜未打卡', '') + (ADV.Cal && !ADV.Cal.checkedIn ? ' !' : '');
       const w0 = 14                                     // 左内边
         + 4 * 18 + 6                                    // 四枚迷你宝石
         + g.measureText(goldT).width + 14
         + g.measureText(mapT).width + 14
-        + g.measureText(calT).width + 18                // 内容 + 右侧 Q 提示
+        + g.measureText(calT).width + (buffT ? g.measureText(buffT).width + 12 : 0)
+        + 18                                            // 内容 + 右侧 Q 提示
         + 44;
       drawWindow(g, 16, 14, w0, 30);
       gems.forEach(([n, got, c], i) => {
@@ -954,7 +966,8 @@ ADV.UI = (function () {
       text(g, goldT, tx, 21, 13, '#ffd94c', undefined, 'normal'); tx += g.measureText(goldT).width + 12;
       text(g, mapT, tx, 21, 13, '#cfe0ff', undefined, 'normal'); tx += g.measureText(mapT).width + 12;
       const warn = ADV.Cal && !ADV.Cal.checkedIn;
-      text(g, calT, tx, 21, 13, warn ? '#ffb0a0' : '#b8e8c0', undefined, 'normal');
+      text(g, calT, tx, 21, 13, warn ? '#ffb0a0' : '#b8e8c0', undefined, 'normal'); tx += g.measureText(calT).width + 10;
+      if (buffT) { g.font = FONT(13); text(g, buffT, tx, 21, 13, '#ffe9a8', undefined, 'normal'); tx += g.measureText(buffT).width + 8; }
       text(g, 'Q', 16 + w0 - 16, 21, 12, '#8a94c0', 'center', 'normal');
       return;
     }
@@ -994,12 +1007,13 @@ ADV.UI = (function () {
     text(g, '💰 ' + (flags.gold || 0), 36, 135, 14, '#ffd94c');
     text(g, '宝藏图 ' + (flags.mapPieces || 0) + '/3', 150, 135, 14, '#cfe0ff', undefined, 'normal');
 
-    // 日历 / 天气行（天气前缀像素图标）
+    // 日历 / 天气行（天气前缀像素图标；当日料理 buff 图标尾随）
     if (ADV.Cal) {
       g.font = FONT(13);
-      const lab = ADV.Cal.label();
       const icon = (ADV.Sprites && ADV.Sprites.getIcon) ? ADV.Sprites.getIcon(ADV.Cal.weather) : null;
       const iw = icon ? 24 : 0;
+      const buffs2 = activeBuffIcons();
+      const lab = ADV.Cal.label() + (buffs2 ? '　' + buffs2 : '');
       const w2 = g.measureText(lab).width + 28 + iw;
       drawWindow(g, 16, 164, w2, 30);
       if (icon) g.drawImage(icon, 26, 167, 22, 22);
