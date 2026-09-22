@@ -338,7 +338,10 @@ ADV.Engine = (function () {
     }
     const dirs = ['up', 'down', 'left', 'right'].filter(d => input.held[d]);
     if (!dirs.length) return;
-    const dur = input.held.dash ? .13 : .22;
+    // 👟 健步如飞（料理 buff）：当天走路步频加快；冲刺键不变
+    let dur = .22;
+    try { const b = ADV.Game.flags.buff; if (b && b.swift === ADV.Cal.day) dur = .18; } catch (e) {}
+    if (input.held.dash) dur = .13;
     // 贴墙滑动：同时按住多个方向时逐个尝试（斜推遇墙会沿墙走，不再原地卡死）
     let moved = false;
     for (const dir of dirs) {

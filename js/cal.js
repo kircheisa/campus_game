@@ -58,6 +58,10 @@ ADV.Cal = (function () {
 
   /* —— 精力：消耗型正反馈，低了只提醒不拦截 —— */
   function costEnergy(n) {
+    // 🍖 精力充沛（料理 buff）：当天所有行动消耗打八折（至少保底 1）
+    if (n > 0) {
+      try { const b = ADV.Game.flags.buff; if (b && b.vig === st.day) n = Math.max(1, Math.round(n * .8)); } catch (e) {}
+    }
     st.energy = Math.max(0, st.energy - (n || 0));
     return st.energy;
   }

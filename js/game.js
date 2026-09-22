@@ -4376,7 +4376,7 @@ E().playAction(E().player, 'laugh', 1.6);
     const f = F(), CO = ADV.Collect;
     while (true) {
       const prog = CO.progress();
-      const a = await choose(['买补给', '珍稀精灵架', '收购台', '驯兽讨教', '先逛逛'], { caption: { name: '阿橘',
+      const a = await choose(['买补给', '珍稀精灵架', '收购台', '驯兽讨教', '图鉴交换', '先逛逛'], { caption: { name: '阿橘',
         text: `欢迎光临精灵小筑～\n你的图鉴收录了 ${prog.got}/${prog.total} 种。\n口粮和宠物球，都是草丛探险的好帮手！` } });
       if (a === 0) { await shop(['critBall', 'goodBall', 'ultraBall', 'petFood', 'bait'], '精灵小筑 · 阿橘'); continue; }
       if (a === 1) {                                   // 珍稀精灵架：每日三格，隔天换货
@@ -4441,7 +4441,53 @@ E().playAction(E().player, 'laugh', 1.6);
         await say({ name: '阿橘', text: `「${les.name}」你已经出师啦！\n${les.tip}` });
         continue;
       }
+      if (a === 4) { await S.exchange(); continue; }   // P4 图鉴交换所：重复伙伴 + 换资 → 未得图鉴
       return;
+    }
+  };
+
+  /* —— P4 图鉴交换所（阿橘柜台）：定向交换（指定目标：你的重复伙伴 + 换资）与
+   *    每日免费交换请求（日期种子确定性生成，一换一、稀有度只升不降）。
+   *    异色个体与随行伙伴不参与交换；换出个体图鉴收录保留（gone=1，可再接回）。 —— */
+  S.exchange = async () => {
+    const f = F(), CO = ADV.Collect;
+    while (true) {
+      const off = CO.dailyOffer();
+      const opts = ['定向交换（指定想要的目标）'];
+      if (off) opts.push(`今日请求：${CO.critter(off.give).name} ⇄ ${CO.critter(off.want).name}（免费）`);
+      opts.push('回柜台');
+      const a = await choose(opts, { caption: { name: '阿橘',
+        text: `图鉴交换所开张啦——重复的小伙伴别闲着，\n换个新面孔给图鉴添一页！\n（金币：${f.gold}）` } });
+      if (opts[a] === '回柜台') return;
+      if (off && a === 1) {                            // 每日请求：免费一换一
+        const sure = await choose(['成交！', '再看看'], { caption: { name: '阿橘',
+          text: `今天我正想要一只${CO.critter(off.give).name}——\n作为回礼，${CO.critter(off.want).name}（${'★'.repeat(CO.critter(off.want).rar)}）跟你回家，分文不取！` } });
+        if (sure !== 0) continue;
+        const r = CO.doDailyOffer();
+        ADV.Audio.sfx(r.ok ? 'item' : 'wrong');
+        await say({ name: '阿橘', text: r.msg });
+        continue;
+      }
+      // 定向交换：先挑目标 → 再挑换出的伙伴 → 确认
+      const missing = CO.critterList().filter(c => !CO.has('critters', c.id)).sort((x, y) => (x.rar || 0) - (y.rar || 0));
+      if (!missing.length) { await say({ name: '阿橘', text: '图鉴都集齐了？！那你可是传说级收藏家，\n没什么好交换的啦！' }); continue; }
+      const topts = missing.map(c => `${c.name}（${c.fam}系·${'★'.repeat(c.rar)}）💰${CO.EX_COST[c.rar || 0]}`).concat(['先不换了']);
+      const ti = await choose(topts, { caption: { name: '阿橘', text: '想要哪一页图鉴？选好目标，\n再挑一只你的小伙伴 + 换资来换——' } });
+      if (ti < 0 || ti >= missing.length) continue;
+      const target = missing[ti];
+      const held = CO.heldCritters().filter(h => !h.gone && !h.shiny && !(f.buddy && f.buddy.id === h.id));
+      if (!held.length) { await say({ name: '阿橘', text: '你手上没有能换出去的小伙伴——\n（异色和随行伙伴不收哦，去草丛再认识几只吧）' }); continue; }
+      const gopts = held.map(h => `${h.cr.name}（${'★'.repeat(h.cr.rar)}）`).concat(['取消']);
+      const gi = await choose(gopts, { caption: { name: '阿橘',
+        text: `换「${target.name}」的话，你想用哪只来换？\n（另付换资 💰${CO.EX_COST[target.rar || 0]}）` } });
+      if (gi < 0 || gi >= held.length) continue;
+      const give = held[gi];
+      const sure = await choose(['换定！', '再想想'], { caption: { name: '阿橘',
+        text: `${give.cr.name}换「${target.name}」，另付 💰${CO.EX_COST[target.rar || 0]}。\n（${give.cr.name}会住进新家，你的图鉴收录保留）` } });
+      if (sure !== 0) continue;
+      const r = CO.exchangeCritter(give.id, target.id);
+      ADV.Audio.sfx(r.ok ? 'item' : 'wrong');
+      await say({ name: '阿橘', text: r.msg });
     }
   };
 
@@ -5696,7 +5742,36 @@ E().playAction(E().player, 'laugh', 1.6);
     Object.entries(r.mats).forEach(([k, n]) => ADV.Collect.useItem(k, n));
     ADV.Collect.addItem(r.id, 1);
     ADV.Audio.sfx('item');
-    await say({ text: `锅铲翻飞，香气出锅——\n《${r.name}》×1 入背包！（战斗大补 + 高级礼物）` });
+    await say({ text: `锅铲翻飞，香气出锅——\n《${r.name}》×1 入背包！（战斗大补 + 高级礼物 · 回家饭桌吃出当日加成）` });
+    save();
+  }
+
+  // —— 料理 buff（S5）：吃下自制料理 → 当天一种临时加成（f.buff 只记日期，过夜自然失效） ——
+  const DISH_BUFF = { r1: 'vig', r2: 'vig', r5: 'vig', r3: 'swift', r6: 'swift', r8: 'swift', r4: 'mem', r7: 'mem', r9: 'mem' };
+  const BUFF_META = {
+    mem:   { icon: '🧠', name: '好记性',   desc: '今天答对题额外 +1 知识点' },
+    vig:   { icon: '🍖', name: '精力充沛', desc: '今天精力消耗打八折' },
+    swift: { icon: '👟', name: '健步如飞', desc: '今天走路更快一点' },
+  };
+  function buffActive(k) { const b = F().buff; return !!(b && b[k] === ADV.Cal.day); }
+  // 吃自家菜：饭桌菜单调用——同类 buff 不叠加，以最后一次吃的为准
+  async function eatAtHome() {
+    const f = F(), C = ADV.Cal, CO = ADV.Collect;
+    const owned = Object.keys(DISH_BUFF).filter(id => CO.count(id) > 0);
+    if (!owned.length) { await say({ text: '（背包里没有能吃的家常菜。\n在饭桌做几道，或去河边钓条鱼烤了！）' }); return; }
+    const opts = owned.map(id => {
+      const m = BUFF_META[DISH_BUFF[id]];
+      return `${CO.itemInfo(id).name} ×${CO.count(id)}（${m.icon}${m.name}）`;
+    }).concat('先不吃');
+    const i = await choose(opts, { caption: { name: '饭桌', text: '热一热就能吃——每道菜一种当日加成，\n同类不叠加，选最需要的吃哦。' } });
+    if (i < 0 || i >= owned.length) return;
+    const id = owned[i], t = DISH_BUFF[id], m = BUFF_META[t];
+    CO.useItem(id, 1);
+    f.buff = f.buff || {};
+    f.buff[t] = C.day;
+    if (t === 'vig') C.gainEnergy(12);
+    ADV.Audio.sfx('item');
+    ADV.UI.toast(` ${m.icon} 《${CO.itemInfo(id).name}》下肚 ·「${m.name}」生效（${m.desc}） `);
     save();
   }
 
@@ -7020,10 +7095,15 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     const known = RECIPES.filter(r => f.recipes && f.recipes[r.id]);
     const opts = ['帮忙家务'];
     if (known.length) opts.push('自己做顿饭');
+    if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0)) opts.push('吃点自己做的小菜');
     if (C.period >= 4 && f.dinnerDay !== C.day) opts.push('吃妈妈做的晚饭');
     const i = await choose(opts, { caption: { name: '饭桌', text: known.length ? '妈妈留了字条：想做就自己做哦～' : '饭桌收拾得干干净净。' } });
     if (opts[i] === '自己做顿饭') {
       await cookAtHome();
+      return;
+    }
+    if (opts[i] === '吃点自己做的小菜') {
+      await eatAtHome();
       return;
     }
     if (opts[i] === '吃妈妈做的晚饭') {
@@ -9675,7 +9755,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
-    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS,
+    themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
     HOTBAR_SLOTS, hotbarCur, hotbarSelect, hotbarToolMatch,   // 工具热键栏（星露谷式快捷执行）
     systemTour, sysToured, totalKp, contestRank,          // 体验收束导览 / 结算单 / 钓鱼大赛评分（供测试）

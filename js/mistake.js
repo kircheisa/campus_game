@@ -61,6 +61,7 @@ ADV.Mistake = (function () {
     if (my === q.a) {
       rec.ok++;
       gain(subject, 1);                   // 答对得 1 个知识点
+      try { const b = f.buff; if (b && b.mem === ADV.Cal.day) gain(subject, 1); } catch (e) {}   // 🧠 好记性（料理 buff）：当天答对额外 +1
       trimLog(f);
       return;
     }

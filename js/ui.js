@@ -840,6 +840,7 @@ ADV.UI = (function () {
   }
   function renderBag(g, x, y, w, h) {
     text(g, '💰 金币：' + (ADV.Game.flags.gold || 0), x + 40, y + 70, 20, '#ffd94c');
+    renderBagRecipes(g, x, y, w, h);                     // 📖 食谱区（固定置底，空包也显示）
     const list = ADV.Collect.bagList();
     if (!list.length) { text(g, '背包空空～小镇礼品店逛逛？', x + w / 2, y + 140, 16, '#8890b0', 'center'); return; }
     const vis = 12;                                        // 页内滚动（P2-23：不再静默截断）
@@ -852,6 +853,26 @@ ADV.UI = (function () {
     if (list.length > vis)
       text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 件 · PgUp/PgDn 翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
     text(g, 'G 键面向 NPC 送礼（生日当天翻倍）', x + w / 2, y + h - 30, 14, '#8a94c0', 'center');
+  }
+  /* 📖 背包页底部食谱区（S5 料理 buff）：已学食谱 + 当日生效的加成一览 */
+  function renderBagRecipes(g, x, y, w, h) {
+    try {
+      const f = ADV.Game.flags, R = ADV.Game.RECIPES, DBF = ADV.Game.DISH_BUFF, BM = ADV.Game.BUFF_META;
+      if (!R || !BM || !DBF) return;
+      const known = R.filter(r => f.recipes && f.recipes[r.id]);
+      const ry = y + h - 176;
+      const on = Object.keys(BM).filter(k => f.buff && f.buff[k] === ADV.Cal.day);
+      text(g, `📖 食谱 ${known.length}/${R.length} · 料理吃下当天生效`, x + 40, ry, 15, '#ffe9a8', undefined, 'left');
+      if (on.length)
+        text(g, '今日：' + on.map(k => `${BM[k].icon}${BM[k].name}`).join(' '), x + w - 44, ry, 14, '#4ae86c', 'right', 'normal');
+      known.slice(0, 6).forEach((r, i) => {
+        const t = DBF[r.id], m = t && BM[t];
+        const live = t && f.buff && f.buff[t] === ADV.Cal.day;
+        text(g, `《${r.name}》${m ? m.icon : '🍽'}${live ? '✓' : ''}`, x + 44 + (i % 3) * 260, ry + 24 + ((i / 3) | 0) * 22, 13, live ? '#4ae86c' : '#e8ecff', undefined, 'left');
+      });
+      if (known.length > 6)
+        text(g, `……已学 ${known.length} 道，做过的都记得`, x + 44 + 2 * 260, ry + 46, 13, '#9aa0c0', undefined, 'left');
+    } catch (e) {}
   }
 
   /* ---------- 摘抄本页签：已摘句子（名句 / 书中句子）+ 日记统计 ---------- */

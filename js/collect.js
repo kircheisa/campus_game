@@ -248,15 +248,15 @@ ADV.Collect = (function () {
     scrap:  { name: '埋宝图残页', gift: false, battle: false, price: 0, desc: '乌云画的，标记了全校宝藏。' },
     camera: { name: '照相机', gift: false, battle: false, price: 60, desc: '记录校园的每个角落。' },
     cape: { name: '武斗大会披风', gift: false, battle: false, price: 0, desc: '冠军的证明，披上攻击+3。' },
-    r1: { name: '阳光蛋包饭', gift: true, battle: true, heal: 32, price: 0, desc: '阿姨的招牌，金黄的一勺。' },
-    r2: { name: '糖醋排骨饭', gift: true, battle: true, heal: 36, price: 0, desc: '酸甜适口，干饭人狂喜。' },
-    r3: { name: '星星曲奇', gift: true, battle: true, heal: 28, price: 0, desc: '星儿烤的，咬开是星空。' },
-    r4: { name: '月光羹', gift: true, battle: true, heal: 40, price: 0, desc: '月见校长的私房甜汤。' },
-    r5: { name: '矿工炖菜', gift: true, battle: true, heal: 44, price: 0, desc: '老矿工的硬核暖锅。' },
-    r6: { name: '四季春卷', gift: true, battle: true, heal: 50, price: 0, desc: '包住一年四季的滋味。' },
-    r7: { name: '田园时蔬汤', gift: true, battle: true, heal: 46, price: 0, desc: '自家园子的菜一锅鲜，妈妈都夸好。' },
-    r8: { name: '丰收南瓜派', gift: true, battle: true, heal: 42, price: 0, desc: '金黄的派皮里包着整个秋天。' },
-    r9: { name: '炭火烤鱼', gift: true, battle: true, heal: 48, price: 0, desc: '矿洞炭火烤的鱼，配烤红薯。' },
+    r1: { name: '阳光蛋包饭', gift: true, battle: true, heal: 32, price: 0, desc: '阿姨的招牌，金黄的一勺。（吃：🍖精力充沛）' },
+    r2: { name: '糖醋排骨饭', gift: true, battle: true, heal: 36, price: 0, desc: '酸甜适口，干饭人狂喜。（吃：🍖精力充沛）' },
+    r3: { name: '星星曲奇', gift: true, battle: true, heal: 28, price: 0, desc: '星儿烤的，咬开是星空。（吃：👟健步如飞）' },
+    r4: { name: '月光羹', gift: true, battle: true, heal: 40, price: 0, desc: '月见校长的私房甜汤。（吃：🧠好记性）' },
+    r5: { name: '矿工炖菜', gift: true, battle: true, heal: 44, price: 0, desc: '老矿工的硬核暖锅。（吃：🍖精力充沛）' },
+    r6: { name: '四季春卷', gift: true, battle: true, heal: 50, price: 0, desc: '包住一年四季的滋味。（吃：👟健步如飞）' },
+    r7: { name: '田园时蔬汤', gift: true, battle: true, heal: 46, price: 0, desc: '自家园子的菜一锅鲜，妈妈都夸好。（吃：🧠好记性）' },
+    r8: { name: '丰收南瓜派', gift: true, battle: true, heal: 42, price: 0, desc: '金黄的派皮里包着整个秋天。（吃：👟健步如飞）' },
+    r9: { name: '炭火烤鱼', gift: true, battle: true, heal: 48, price: 0, desc: '矿洞炭火烤的鱼，配烤红薯。（吃：🧠好记性）' },
     /* —— 寻宝迷宫奖励池 —— */
     mapFrag: { name: '洞窟残页', gift: false, battle: false, price: 0, desc: '古老藏宝图的一角，字迹已经模糊。' },
     moonCrystal: { name: '月光结晶', gift: true, battle: true, heal: 60, price: 0, desc: '黑暗中微微发光，蕴含月之力。' },
@@ -585,6 +585,56 @@ ADV.Collect = (function () {
     ADV.Game.save();
     return { ok: true, msg: `阿橘数出 ${gold} 文：「${cr.name}会找到新主人的，放心。」` };
   }
+  /* —— P4 图鉴交换所：重复个体 + 换资 → 指定未得图鉴；每日免费交换请求（日期种子确定性） ——
+   * 换出个体 gone=1（图鉴收录保留，可再接回）；异色个体与随行伙伴不可交换。 */
+  const EX_COST = [0, 30, 60, 100];                    // 定向交换换资：按目标稀有度
+  function exchangeCritter(giveId, getId) {
+    const F = ADV.Game.flags;
+    const give = critterEntry(giveId), giveCr = critter(giveId), getCr = critter(getId);
+    if (!giveCr || !getCr) return { ok: false, msg: '阿橘翻了翻账本：「这单换不了，图鉴上没这一只。」' };
+    if (!give || give.gone) return { ok: false, msg: '（你手上没有能换出去的这一只。）' };
+    if (give.s) return { ok: false, msg: '「金色的可遇不可求，可不能拿去换。」阿橘把话顶了回去。' };
+    if (F.buddy && F.buddy.id === giveId) return { ok: false, msg: '「随行的伙伴先换下来，再谈交换。」' };
+    if (has('critters', getId)) return { ok: false, msg: `你已经收录过${getCr.name}了，换只没见过的吧。` };
+    const cost = EX_COST[getCr.rar || 0] || 0;
+    if ((F.gold || 0) < cost) return { ok: false, msg: `换资不够（还差 ${cost - (F.gold || 0)} 文）……` };
+    F.gold = (F.gold || 0) - cost;
+    give.gone = 1;                                     // 换出的伙伴住进新家（你的图鉴收录保留）
+    const k = col()['insects'] || (col()['insects'] = {});
+    k[getId] = { s: rollShiny(1) ? 1 : 0, d: ADV.Cal ? ADV.Cal.day : 0 };
+    ADV.UI.toast(` 收藏入手：${getCr.name} `);
+    checkCritterMiles();
+    checkFull('critters');
+    ADV.Game.save();
+    return { ok: true, msg: `一手交${giveCr.name}，一手付换资 💰${cost}——「${getCr.name}」住进了你家院子！` };
+  }
+  function dailyOffer() {                              // {give, want} 或 null：同一天内确定不变
+    const day = ADV.Cal ? ADV.Cal.day : 0;
+    if (!day) return null;
+    const owned = heldCritters().filter(h => !h.gone && !h.shiny && !(ADV.Game.flags.buddy && ADV.Game.flags.buddy.id === h.id));
+    const missing = DB.critters.filter(c => !has('critters', c.id));
+    if (!owned.length || !missing.length) return null;
+    let s = (day * 2246822519) >>> 0;                  // 线性同余伪随机：纯日期种子
+    const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    const give = owned[(rnd() * owned.length) | 0];
+    const pool = missing.filter(c => (c.rar || 0) >= (give.cr.rar || 0));
+    const bag = pool.length ? pool : missing;
+    const want = bag[(rnd() * bag.length) | 0];
+    return { give: give.id, want: want.id };
+  }
+  function doDailyOffer() {
+    const off = dailyOffer();
+    if (!off) return { ok: false, msg: '（暂时凑不出一单交换——先去草丛里认识新伙伴吧。）' };
+    const e = critterEntry(off.give);
+    if (!e || e.gone || e.s) return { ok: false, msg: '（要交换的小伙伴已经不在手上了，明天来看新请求吧。）' };
+    const g0 = ADV.Game.flags.gold || 0;
+    const r = exchangeCritter(off.give, off.want);
+    if (r.ok) {
+      ADV.Game.flags.gold = g0;                        // 每日请求免换资：定向交换扣掉的如数退回
+      r.msg = `阿橘如愿抱走了${critter(off.give).name}——作为回礼，「${critter(off.want).name}」跟你回家！\n（每日免费请求，分文不取）`;
+    }
+    return r;
+  }
   /* 每日珍稀精灵架：三格 = 稀有1 必上 + 稀有2 + 30% 概率换上传说（需图鉴解锁）
    * 以日期为种子确定性生成，同一天刷出来都一样 */
   function petShelf() {
@@ -609,5 +659,6 @@ ADV.Collect = (function () {
            netTier, cageTier, shinyMult,
            applyEvolve, critterRearing,
            critterPrice, sellPrice, critterEntry, heldCritters, buyCritter, sellCritter, petShelf,
+           exchangeCritter, dailyOffer, doDailyOffer, EX_COST,
            addItem, useItem, count, giftables, bagList, itemInfo, give };
 })();

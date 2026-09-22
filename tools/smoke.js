@@ -4928,6 +4928,93 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     });
   }
 
+  console.log('\n[5.71] 玩法批次三：图鉴交换所（P4）+ 料理 buff（S5）');
+  {
+    const F71 = A.Game.flags, CO71 = A.Collect;
+    // —— S5 数据面 ——
+    ok(A.Game.DISH_BUFF && Object.keys(A.Game.DISH_BUFF).length === 9 && ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9'].every(id => A.Game.DISH_BUFF[id]),
+      '料理 buff：九道家常菜全部挂上类型（mem/vig/swift）');
+    ok(A.Game.BUFF_META && ['mem', 'vig', 'swift'].every(k => A.Game.BUFF_META[k] && A.Game.BUFF_META[k].name && A.Game.BUFF_META[k].desc),
+      '料理 buff：三种加成元信息齐全（好记性/精力充沛/健步如飞）');
+    ok(/好记性/.test(CO71.itemInfo('r4').desc) && /精力充沛/.test(CO71.itemInfo('r1').desc) && /健步如飞/.test(CO71.itemInfo('r3').desc),
+      '料理 buff：物品描述带吃法提示（背包页可见）');
+    const dtSrc71 = String(A.Game.S.dinnerTable);
+    ok(dtSrc71.includes('吃点自己做的小菜') && dtSrc71.indexOf('吃点自己做的小菜') > dtSrc71.indexOf('自己做顿饭'),
+      '饭桌：「吃点自己做的小菜」挂在做饭之后（既有按键序列不受扰）');
+    // —— S5/P4 功能面（全局状态 try/finally 快照还原） ——
+    const cal71 = A.Cal.dump();
+    const keep71 = {
+      buff: JSON.stringify(F71.buff || null), quizLog: JSON.stringify(F71.quizLog || null),
+      wrong: JSON.stringify(F71.wrong || null), kp: JSON.stringify(F71.kp || null),
+      col: JSON.stringify(F71.col || null), gold: F71.gold, buddy: F71.buddy,
+    };
+    const rnd71 = Math.random;                             // 真实随机（finally 恢复用）
+    try {
+      Math.random = () => .99;                             // 定桩：异色 roll 必不中（消除 5% 抖动；dailyOffer 用自身 LCG 不受影响）
+      A.Cal.load({ day: 40, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      // 记忆 buff：Mistake.answer 统一入口（随堂/作业/讨教/考试/打卡全走这里）
+      const q71 = { q: '批次三·测试题', opts: ['对', '错'], a: 0 };
+      A.Mistake.answer('math', q71, 0);
+      const kp171 = F71.kp.math;
+      F71.buff = F71.buff || {}; F71.buff.mem = 40;
+      ok(A.Game.buffActive('mem') && !A.Game.buffActive('vig'), '料理 buff：buffActive 当日判定（过夜自然失效由日期比较保证）');
+      A.Mistake.answer('math', q71, 0);
+      ok(F71.kp.math === kp171 + 2, '🧠好记性：答对知识点 1→2（buff 关闭即回落）');
+      delete F71.buff.mem;
+      // 精力 buff：costEnergy 全局入口打八折
+      const e071 = A.Cal.energy;
+      A.Cal.costEnergy(10);                                // 无 buff：-10
+      F71.buff.vig = 40;
+      A.Cal.costEnergy(10);                                // 有 buff：-8
+      delete F71.buff.vig;
+      ok(e071 - A.Cal.energy === 18, '🍖精力充沛：10 点行动消耗折为 8（18 = 10+8）');
+      // —— P4：入口 + API ——
+      const psSrc71 = String(A.Game.S.petShop);
+      ok(psSrc71.includes('图鉴交换') && psSrc71.indexOf('图鉴交换') < psSrc71.indexOf('先逛逛'),
+        '精灵小筑：主菜单挂上「图鉴交换」（先逛逛仍居末位，既有 pump 序列不受扰）');
+      ok(typeof CO71.exchangeCritter === 'function' && typeof CO71.dailyOffer === 'function' &&
+         typeof CO71.doDailyOffer === 'function' && CO71.EX_COST && CO71.EX_COST[3] === 100,
+        '图鉴交换所：Collect 交换 API + 换资表导出');
+      // 收藏清空（快照在 keep71.col）：交换行为完全可控
+      F71.buddy = null;
+      F71.col = {};
+      F71.gold = 500;
+      CO71.gainCritter('i1', false);                       // 手上一只非异色
+      const e71 = F71.col.insects.i1;
+      e71.s = 1;
+      ok(CO71.exchangeCritter('i1', 'i2').ok === false, '交换守卫：异色个体不可换出');
+      e71.s = 0;
+      F71.buddy = { id: 'i1' };
+      ok(CO71.exchangeCritter('i1', 'i2').ok === false, '交换守卫：随行伙伴不可换出');
+      F71.buddy = null;
+      ok(CO71.exchangeCritter('i1', 'i1').ok === false, '交换守卫：目标已收录时拒绝');
+      const offA71 = CO71.dailyOffer(), offB71 = CO71.dailyOffer();
+      ok(offA71 && offA71.give === 'i1' && CO71.critter(offA71.want) && JSON.stringify(offA71) === JSON.stringify(offB71),
+        '每日请求：日期种子确定性生成（give=手上伙伴，want=未收录且稀有度不降）');
+      const r71 = CO71.exchangeCritter('i1', 'i2');
+      ok(r71.ok && F71.col.insects.i1.gone === 1 && F71.col.insects.i2 &&
+         F71.gold === 500 - CO71.EX_COST[CO71.critter('i2').rar || 0],
+        '定向交换：重复个体 + 换资 → 未得图鉴（收录保留 gone=1 + 金币按稀有度扣减）');
+      const gB71 = F71.gold, off71 = CO71.dailyOffer();
+      const rd71 = CO71.doDailyOffer();
+      ok(rd71.ok && F71.col.insects.i2.gone === 1 && F71.col.insects[off71.want] && F71.gold === gB71,
+        '每日请求：免费一换一执行（回礼入册、出让个体收录保留、分文不取）');
+      F71.col = {};
+      ok(CO71.doDailyOffer().ok === false, '每日请求：手上无可换伙伴时作废（明日刷新）');
+    } finally {
+      choosePick = null;
+      Math.random = rnd71;
+      F71.col = JSON.parse(keep71.col);
+      F71.gold = keep71.gold;
+      F71.buddy = keep71.buddy;
+      F71.buff = JSON.parse(keep71.buff);
+      F71.quizLog = JSON.parse(keep71.quizLog);
+      F71.wrong = JSON.parse(keep71.wrong);
+      F71.kp = JSON.parse(keep71.kp);
+      A.Cal.load(cal71);
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
