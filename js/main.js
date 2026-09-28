@@ -122,6 +122,8 @@ ADV.Main = (function () {
         const on = ADV.UI.toggleAuto();
         ADV.UI.toast(on ? ' ⏩ 自动播放：开（对话自动翻页，选项仍需手动选） ' : ' ⏸ 自动播放：关 ');
       }
+      else if (t === 'save') manualSave();                // 手动保存（自动存档之外的显式存点）
+      else if (t === 'load') manualLoad();                // 手动读取（回档到上次保存）
       else if (t === 'fs') toggleFullscreen();
     });
   });
@@ -268,6 +270,26 @@ ADV.Main = (function () {
     else ADV.UI.toast(' ⚠ 存档代码无效或已损坏，导入失败 ');
   }
 
+  /* —— 游玩中手动保存 / 读取（工具条 💾 📂；战斗/小游戏/阅读器/对话/手册中不响应） —— */
+  function uiModalBlock() {
+    return state !== 'play' || journalOpen || ADV.Game.busy || ADV.UI.busy ||
+      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
+  }
+  function manualSave() {
+    if (uiModalBlock()) return;
+    ADV.Game.save();
+    ADV.Audio.sfx('ok');
+    ADV.UI.toast(' 💾 已保存当前进度（影子槽同步留有上一代） ');
+  }
+  async function manualLoad() {
+    if (uiModalBlock()) return;
+    if (!ADV.Game.hasSave()) { ADV.UI.toast(' ⚠ 还没有存档 '); return; }
+    const pick = await ADV.UI.choose(['📂 读取存档（进度回到上次保存）', '取消'], { cancelIndex: 1 });
+    if (pick !== 0 || uiModalBlock()) return;              // 确认期间状态可能已变，再守一道
+    if (ADV.Game.continueGame()) { ADV.Audio.sfx('start'); ADV.UI.toast(' 📂 已读取存档 '); }
+    else ADV.UI.toast(' ⚠ 读取失败（存档损坏且无备用槽） ');
+  }
+
   function drawTitleBg() {
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, '#5aa8e8'); grad.addColorStop(.6, '#a8d8f5'); grad.addColorStop(1, '#d8f0ff');
@@ -384,11 +406,14 @@ ADV.Main = (function () {
   }
 
   /* ==================== 主角选择 ==================== */
+  const HERO_NAMES = ['小智', '小樱'];                   // 默认名（可在选人后自定义，game.js 同款）
   function updateHeroSelect() {
     if (pressed.left || pressed.right) { heroIdx = 1 - heroIdx; ADV.Audio.sfx('cursor'); }
     if (pressed.ok) {
       ADV.Audio.sfx('start');
-      ADV.Game.newGame(heroIdx === 0 ? 'hero_boy' : 'hero_girl', true);   // true = 播放序章
+      // 开局命名：prompt 取消/留空 → 用默认名（game.js sanitizeName 净化：trim + 8 字截断）
+      const nm = window.prompt(`给主角起个名字（8 字内，取消用默认「${HERO_NAMES[heroIdx]}」）：`, HERO_NAMES[heroIdx]);
+      ADV.Game.newGame(heroIdx === 0 ? 'hero_boy' : 'hero_girl', true, nm);   // true = 播放序章
       ADV.UI.toast(' 🌤 新生活开始了，先去学校报到吧 ');
       state = 'play';
     }
@@ -397,7 +422,7 @@ ADV.Main = (function () {
   function renderHeroSelect() {
     drawTitleBg();
     text('选择你的主角', W / 2, 60, 40, '#fff', 'center');
-    const names = ['小智', '小樱'];
+    const names = HERO_NAMES;
     const pals = ['hero_boy', 'hero_girl'];
     pals.forEach((p, i) => {
       const cx = W / 2 + (i === 0 ? -190 : 190), cy = 300;
@@ -437,6 +462,7 @@ ADV.Main = (function () {
       ['G', '面向 NPC 送礼（投其所好！）'],
       ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
       ['M', '静音开关'],
+      ['💾 / 📂 工具条', '手动保存 / 读取进度（平时也自动存）'],
       ['F', '手册（↑ ↓ 切组 · ← → 切页：关系/生活/收藏/学习/成长）'],
       ['', ''],
       ['【生活】', ''],

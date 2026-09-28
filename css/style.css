@@ -75,6 +75,11 @@ body.modal #toolbar { display: none; }
   #abtns .tk { width: 48px; height: 48px; font-size: 19px; }
   .tb { width: 38px; height: 38px; font-size: 17px; border-radius: 9px; }
 }
+/* 窄屏（竖屏手机）：工具条 8 键收窄，保证 360px 视口内放得下 */
+@media (max-width: 430px) {
+  #toolbar { gap: 5px; }
+  .tb { width: 34px; height: 34px; font-size: 16px; border-radius: 8px; }
+}
 
 /* 竖屏提示：整宽横幅（不压工具条，工具条会下移一档），约 9 秒后自动淡出 */
 #rotate-tip { display: none; }

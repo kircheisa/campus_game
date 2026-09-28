@@ -5303,6 +5303,66 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.76] 体验批次七：开局自定义人名 + 游玩中手动保存/读取');
+  {
+    const KMAIN = 'campus_adventure_save_v1', KA = KMAIN + '_a', KB = KMAIN + '_b';
+    const keepLS = {};
+    for (const k of [KMAIN, KA, KB]) keepLS[k] = localStorage.getItem(k);
+    try {
+      // —— 命名：newGame 第三参净化入库（trim + 8 字截断）；空 → 默认名 ——
+      A.Game.newGame('hero_boy', false, '  阿福  ');
+      ok(A.Game.flags.name === '阿福' && A.Game.playerName() === '阿福',
+        '开局命名：newGame 传入名字 trim 后入库，playerName() 返回自定义名');
+      A.Game.newGame('hero_girl', false, '一二三四五六七八九十');
+      ok(A.Game.flags.name === '一二三四五六七八', '开局命名：超长名字截断到 8 字');
+      A.Game.newGame('hero_girl', false, null);
+      ok(A.Game.flags.name === '' && A.Game.playerName() === '小樱',
+        '开局命名：取消/留空 → 默认名（女主 小樱，flags.name 留空占位）');
+      A.Game.newGame('hero_boy', false);
+      ok(A.Game.playerName() === '小智' && A.Game.HERO_NAMES.hero_boy === '小智',
+        '开局命名：缺省男主默认名 小智（选人画面同款 HERO_NAMES）');
+      // —— 名字随存档往返（flags 整体序列化，天然持久化） ——
+      A.Game.flags.name = '存档名';
+      A.Game.save();
+      ok(JSON.parse(localStorage.getItem(KMAIN)).flags.name === '存档名', '命名持久化：名字写入存档 JSON');
+      A.Game.flags.name = '改名了';
+      ok(A.Game.continueGame() && A.Game.flags.name === '存档名', '读取回档：continueGame 恢复存档时的名字');
+      // —— 向后兼容：无 name 字段的旧档读取后回落默认名 ——
+      const old79 = JSON.parse(localStorage.getItem(KMAIN));
+      delete old79.flags.name;
+      localStorage.setItem(KMAIN, JSON.stringify(old79));
+      ok(A.Game.continueGame() && A.Game.flags.name === '' && A.Game.playerName() === '小智',
+        '向后兼容：旧档无 name 字段 → blankFlags 合并补空，playerName 回落默认名');
+      // —— NG+ 转生保留名字 ——
+      A.Game.flags.name = '转生名';
+      A.Game.ngStart();
+      A.Game.flags.introDone = true;                     // 立即压掉 80ms 后的 _intro 定时器（早退分支）
+      ok(A.Game.flags.ngplus === true && A.Game.flags.name === '转生名',
+        'NG+：图鉴/友谊/旗标重置，但主角名字跟着进新学期');
+      // —— HUD：带名字的徽章面板渲染不崩（ui.js 消费 playerName） ——
+      A.UI.renderHUD(makeCtx(makeCanvas()), A.Game.flags, '校园', false);
+      ok(true, 'HUD：完整面板标题并入主角名（「XX · 智慧徽章」）渲染不抛错');
+      // —— main.js / index.html 接线（main.js 不参与冒烟，按源码断言） ——
+      const main79 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      const html79 = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      ok(main79.indexOf('给主角起个名字') >= 0 && main79.indexOf('HERO_NAMES') >= 0,
+        '接线：选人确认后 prompt 命名（取消/留空回默认名）已挂上');
+      ok(main79.indexOf("t === 'save'") >= 0 && main79.indexOf("t === 'load'") >= 0
+        && main79.indexOf('uiModalBlock()') >= 0
+        && html79.indexOf('data-t="save"') >= 0 && html79.indexOf('data-t="load"') >= 0,
+        '接线：工具条 💾 保存 / 📂 读取（读取先确认，战斗/对话/手册中不响应）已挂上');
+    } finally {
+      for (const k of [KMAIN, KA, KB]) {
+        if (keepLS[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS[k]);
+      }
+      A.Game.hero = 'hero_boy';                          // 还原主角（setter 已导出）
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

@@ -996,7 +996,7 @@ ADV.UI = (function () {
 
     // —— 完整面板（Q 展开） ——
     drawWindow(g, 16, 14, 322, 106);
-    text(g, '智慧徽章', 32, 24, 16, '#ffe9a8');
+    text(g, (ADV.Game && ADV.Game.playerName ? ADV.Game.playerName() : '') + ' · 智慧徽章', 32, 24, 16, '#ffe9a8');
     gems.forEach(([n, got, c], i) => {
       const gx = 56 + i * 78;
       ADV.Sprites.drawGem(g, gx, 60, c, got, 9);

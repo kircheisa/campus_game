@@ -11,6 +11,7 @@ ADV.Game = (function () {
 
   // 初始旗标（也是旧存档升级时合并的默认值）
   const blankFlags = () => ({
+    name: '',                                           // 主角名字（开局自定义；空 = 用默认名「小智/小樱」）
     metPrincipal: false, gotBread: false, breadShared: false,
     gotHairpin: false, hairpinReturned: false,
     gotComic: false, comicReturned: false,
@@ -6034,10 +6035,11 @@ E().playAction(E().player, 'laugh', 1.6);
 
   // —— NG+：带着友谊与图鉴重新开学 ——
   function ngStart() {
-    const keep = { friends: JSON.parse(JSON.stringify(state.friends)), col: JSON.parse(JSON.stringify(F().col || {})), items: JSON.parse(JSON.stringify(F().items || {})), ngplus: true };
+    const keep = { friends: JSON.parse(JSON.stringify(state.friends)), col: JSON.parse(JSON.stringify(F().col || {})), items: JSON.parse(JSON.stringify(F().items || {})), name: F().name || '', ngplus: true };
     state.flags = blankFlags();
     state.flags.col = keep.col;
     state.flags.items = keep.items;
+    state.flags.name = keep.name;                        // 新学期还是同一个人
     state.flags.ngplus = keep.ngplus;
     state.friends = keep.friends;
     ADV.Cal.load({ day: 1, period: 0, weather: '晴', checkedIn: false, streak: 0 });
@@ -6063,6 +6065,7 @@ E().playAction(E().player, 'laugh', 1.6);
         return;
       }
       await say({ text: '—— 春 · 清晨 · 阳光小镇 ——\n蝉鸣还未醒来的早晨，\n你背着崭新的书包，站在自己房间的镜子前。' });
+      await say({ text: `对镜子练习了一遍自我介绍：\n「你好，我叫${playerName()}。」\n——嗯，报到的时候就这么说。` });
       await say({ text: '因为父母工作调动，这个春天\n你转学来到了阳光中学。\n一切都是新的：街道、同学、教室……\n以及，这所学校流传了百年的传说。' });
       const mom = E().getNpc('mom');
       if (mom) { mom.dir = 'right'; E().playAction(mom, 'wave', 1.4); }
@@ -9092,9 +9095,19 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     } catch (e) { return false; }
   }
 
-  function newGame(hero, withIntro) {
+  /* —— 主角名字：开局可自定义（8 字内）；空串回落默认名（选人画面同款） —— */
+  const HERO_NAMES = { hero_boy: '小智', hero_girl: '小樱' };
+  function sanitizeName(n) {
+    return String(n == null ? '' : n).trim().slice(0, 8);
+  }
+  function playerName() {
+    return (state.flags && state.flags.name) ? state.flags.name : (HERO_NAMES[state.hero] || '小勇');
+  }
+
+  function newGame(hero, withIntro, name) {
     state.hero = hero;
     state.flags = blankFlags();
+    state.flags.name = sanitizeName(name);               // 开局命名（第三参，可省略）
     state.friends = {};
     if (ADV.Skills) ADV.Skills.reset();                  // 五系技能从零开始
     ADV.Cal.load({ day: 1, period: 0, weather: '晴', checkedIn: false, streak: 0 });
@@ -9905,6 +9918,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
   return {
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
+    playerName, HERO_NAMES,                              // 主角名（开局自定义；HUD/序章消费，供测试）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
     themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, OLYMP_QUIZ, OFFICE_LINES, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive, olympPrepTick, classicReadTick,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
