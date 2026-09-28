@@ -3451,6 +3451,7 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
       const wB = S44._duel({ name: '甲', fam: '水', pow: 5, spd: 5 }, { name: '乙', fam: '虫', pow: 7, spd: 1 });
       ok(!wB.win && wB.body.includes('效果不佳'), 'duelRounds：水撞虫 0.75 被克 → 败局 + 战报标注');
       Math.random = rnd44;
+      Math.random = () => .9;   // 擂台全程定桩：无闪避 · 伤害 = (力+2)×克制 → 全胜确定（对齐 [5.33]/[5.47]/[5.63] 口径）
 
       // —— 训练家三阶梯：注入满级「擂台神兽」（兽系 力20/速20）连闯三关 ——
       const zz44 = { id: 'zz', name: '擂台神兽', desc: '冒烟测试专用搭档。', fam: '兽', rar: 3, pow: 20, spd: 20, hp: 20, bait: ['peach'], where: 'riverbay', when: {}, hint: '' };
@@ -3474,13 +3475,13 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
       ok(F44.ladderTier === 3 && F44.gold === g44 + 63, '训练家：冠军蝉鸣大爷三连（传说压轴）→ 登顶 + 40 金');
       ok(said44.some(t => t.includes('山神小狐狸') && t.includes('倒吸')), '训练家：王牌山神小狐狸有传说级登场演出');
 
-      // —— 自由擂台：42 种全可上场；兽系神兽撞水系 → 被克 0.75 仍凭硬实力取胜 ——
+      // —— 自由擂台：44 种全可上场；兽系神兽撞水系 → 被克 0.75 仍凭硬实力取胜 ——
       loadDay44(5);
       CO.DB.critters = [db44.find(c => c.id === 'c1'), zz44];   // 池定桩：蝌蚪（水系）+ 神兽（留在池中才能上场）
       said44.length = 0;
       pickPlan44(['上擂台斗虫', '擂台神兽']);
       await pump(S44.bugArena(), 6000);
-      ok(F44.bugWins === bw44 + 1 && F44.gold === g44 + 75, '自由擂台：兽系上场亦受理（42 种全可战）→ 每日首胜 12 金');
+      ok(F44.bugWins === bw44 + 1 && F44.gold === g44 + 75, '自由擂台：兽系上场亦受理（44 种全可战）→ 每日首胜 12 金');
       ok(said44.some(t => t.includes('擂台神兽') && t.includes('效果不佳')), '自由擂台：兽撞水 0.75 被克战报如实标注');
 
       // —— 传说演出：窝点抽中山神小狐狸 → appear / catch 专属文案（压过异色播报）——
@@ -5211,6 +5212,94 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       Math.random = realRnd74;
       F74.col = JSON.parse(keep74.col); F74.buddy = JSON.parse(keep74.buddy); F74.buddyBoost = JSON.parse(keep74.boost);
       A.Cal.load(cal74);
+    }
+  }
+
+  console.log('\n[5.75] 体验批次六：多槽位存档 / 对话自动播放 / 触屏 NPC 点选 / 星空预渲染');
+  {
+    const KMAIN = 'campus_adventure_save_v1', KA = KMAIN + '_a', KB = KMAIN + '_b';
+    const keepLS = {};
+    keepLS[KMAIN] = localStorage.getItem(KMAIN);
+    keepLS[KA] = localStorage.getItem(KA);
+    keepLS[KB] = localStorage.getItem(KB);
+    const keepCal78 = A.Cal.dump();
+    try {
+      // —— 多槽位：save 主档 + 影子槽交替双写，永远留有上一代 ——
+      A.Game.save();
+      const sA1 = localStorage.getItem(KA), sB1 = localStorage.getItem(KB);
+      A.Game.flags.gold = (A.Game.flags.gold || 0) + 7;
+      A.Game.save();
+      const sA2 = localStorage.getItem(KA), sB2 = localStorage.getItem(KB);
+      ok(!!sA2 && !!sB2 && ((sA2 === sA1) !== (sB2 === sB1)),
+        '多槽位存档：save 交替写 a/b 影子槽——相邻两次 save 恰好换槽，永远保留上一代');
+      ok(!!JSON.parse(sA2).flags && !!JSON.parse(sB2).flags,
+        '多槽位存档：两代影子槽都是完整可校验的存档');
+      // —— 主档损坏 → load 自动回退影子槽 ——
+      localStorage.setItem(KMAIN, '{oops-not-json');
+      const back78 = A.Game.load();
+      ok(!!back78 && !!back78.flags, '存档回退：主档损坏时 load() 自动从备用槽恢复，不再整档丢失');
+      ok(A.Game.hasSave(), '存档回退：主档损坏时 hasSave() 仍为真（标题页「继续」不消失）');
+      // —— 导出兜底：主档缺失时导出影子槽 ——
+      localStorage.removeItem(KMAIN);
+      let expOk = false;
+      try { expOk = !!A.Game.exportSave(); } catch (e) {}
+      ok(expOk, '导出兜底：主档缺失时 exportSave() 退而导出备用槽');
+      // —— 对话自动播放：say 页零按键自动翻完，选项永不自动选 ——
+      ok(A.UI.toggleAuto() === true && localStorage.getItem('campus_autoplay') === '1',
+        '自动播放：开关置位并持久化（campus_autoplay，P 键 / 触屏工具条 ⏩）');
+      for (let i = 0; i < 600 && A.UI.busy; i++) A.UI.update(1 / 60, {});      // 清残留窗口（有界防死等）
+      let autoDone = false;
+      A.UI.say({ name: '测试', text: '自动播放测试。'.repeat(40) }).then(() => { autoDone = true; });
+      for (let i = 0; i < 1200 && A.UI.busy; i++) A.UI.update(1 / 60, {});     // busy 同步翻转，无需等微任务
+      await new Promise(r => setImmediate(r));                                 // 冲刷微任务再读标志位
+      ok(autoDone, '自动播放：say 多页对话零按键自动翻页并 resolve（完页停 1.4s）');
+      let pickAuto = -1;
+      const pCh78 = A.UI.choose(['甲', '乙', '离开']);
+      pCh78.then(i => { pickAuto = i; });
+      for (let i = 0; i < 300 && pickAuto < 0; i++) A.UI.update(1 / 60, {});
+      ok(pickAuto < 0 && A.UI.busy, '自动播放：选项窗不自动确认（抉择必须玩家亲手选）');
+      A.UI.update(1 / 60, { ok: true });                                       // 手动确认收尾
+      await new Promise(r => setImmediate(r));
+      ok(pickAuto === 0, '自动播放：手动确认后选项正常 resolve');
+      // —— 触屏 NPC 点选：远处点按仅转身，界外不接管 ——
+      A.Engine.loadMap('campus', 22, 30, 'up');
+      A.Game.busy = false;
+      const n78 = A.Engine.npcs.find(n => !n.hidden && !n.buddy &&
+        Math.abs(n.x - 22) + Math.abs(n.y - 30) >= 2 && Math.abs(n.x - 22) !== Math.abs(n.y - 30));
+      if (n78) {
+        const cam78 = A.Engine.camOffset;
+        const dirBefore = A.Engine.player.dir;
+        const hit78 = A.Engine.tapWorld(n78.px + 24 - cam78.x, n78.py + 24 - cam78.y);
+        const ddx = n78.x - 22, ddy = n78.y - 30;
+        const want78 = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'right' : 'left') : (ddy > 0 ? 'down' : 'up');
+        ok(hit78 === true && A.Engine.player.dir === want78,
+          `触屏点选：点远处 NPC 仅转身（${dirBefore}→${A.Engine.player.dir}），不瞬移不误触脚本`);
+      } else {
+        ok(!A.Engine.npcs.some(n => !n.hidden && !n.buddy), '触屏点选：当前地图无可见 NPC（跳过转向断言）');
+      }
+      ok(A.Engine.tapWorld(-999, -999) === false, '触屏点选：界外点按不接管（返回 false 交还调用方）');
+      // —— 星空两层离屏预渲染 ——
+      ok(typeof A.Engine.starTwinkle === 'function' && A.Engine.starTwinkle(0, 0) === 0.4
+        && Math.abs(A.Engine.starTwinkle(1.3, 0) + A.Engine.starTwinkle(1.3, 1) - 0.8) < 1e-9,
+        '星空预渲染：奇偶两层相位差闪烁（starTwinkle 两层恒和 0.8，帧间仅 2 次 drawImage）');
+      A.Cal.load({ day: 21, period: 5, weather: '星空', checkedIn: true, streak: 1, energy: 50 });
+      A.Engine.render(makeCtx(makeCanvas()));
+      ok(true, '星空渲染：预渲染层入夜走一遍全套（晴夜遮罩 + 双层 drawImage 不抛错）');
+      // —— main.js / index.html 接线（main.js 不参与冒烟，按源码断言） ——
+      const main78 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      const html78 = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      ok(main78.indexOf('tapWorld(p.x, p.y)') >= 0 && main78.indexOf("'KeyP'") >= 0
+        && main78.indexOf("t === 'auto'") >= 0 && html78.indexOf('data-t="auto"') >= 0,
+        '接线：tapAt 未接管转 tapWorld、P 键与触屏工具条 ⏩ 均已挂上');
+    } finally {
+      for (const k of [KMAIN, KA, KB]) {
+        if (keepLS[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS[k]);
+      }
+      A.UI.toggleAuto(false);
+      try { localStorage.removeItem('campus_autoplay'); } catch (e) {}
+      A.Cal.load(keepCal78);
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
     }
   }
 

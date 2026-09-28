@@ -64,6 +64,10 @@ ADV.Main = (function () {
     }
     if (e.code === 'KeyF' && state === 'play') toggleJournal();             // F：生活手册
     if (e.code === 'KeyL' && state === 'play' && !journalOpen) ADV.UI.toggleLog();   // L：对话回看
+    if (e.code === 'KeyP' && state === 'play') {                            // P：对话自动播放开关
+      const on = ADV.UI.toggleAuto();
+      ADV.UI.toast(on ? ' ⏩ 自动播放：开（对话自动翻页，选项仍需手动选） ' : ' ⏸ 自动播放：关 ');
+    }
     if (e.code === 'Tab' && state === 'play') {                             // Tab：小地图开关
       e.preventDefault();
       const on = ADV.UI.toggleMinimap();
@@ -113,6 +117,10 @@ ADV.Main = (function () {
       else if (t === 'vol') {
         const m = ADV.Audio.cycleVolume();
         ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 1 ? ' 🎵 仅音效（音乐静音） ' : ' 🔇 已静音 ');
+      }
+      else if (t === 'auto') {
+        const on = ADV.UI.toggleAuto();
+        ADV.UI.toast(on ? ' ⏩ 自动播放：开（对话自动翻页，选项仍需手动选） ' : ' ⏸ 自动播放：关 ');
       }
       else if (t === 'fs') toggleFullscreen();
     });
@@ -733,7 +741,7 @@ ADV.Main = (function () {
         else if (hit.t === 'fdown') ADV.UI.journalPage(1, journalTab);
         return;
       }
-      ADV.UI.tapAt(p.x, p.y);                       // 对话推进/选项/回看/拾取动画
+      if (!ADV.UI.tapAt(p.x, p.y)) ADV.Engine.tapWorld(p.x, p.y);   // 窗口未接管 → 空地点按：NPC 点选/转向（P2-10 遗留）
     }
   });
 

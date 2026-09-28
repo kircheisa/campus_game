@@ -35,6 +35,18 @@ ADV.Engine = (function () {
   // 星空坐标预计算（原式确定性：i*197%W, i*131%(H/2)），绘制时只改 globalAlpha，不再每帧拼 40 个 rgba 字符串
   const STARS = [];
   for (let i = 0; i < 40; i++) STARS.push([(i * 197) % W, (i * 131) % (H / 2)]);
+  // 星空两层离屏预渲染（P2-19 深化）：按奇偶分两批烤进离屏图，帧间只 2 次 drawImage，
+  // 两层用相位差闪烁保留「星星各自明灭」的层次（starTwinkle 导出供冒烟测试）
+  let starCvs = null;
+  function buildStarLayers() {
+    starCvs = [cnv(W, Math.ceil(H / 2)), cnv(W, Math.ceil(H / 2))];
+    STARS.forEach(([sx, sy], i) => {
+      const sg = starCvs[i % 2].getContext('2d');
+      sg.fillStyle = '#fffadc';
+      sg.fillRect(sx, sy, 2, 2);
+    });
+  }
+  function starTwinkle(t, i) { return .4 + .4 * Math.sin(t * 2 + (i % 2) * Math.PI); }
   const fogGrads = {}, coldGrads = {};          // 天气渐变缓存（键：浓度档，仅两三档参数）
 
   // 季节内进度：每 10 天一季，返回 0~1；换季时自动触发过渡动画
@@ -653,6 +665,26 @@ ADV.Engine = (function () {
     }
   }
 
+  /* ---------- 触屏点按世界坐标（P2-10 遗留；px,py 为画布逻辑坐标，tapAt 未接管时由 main.js 调用）
+   * 点自己 → 交互面前目标；点相邻格 → 转向 + 交互；点远处 → 仅转向反馈（不瞬移不走路）；
+   * 脚本播放中 / 玩家移动中吞掉点按，防止误触连发 ---------- */
+  function tapWorld(px, py) {
+    if (!player || !map) return false;
+    if (ADV.Game.busy || player.mv) return true;      // 吞掉：忙碌期间的点按不该落到地上
+    const tx = Math.floor((px + cam.x) / T), ty = Math.floor((py + cam.y) / T);
+    if (tx < 0 || ty < 0 || tx >= map.w || ty >= map.h) return false;
+    const ddx = tx - player.x, ddy = ty - player.y;
+    if (ddx === 0 && ddy === 0) { interact(); return true; }          // 点自己：面前有什么就交互什么
+    if (Math.abs(ddx) + Math.abs(ddy) === 1) {                        // 相邻格：先转身再交互
+      player.dir = ddx > 0 ? 'right' : ddx < 0 ? 'left' : ddy > 0 ? 'down' : 'up';
+      interact();
+      return true;
+    }
+    player.dir = Math.abs(ddx) >= Math.abs(ddy) ? (ddx > 0 ? 'right' : 'left')   // 远处：转身示意
+      : (ddy > 0 ? 'down' : 'up');
+    return true;
+  }
+
   /* ---------- 镜头 ---------- */
   function centerCam() {
     const mw = map.w * T, mh = map.h * T;
@@ -790,10 +822,10 @@ ADV.Engine = (function () {
       if (tint) { g.fillStyle = tint; g.fillRect(0, 0, W, H); }
       if (ADV.Cal.weather === '星空' && p >= 4) {
         g.fillStyle = 'rgba(8,10,40,.30)'; g.fillRect(0, 0, W, H);
-        g.fillStyle = '#fffadc';
-        for (let i = 0; i < STARS.length; i++) {
-          g.globalAlpha = .4 + .4 * Math.sin(time * 2 + i);
-          g.fillRect(STARS[i][0], STARS[i][1], 2, 2);
+        if (!starCvs) buildStarLayers();               // 首次入夜才烤层，晴天零开销
+        for (let l = 0; l < 2; l++) {
+          g.globalAlpha = Math.max(0, starTwinkle(time, l));
+          g.drawImage(starCvs[l], 0, 0);
         }
         g.globalAlpha = 1;
       }
@@ -1297,13 +1329,14 @@ ADV.Engine = (function () {
   }
 
   return {
-    loadMap, update, render, interact, fadeTo, findTarget,
+    loadMap, update, render, interact, fadeTo, findTarget, tapWorld, starTwinkle,
     emote, getNpc, setObjectOpen, playAction, playerAction, giftAction, hangoutAction, findObject, applySchedule,
     objVisible,
     goTo, speak, startSeasonTransition,
     spawnBuddy, getBuddy,
     get map() { return map; },
     get player() { return player; },
-    get npcs() { return npcs; }
+    get npcs() { return npcs; },
+    get camOffset() { return { x: Math.round(cam.x), y: Math.round(cam.y) }; }   // 供冒烟测试反算点按屏幕坐标
   };
 })();

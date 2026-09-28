@@ -8994,6 +8994,10 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
   let _hasSave = null;               // hasSave 结果缓存（save / 导入后失效）
   let _storageOk = null;             // localStorage 可用性探测（缓存）
   let _saveWarned = false;           // 存储失败只提醒一次，别每步都弹
+  // 双槽影子存档（P2-7 遗留）：主档之外每次交替写 a/b，永远保留上一代进度；
+  // 主档缺失或损坏时 load() 自动回退到影子槽，不再一坏就丢档
+  const SAVE_SLOTS = [SAVE_KEY + '_a', SAVE_KEY + '_b'];
+  let _slotFlip = false;             // 下一次影子写进哪个槽（false=a，true=b）
 
   function storageOk() {             // 隐私模式等场景 localStorage 会直接抛错
     if (_storageOk !== null) return _storageOk;
@@ -9025,6 +9029,10 @@ growth: ADV.Growth ? ADV.Growth.dump() : null,
 skills: ADV.Skills ? ADV.Skills.dump() : null
 };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      try {                                                    // 影子槽写失败不影响主档（配额紧张时退化为单槽）
+        localStorage.setItem(SAVE_SLOTS[_slotFlip ? 1 : 0], JSON.stringify(data));
+        _slotFlip = !_slotFlip;
+      } catch (e1) {}
       _hasSave = true;
     } catch (e) {
       // 存储失败（隐私模式/配额满）不再静默：提示一次 + 指路手动备份
@@ -9034,9 +9042,10 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
       }
     }
   }
-  function load() {
+  /* 读单个槽位：JSON 解析 + 语义校验 + 旧档升级，任何一步失败都视为槽位不可用 */
+  function readSlot(key) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = localStorage.getItem(key);
       if (!raw) return null;
       const d = JSON.parse(raw);
       if (!validSave(d)) return null;
@@ -9045,6 +9054,18 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
       return d;
     } catch (e) { return null; }
   }
+  function load() {
+    const d = readSlot(SAVE_KEY);
+    if (d) return d;
+    for (const k of SAVE_SLOTS) {          // 主档缺失/损坏 → 影子槽自动回退
+      const sd = readSlot(k);
+      if (sd) {
+        try { UI().toast(' ⚠ 主存档读取失败，已从备用槽恢复上一份进度 '); } catch (e) {}
+        return sd;
+      }
+    }
+    return null;
+  }
   function hasSave() {
     if (_hasSave === null) _hasSave = !!load();      // 标题页每帧都问，缓存避免反复解析大 JSON
     return _hasSave;
@@ -9052,7 +9073,11 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
 
   /* —— 存档导出 / 导入（Base64 文本，可粘贴备份 / 换设备） —— */
   function exportSave() {
-    const raw = localStorage.getItem(SAVE_KEY);
+    let raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) for (const k of SAVE_SLOTS) {              // 主档缺失时退而导出影子槽
+      raw = localStorage.getItem(k);
+      if (raw) break;
+    }
     if (!raw) throw new Error('还没有存档');
     return btoa(unescape(encodeURIComponent(raw)));
   }

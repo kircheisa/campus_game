@@ -123,6 +123,17 @@ ADV.UI = (function () {
   const msgX = () => safePad;                          // 对话框左边（触屏时让开虚拟按键）
   const msgW = () => W - safePad * 2;
   const msgTextW = pv => msgW() - 60 - (pv ? 62 : 0);  // 正文可用宽度（扣内边距与头像位）
+  /* 自动播放（P2-9 遗留）：开启后 say 每页停 1.4s 自动翻页；选项/拾取动画永不自动——
+   * 涉及抉择的一定要玩家亲手选。开关持久化到 localStorage，P 键 / 触屏工具条 ⏩ 切换 */
+  let autoPlay = false;
+  let autoT = 0;                          // 当前页已停留秒数（翻页/换页时清零）
+  try { autoPlay = localStorage.getItem('campus_autoplay') === '1'; } catch (e) {}
+  function toggleAuto(v) {
+    autoPlay = v === undefined ? !autoPlay : !!v;
+    autoT = 0;
+    try { localStorage.setItem('campus_autoplay', autoPlay ? '1' : '0'); } catch (e) {}
+    return autoPlay;
+  }
   function say(opt) {
     return new Promise(res => {
       const name = opt.name || '';
@@ -134,6 +145,7 @@ ADV.UI = (function () {
         lines: [], pages: [], page: 0,
         shown: 0, done: false, t: 0
       };
+      autoT = 0;
       const g = ctx2d;
       const lines = wrap(g, opt.text, msgTextW(pv), 21);
       // 每页最多 3 行
@@ -222,15 +234,7 @@ ADV.UI = (function () {
       return;
     }
     if (active && active.type === 'say') {
-      if (press.ok) {
-        ADV.Audio.sfx('ok');
-        if (!active.done) { active.shown = 999; active.done = true; }
-        else {
-          active.page++;
-          if (active.page >= active.pages.length) { const r = active.res; active = null; r(); }
-          else { active.shown = 0; active.done = false; }
-        }
-      }
+      if (press.ok) advanceSay();
     } else if (active && active.type === 'choose') {
       if (!active.capDone) {                              // 说明文字分页中：Z 翻页，X/Esc 直接跳到选项
         if (press.ok || press.cancel) {
@@ -254,6 +258,19 @@ ADV.UI = (function () {
     }
   }
 
+  /* say 翻页（Z 点按与自动播放共用）：未完页先瞬间补全，完页则翻页 / 收尾 */
+  function advanceSay() {
+    const a = active;
+    ADV.Audio.sfx('ok');
+    if (!a.done) { a.shown = 999; a.done = true; }
+    else {
+      a.page++;
+      if (a.page >= a.pages.length) { const r = a.res; active = null; r(); }
+      else { a.shown = 0; a.done = false; }
+    }
+    autoT = 0;
+  }
+
   function update(dt, press, held) {
     for (let i = toasts.length - 1; i >= 0; i--) {
       toasts[i].t += dt;
@@ -266,6 +283,9 @@ ADV.UI = (function () {
       if (!active.done) {
         active.shown += dt * (held && held.ok ? 220 : 36);   // 按住 Z/空格：打字机 6 倍速快进
         if (active.shown >= total) { active.shown = total; active.done = true; }
+      } else if (autoPlay) {                                 // 自动播放：完页停 1.4s 自动翻页
+        autoT += dt;
+        if (autoT >= 1.4) advanceSay();
       }
     }
     if (active && active.type === 'choose') active.t += dt;   // 供说明文字▼闪烁
@@ -299,6 +319,7 @@ ADV.UI = (function () {
       }
       if (active.done && Math.floor(active.t * 2.4) % 2 === 0)
         text(g, '▼', x + w - 38, y + h - 30, 17, '#ffe9a8', 'center');
+      if (autoPlay) text(g, 'AUTO', x + w - 20, y + 10, 11, '#8fe3c8', 'right', 'normal');   // 自动播放标记
     }
 
     // 选项窗口（若带 caption，则先绘制消息窗；说明文字分页，不截断）
@@ -1110,7 +1131,7 @@ ADV.UI = (function () {
     say, choose, itemGet, toast, update, render, renderHUD, renderJournal, renderCollect, journalMove, setCtx, drawWindow, text,
     toggleMinimap, layout, setSafePad, getSafePad, setTouch, CTL, toggleHud, loadHudPref,
     renderHotbar, toggleHotbar,
-    renderToasts, renderLog, toggleLog, tapAt, journalHit, journalPage, resetJournalScroll, pushHistory,
+    renderToasts, renderLog, toggleLog, tapAt, journalHit, journalPage, resetJournalScroll, pushHistory, toggleAuto,
     get hotbarOn() { return hotbarOn; },
     get hudMode() { return hudMode; },            // 'full' | 'mini' | 'hidden'（主循环据此跳过渲染）
     get busy() { return !!(active || itemAnim); },
@@ -1120,6 +1141,7 @@ ADV.UI = (function () {
     get safePad() { return safePad; },            // 供冒烟测试断言安全区
     get touchUI() { return touchUI; },
     get logOpen() { return logOpen; },            // 对话回看开合（主循环据此冻结移动）
+    get autoPlay() { return autoPlay; },          // 自动播放开关（冒烟测试断言用）
     get historyCount() { return msgHistory.length; },
     get friendScroll() { return friendScroll; },
     get msgRect() { return { x: msgX(), y: H - 192, w: msgW(), h: 160 }; }   // 含姓名牌（供布局测试）
