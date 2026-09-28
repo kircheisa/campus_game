@@ -12,6 +12,7 @@ ADV.Game = (function () {
   // 初始旗标（也是旧存档升级时合并的默认值）
   const blankFlags = () => ({
     name: '',                                           // 主角名字（开局自定义；空 = 用默认名「小智/小樱」）
+    cheatDay: 0, cheatGold: 0,                          // 金钥匙彩蛋：已领的日额记录（cheatDay = 领取时的游戏日）
     metPrincipal: false, gotBread: false, breadShared: false,
     gotHairpin: false, hairpinReturned: false,
     gotComic: false, comicReturned: false,
@@ -9104,6 +9105,21 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     return (state.flags && state.flags.name) ? state.flags.name : (HERO_NAMES[state.hero] || '小勇');
   }
 
+  /* —— 金钥匙：口令换金币的彩蛋（工具条 🔑 → prompt 输入口令）——
+     每次转动 +1000 金，同一游戏日累计上限 3000；跨天自动重置额度。口令大小写/首尾空白宽容。 —— */
+  const KEY_GRANT = 1000, KEY_DAILY = 3000;
+  function goldenKey(raw) {
+    const code = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (code !== 'givememoney') return { ok: false, msg: ' ⚠ 口令不识别，金钥匙纹丝不动 ' };
+    const f = F(), day = (ADV.Cal && ADV.Cal.day) || 0;
+    if (f.cheatDay !== day) { f.cheatDay = day; f.cheatGold = 0; }     // 跨天 → 额度清零重来
+    if (f.cheatGold >= KEY_DAILY) return { ok: false, msg: ' ⚠ 今日金钥匙已领满（上限 3000 金），明天再来吧 ' };
+    f.cheatGold += KEY_GRANT;
+    f.gold += KEY_GRANT;
+    save();                                             // 立刻落盘，白来的金币不放手滑丢
+    return { ok: true, gained: KEY_GRANT, left: KEY_DAILY - f.cheatGold };
+  }
+
   function newGame(hero, withIntro, name) {
     state.hero = hero;
     state.flags = blankFlags();
@@ -9919,6 +9935,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     playerName, HERO_NAMES,                              // 主角名（开局自定义；HUD/序章消费，供测试）
+    goldenKey,                                           // 金钥匙彩蛋（口令 → +1000 金，游戏日限 3000）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
     themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, OLYMP_QUIZ, OFFICE_LINES, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive, olympPrepTick, classicReadTick,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）

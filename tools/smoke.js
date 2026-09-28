@@ -5363,6 +5363,54 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.77] 体验批次八：金钥匙口令（givememoney → +1000 金，游戏日限 3000）');
+  {
+    const KMAIN = 'campus_adventure_save_v1', KA = KMAIN + '_a', KB = KMAIN + '_b';
+    const keepLS = {};
+    for (const k of [KMAIN, KA, KB]) keepLS[k] = localStorage.getItem(k);
+    try {
+      A.Game.newGame('hero_boy', false);
+      const g0 = A.Game.flags.gold;
+      // —— 口令校验 ——
+      const bad = A.Game.goldenKey('wrong-code');
+      ok(bad.ok === false && A.Game.flags.gold === g0, '金钥匙：错误口令 → 拒绝且金币分文不动');
+      const r1 = A.Game.goldenKey('  GiveMeMoney  ');
+      ok(r1.ok === true && A.Game.flags.gold === g0 + 1000 && A.Game.flags.cheatGold === 1000,
+        '金钥匙：口令命中（大小写/首尾空白宽容）→ +1000 金，当日额度记 1000');
+      // —— 日限 3000：同日三满第四拒 ——
+      A.Game.goldenKey('givememoney');
+      A.Game.goldenKey('givememoney');
+      ok(A.Game.flags.gold === g0 + 3000 && A.Game.flags.cheatGold === 3000, '金钥匙：同日三连 → 领满 3000');
+      const r4 = A.Game.goldenKey('givememoney');
+      ok(r4.ok === false && A.Game.flags.gold === g0 + 3000, '金钥匙：同日第四次 → 拒绝（日限 3000）');
+      // —— 跨天重置 ——
+      A.Cal.load({ day: 2, period: 3, weather: '晴', checkedIn: true });
+      const r5 = A.Game.goldenKey('givememoney');
+      ok(r5.ok === true && A.Game.flags.gold === g0 + 4000 && A.Game.flags.cheatGold === 1000,
+        '金钥匙：跨天额度自动重置 → 新一天又能领 1000');
+      // —— 领取即落盘 ——
+      const raw80 = JSON.parse(localStorage.getItem(KMAIN));
+      ok(raw80.flags.gold === g0 + 4000 && raw80.flags.cheatGold === 1000 && raw80.flags.cheatDay === 2,
+        '金钥匙：每次转动即刻写档（gold / cheatGold / cheatDay 全部落盘）');
+      // —— main.js / index.html 接线（main.js 不参与冒烟，按源码断言） ——
+      const main80 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      const html80 = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      ok(main80.indexOf("t === 'key'") >= 0 && main80.indexOf('输入金钥匙口令') >= 0
+        && main80.indexOf('goldenKeyUI') >= 0,
+        '接线：工具条 🔑 → prompt 口令 → Game.goldenKey（战斗/对话/手册中不响应）已挂上');
+      ok(html80.indexOf('data-t="key"') >= 0, '接线：工具条 🔑 按钮已加');
+    } finally {
+      for (const k of [KMAIN, KA, KB]) {
+        if (keepLS[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS[k]);
+      }
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

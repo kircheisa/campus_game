@@ -124,6 +124,7 @@ ADV.Main = (function () {
       }
       else if (t === 'save') manualSave();                // 手动保存（自动存档之外的显式存点）
       else if (t === 'load') manualLoad();                // 手动读取（回档到上次保存）
+      else if (t === 'key') goldenKeyUI();                // 金钥匙彩蛋（口令 → 金币，日限 3000）
       else if (t === 'fs') toggleFullscreen();
     });
   });
@@ -288,6 +289,15 @@ ADV.Main = (function () {
     if (pick !== 0 || uiModalBlock()) return;              // 确认期间状态可能已变，再守一道
     if (ADV.Game.continueGame()) { ADV.Audio.sfx('start'); ADV.UI.toast(' 📂 已读取存档 '); }
     else ADV.UI.toast(' ⚠ 读取失败（存档损坏且无备用槽） ');
+  }
+
+  /* —— 金钥匙彩蛋：工具条 🔑 → 输入口令 → 金币 +1000（游戏日限 3000，口令问同学/社区） —— */
+  function goldenKeyUI() {
+    if (uiModalBlock()) return;
+    const code = window.prompt('🗝 输入金钥匙口令：');
+    if (code == null) return;                              // 取消不打扰
+    const r = ADV.Game.goldenKey(code);
+    ADV.UI.toast(r.msg || (r.ok ? ` 🗝 金钥匙转动：金币 +${r.gained}（今日还可领 ${r.left} 金） ` : ''));
   }
 
   function drawTitleBg() {
@@ -463,6 +473,7 @@ ADV.Main = (function () {
       ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
       ['M', '静音开关'],
       ['💾 / 📂 工具条', '手动保存 / 读取进度（平时也自动存）'],
+      ['🔑 工具条', '金钥匙（输入正确口令才能转动）'],
       ['F', '手册（↑ ↓ 切组 · ← → 切页：关系/生活/收藏/学习/成长）'],
       ['', ''],
       ['【生活】', ''],
