@@ -144,7 +144,7 @@ ADV.Battle = (function () {
       guardFac: Math.max(.35, .5 - .03 * (n.science || 0)),      // 科学：守护减伤更强
     };
   }
-  /* 驯兽导师「进化催化」（三期C）：山隐婆婆为随行伙伴点开的潜力——力/速各 +1 */
+  /* 驯兽导师「进化催化」（三期C）：雾隐婆婆为随行伙伴点开的潜力——力/速各 +1 */
   function buddyBoost() {
     const b = ADV.Game.flags && ADV.Game.flags.buddyBoost;
     return b ? { pow: b.pow || 0, spd: b.spd || 0 } : { pow: 0, spd: 0 };

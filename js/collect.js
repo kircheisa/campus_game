@@ -55,7 +55,7 @@ ADV.Collect = (function () {
       { id: 'l7', name: '榆树叶', desc: '锯齿边的小椭圆。' },
       { id: 'l8', name: '竹叶', desc: '风一吹就沙沙响。' }
     ],
-    /* —— 生物图鉴：宝可梦式收集（42 种 = 虫 18 + 水 12 + 走兽 12）
+    /* —— 生物图鉴：宝可梦式收集（44 种 = 虫 18 + 水 12 + 走兽 14；m14 望月犬 only 饲养进化可得）
      *   fam=系别（虫/水/兽，斗虫擂台循环克制） rar=稀有度1-3 hp/pow/spd=对战三维
      *   bait=诱饵偏好（背包物品 id） where=主要出没地图 hint=图鉴出没线索
      *   when={p:[时段0-5] se:[季节en] we:[天气]} 缺省=全天候  need=图鉴进度解锁
@@ -105,7 +105,9 @@ ADV.Collect = (function () {
       { id: 'm9', name: '三花猫', desc: '后巷的女王，爱答不理。', fam: '兽', rar: 2, pow: 4, spd: 6, hp: 9, bait: ['fish'], where: 'oldStreet', when: { p: [4, 5] }, hint: '夜里商店街后巷巡领地。' },
       { id: 'm10', name: '幼鹿', desc: '梅花点点，眼睛像清晨。', fam: '兽', rar: 2, pow: 4, spd: 7, hp: 10, bait: ['peach', 'pear'], where: 'hillside', when: { p: [0] }, need: 20, hint: '清晨薄雾里的山脚——图鉴攒够 20 种才有缘。' },
       { id: 'm11', name: '白鼬', desc: '雪地上一道白影子。', fam: '兽', rar: 2, pow: 5, spd: 7, hp: 9, bait: ['egg'], where: 'hillside', when: { se: ['winter'] }, hint: '落雪后的山脚雪窝边。' },
-      { id: 'm12', name: '山神小狐狸', desc: '尾巴尖挑着一粒月光，看见它的人会有好运。', fam: '兽', rar: 3, pow: 6, spd: 8, hp: 13, bait: ['sevenFlower'], where: 'hillside', when: { p: [5], we: ['晴'] }, need: 30, hint: '月圆深夜的山径尽头——图鉴攒够 30 种，七色花为礼。' }
+      { id: 'm12', name: '山神小狐狸', desc: '尾巴尖挑着一粒月光，看见它的人会有好运。', fam: '兽', rar: 3, pow: 6, spd: 8, hp: 13, bait: ['sevenFlower'], where: 'hillside', when: { p: [5], we: ['晴'] }, need: 30, hint: '月圆深夜的山径尽头——图鉴攒够 30 种，七色花为礼。' },
+      { id: 'm13', name: '奶狗', desc: '闻到面包味就摇尾巴。', fam: '兽', rar: 1, pow: 2, spd: 3, hp: 7, bait: ['bread'], where: 'seasonPlaza', when: { p: [0, 1, 2, 3] }, hint: '广场长椅边等人分早餐。', evolve: { to: 'm14', days: 6 } },
+      { id: 'm14', name: '望月犬', desc: '月圆之夜，吠声能传过三座山。', fam: '兽', rar: 2, pow: 5, spd: 5, hp: 10, bait: ['bread'], where: 'none', when: {}, hint: '奶狗在院子里养足六天，月圆夜长成。', evolve: { to: 'm14', from: 'm13', days: 6 } }
     ],
     /* —— 百果园：果园四季果树（season=成熟季节，item=摘下进背包的物品） —— */
     fruits: [
@@ -202,7 +204,7 @@ ADV.Collect = (function () {
     ['fruits', '百果园', '🍑'], ['fish', '渔获', '🐟'], ['photos', '回忆照片', '📷'], ['wishes', '心愿集', '🏮'],
     ['cards', '童年卡', '🎴'], ['scenes', '风景相册', '📸']
   ];
-  /* 生物图鉴 42 种不在图鉴总览网格里铺开（太长），走手册独立「生物」页；
+  /* 生物图鉴 44 种不在图鉴总览网格里铺开（太长），走手册独立「生物」页；
    * 存储键沿用 col().insects（旧存档/旧测试重置逻辑兼容），catKey 做映射 */
   DB.insects = DB.critters.filter(c => c.fam === '虫');       // 斗虫擂台沿用「虫系 18」池
   const CAT_MAP = { critters: 'insects' };                    // 图鉴键映射：critters 读写 insects 槽
@@ -348,7 +350,7 @@ ADV.Collect = (function () {
   function ids(cat) { const k = catKey(cat); const c = col()[k] || {}; return DB[cat].filter(x => c[x.id]).map(x => x.id); }
   function catCount(cat) { return ids(cat).length; }
   function totalOf(cat) { return DB[cat].length; }
-  function progress() {   // 全收藏总进度（生物图鉴 42 种单独并入，虫系是它的子集不重复计）
+  function progress() {   // 全收藏总进度（生物图鉴 44 种单独并入，虫系是它的子集不重复计）
     let got = 0, total = 0;
     CATS.forEach(c => { got += catCount(c[0]); total += totalOf(c[0]); });   // CATS 项为 [cat, label, icon]
     got += catCount('critters'); total += totalOf('critters');
@@ -398,7 +400,7 @@ ADV.Collect = (function () {
   }
 
   /* ---------- 生物出现条件（时段/季节/天气） ----------
-   * 42 种 critters 用 when:{p:[时段],se:[季节],we:[天气]}，缺省=全天候；
+   * 44 种 critters 用 when:{p:[时段],se:[季节],we:[天气]}，缺省=全天候；
    * 旧 i1-i8 的 INSECT_WHEN 规则已并入 critters 表，仅作兜底 */
   const INSECT_WHEN = { i1: 'd', i2: 'sd', i3: 'rd', i4: 'fd', i5: 'an', i6: 'sn', i7: 'sd', i8: 'd' };
   function whenOk(id) {
@@ -480,7 +482,7 @@ ADV.Collect = (function () {
       if (ADV.Growth) ADV.Growth.milestone('🌙 集齐传说三只，获得称号「传说研究员」');
     }
   }
-  /* 图鉴总数含异色位：42 常规 + 已收异色补充 */
+  /* 图鉴总数含异色位：44 常规 + 已收异色补充 */
   function shinyCount() { return DB.critters.filter(c => isShiny('critters', c.id)).length; }
 
   /* —— 落叶册阶梯奖励闭环（仿图鉴里程碑）：8 种叶子收集到 3/5/8 种时发金币 + 称号 —— */

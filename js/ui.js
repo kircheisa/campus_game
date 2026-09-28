@@ -799,7 +799,7 @@ ADV.UI = (function () {
       });
     });
   }
-  /* ---------- 生物图鉴页：宝可梦式收集（42 种 = 虫18 + 水12 + 兽12）
+  /* ---------- 生物图鉴页：宝可梦式收集（44 种 = 虫18 + 水12 + 兽14；m14 望月犬仅饲养进化可得）
    * 未收显示剪影 + 出没线索；传说系未达进度显示 🔒；已收显示三维，金色异色高亮 ---------- */
   function renderCritters(g, x, y, w, h) {
     const co = ADV.Collect;
@@ -837,7 +837,7 @@ ADV.UI = (function () {
       .map(([n, t]) => `${got >= n ? '✔' : n} ${t}`).join('  ');
     const trio = ['i18', 'c12', 'm12'].map(id => co.has('critters', id) ? '✔' : '·').join('');
     text(g, `🏅 称号：${miles}  ｜  传说研究员 ${F.legendTrio ? '✔ 已获得' : trio + ' 三传说'}`, x + 40, fy + 2, 12, '#c8b6ff', undefined, 'left');
-    text(g, '🫙 水缸饲养：毛毛虫·蝌蚪养在院子里，几天后会悄悄变化', x + 40, fy + 20, 12, '#8a94c0', undefined, 'left');
+    text(g, '🫙 水缸饲养：毛毛虫·蝌蚪·奶狗养在院子里，几天后会悄悄变化（望月犬只有养出来）', x + 40, fy + 20, 12, '#8a94c0', undefined, 'left');
     text(g, '🏠 精灵小筑：小镇南街买球和口粮，珍稀架每日换新，草丛遭遇即开画布对战', x + 40, fy + 38, 12, '#8a94c0', undefined, 'left');
   }
   function renderBag(g, x, y, w, h) {

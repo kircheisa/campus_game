@@ -973,12 +973,12 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     }
     if (pick === 1) {
       if (taskTaken) {
-        await say({ name: '蒲老师', text: `今天的作业：再收录一种新生物！\n（图鉴进度 ${caught()} / 42，收录后回来找我领奖励）` });
+        await say({ name: '蒲老师', text: `今天的作业：再收录一种新生物！\n（图鉴进度 ${caught()} / ${Col.totalOf('critters')}，收录后回来找我领奖励）` });
         return;
       }
       f.hwNat.taskDay = day;
       f.hwNat.base = caught();
-      await say({ name: '蒲老师', text: `今日作业：收录一种新的生物到图鉴！\n（图鉴进度 ${caught()} / 42）\n对着虫鸣的草丛挥网、在水边下笼——\n完成后来找我，捉虫网、草编笼、鱼竿都可能送哦！` });
+      await say({ name: '蒲老师', text: `今日作业：收录一种新的生物到图鉴！\n（图鉴进度 ${caught()} / ${Col.totalOf('critters')}）\n对着虫鸣的草丛挥网、在水边下笼——\n完成后来找我，捉虫网、草编笼、鱼竿都可能送哦！` });
       save();
       return;
     }
@@ -3539,8 +3539,8 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
       const a = await choose(['摸摸头', '喂点吃的', '说说悄悄话', '道别（解除随行）', '就这样吧'], {
         cancelIndex: 4,                                     // X/ESC = 就这样吧，随时收起选项
         caption: { name: cr.name,
-                   text: stage === 3 ? '它把下巴搁在你的鞋面上，\n尾巴摇成了小风扇。'
-                       : stage === 2 ? '它绕着你的脚踝转圈，\n时不时抬头看你一眼。'
+                   text: stage === 3 ? '它把下巴搁在你的鞋面上，\n尾巴摇成了小风扇。\n（亲密度加护全开：战中每回合回体力 · 濒死稳住一次）'
+                       : stage === 2 ? '它绕着你的脚踝转圈，\n时不时抬头看你一眼。\n（亲密度加护：战中每回合回 1 体力）'
                        : stage === 1 ? '它蹲坐在你脚边，\n耳朵朝你的方向偏着。'
                        : `它安安静静待在你的影子里。\n亲密度 ${bond}/100` } });
       if (a === 4 || a === -1) return;
@@ -4135,8 +4135,13 @@ const sp = ADV.Collect.info('fish', rollFish(bait, rainy));
    * startHp 供连续作战续航（不传则满血开局，训练家阶梯即每场满血）。返回 {win,draw,myHp,body} */
   function duelRounds(me, foe, startHp) {
     const SK = ADV.Skills;
+    /* 三期C 催化进石墩战：出战者正是随行伙伴时，享受雾隐婆婆的力/速加成（与画布战同源） */
+    const flg = ADV.Game.flags, bst = (flg && flg.buddy && flg.buddy.id === me.id && flg.buddyBoost)
+      ? { pow: flg.buddyBoost.pow || 0, spd: flg.buddyBoost.spd || 0 } : { pow: 0, spd: 0 };
+    if (bst.pow || bst.spd) me = Object.assign({}, me, { pow: me.pow + bst.pow, spd: me.spd + bst.spd });
     let myHp = (startHp == null ? me.pow * 6 + 20 : startHp) + (SK ? SK.duelHp() : 0), foeHp = foe.pow * 6 + 20;
     const lines = [];
+    if (bst.pow || bst.spd) lines.push(`· ${me.name}浑身一亮——骨子里涌着催化后的力气！`);
     const strike = (att, def, isMe) => {
       const dodge = Math.max(0, def.spd * .04 - (isMe && SK ? SK.duelFocus() : 0));   // 预判技能：对手更难闪开
       if (Math.random() < dodge) { lines.push(`· ${def.name}侧身一闪，${att.name}扑了个空！`); return; }
@@ -4478,13 +4483,15 @@ E().playAction(E().player, 'laugh', 1.6);
         if (!held.length) { await say({ name: '阿橘', text: '你手上还没有能寄养的小伙伴呀。\n（草丛里收服过的都会记在图鉴上）' }); continue; }
         const opts = held.map(h => {
           const p = CO.sellPrice(h.cr, h.shiny);
-          return `${h.cr.name}${h.shiny ? '✨' : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
+          const rear = CO.critterRearing(h.id, ADV.Cal.day);   // 饲养倒计时：防止手滑卖掉临进化的幼体
+          return `${h.cr.name}${h.shiny ? '✨' : ''}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
         }).concat(['还是不卖了']);
         const i = await choose(opts, { caption: { name: '阿橘', text: '图鉴收录过的可以寄养到我这，\n按稀有度给收购价——异色翻三倍！' } });
         if (i < 0 || i >= held.length) continue;
         const h = held[i];
+        const rearH = CO.critterRearing(h.id, ADV.Cal.day);
         const sure = await choose(['卖给阿橘', '再想想'], { caption: { name: '阿橘',
-          text: `${h.cr.name}会找到好好待它的新主人。\n（图鉴收录保留，随时可以再来接回家）` } });
+          text: `${h.cr.name}会找到好好待它的新主人。` + (rearH >= 0 ? '\n（它好像快要变化了——卖前再想想）' : '') + '\n（图鉴收录保留，随时可以再来接回家）' } });
         if (sure !== 0) continue;
         const r = CO.sellCritter(h.id);
         ADV.Audio.sfx(r.ok ? 'save' : 'wrong');
@@ -4561,13 +4568,17 @@ E().playAction(E().player, 'laugh', 1.6);
       const target = missing[ti];
       const held = CO.heldCritters().filter(h => !h.gone && !h.shiny && !(f.buddy && f.buddy.id === h.id));
       if (!held.length) { await say({ name: '阿橘', text: '你手上没有能换出去的小伙伴——\n（异色和随行伙伴不收哦，去草丛再认识几只吧）' }); continue; }
-      const gopts = held.map(h => `${h.cr.name}（${'★'.repeat(h.cr.rar)}）`).concat(['取消']);
+      const gopts = held.map(h => {
+        const rear = CO.critterRearing(h.id, ADV.Cal.day);   // 饲养倒计时：防止手滑换掉临进化的幼体
+        return `${h.cr.name}（${'★'.repeat(h.cr.rar)}）${rear >= 0 ? ` 🫙剩${rear}天` : ''}`;
+      }).concat(['取消']);
       const gi = await choose(gopts, { caption: { name: '阿橘',
         text: `换「${target.name}」的话，你想用哪只来换？\n（另付换资 💰${CO.EX_COST[target.rar || 0]}）` } });
       if (gi < 0 || gi >= held.length) continue;
       const give = held[gi];
+      const rearG = CO.critterRearing(give.id, ADV.Cal.day);
       const sure = await choose(['换定！', '再想想'], { caption: { name: '阿橘',
-        text: `${give.cr.name}换「${target.name}」，另付 💰${CO.EX_COST[target.rar || 0]}。\n（${give.cr.name}会住进新家，你的图鉴收录保留）` } });
+        text: `${give.cr.name}换「${target.name}」，另付 💰${CO.EX_COST[target.rar || 0]}。` + (rearG >= 0 ? '\n（它好像快要变化了——换前再想想）' : '') + `\n（${give.cr.name}会住进新家，你的图鉴收录保留）` } });
       if (sure !== 0) continue;
       const r = CO.exchangeCritter(give.id, target.id);
       ADV.Audio.sfx(r.ok ? 'item' : 'wrong');
@@ -4575,7 +4586,7 @@ E().playAction(E().player, 'laugh', 1.6);
     }
   };
 
-  /* —— 三期C 后山隐藏驯兽导师：山隐婆婆（扫地僧定位）。克制环出师后石屋的门才会开——
+  /* —— 三期C 后山隐藏驯兽导师：雾隐婆婆（扫地僧定位）。克制环出师后石屋的门才会开——
    *    图鉴 ≥20 种、带着随行伙伴、200 文学费 + 一道驯兽难题，学成「进化催化」：
    *    随行伙伴力/速永久 +1（battle.js 与 wildBattle 的满血公式自动消费） —— */
   S.hermitHut = async () => {
@@ -6016,7 +6027,7 @@ E().playAction(E().player, 'laugh', 1.6);
       ['钓鱼大赛冠军', (f.contestChamp || 0) >= 1, '周日钓鱼大赛夺魁'],
       ['牧场主', f.cow && f.sheep, '牛棚羊圈双全（挤奶与剪毛都上手）'],
       ['小镇之光', (f.helpPts || 0) >= 12, '帮助板声望 12：全镇的感谢都归你'],
-      ['驯兽宗师', !!f.buddyBoost, '接受山隐婆婆的进化催化']
+      ['驯兽宗师', !!f.buddyBoost, '接受雾隐婆婆的进化催化']
     ];
     return A.map(([name, done, desc]) => ({ name, done: !!done, desc }));
   }

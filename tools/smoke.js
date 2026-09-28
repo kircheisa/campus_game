@@ -960,7 +960,7 @@ async function pump(promise, maxSteps) {
   console.log('\n[5.14] 童年怀旧玩法包（六个小游戏 + 广播体操 + 小卖部集卡）');
   // —— 图鉴第 8 类 ——
   ok(A.Collect.CATS.length === 9 && A.Collect.CATS.some(c => c[0] === 'cards') && A.Collect.CATS.some(c => c[0] === 'scenes')
-     && A.Collect.DB.critters.length === 42, '图鉴 9 类 + 生物图鉴 42 种（虫系旧 8 种并入生物图鉴）');
+     && A.Collect.DB.critters.length === 44, '图鉴 9 类 + 生物图鉴 44 种（虫系旧 8 种并入生物图鉴）');
   ok(A.Collect.DB.cards.length === 12 && A.Collect.DB.cards.every(c => c.id && c.name && c.star >= 1 && c.star <= 3),
      `童年卡 ${A.Collect.DB.cards.length} 张齐备（含 1-3 星）`);
   // —— 地图触发点 ——
@@ -3291,13 +3291,13 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
     ok(true, `室内地图 ${indoorMapsIds.length} 张×季节系统: 粒子系统在 indoor=true 下正常关闭无崩溃`);
   }
 
-  console.log('\n[7.0] 生物图鉴：42 种三系收集 · 窝点捕捉 · 金色异色');
+  console.log('\n[7.0] 生物图鉴：44 种三系收集 · 窝点捕捉 · 金色异色');
   {
     const CO = A.Collect;
-    // —— 数据完整性：42 种 = 虫18 / 水12 / 兽12，字段齐备 ——
-    ok(CO.critterList().length === 42, '生物图鉴：42 种入册');
-    ok(CO.critterList('虫').length === 18 && CO.critterList('水').length === 12 && CO.critterList('兽').length === 12,
-      '生物图鉴：虫18 / 水12 / 兽12 三系齐备');
+    // —— 数据完整性：44 种 = 虫18 / 水12 / 兽14（m14 望月犬仅饲养可得），字段齐备 ——
+    ok(CO.critterList().length === 44, '生物图鉴：44 种入册');
+    ok(CO.critterList('虫').length === 18 && CO.critterList('水').length === 12 && CO.critterList('兽').length === 14,
+      '生物图鉴：虫18 / 水12 / 兽14 三系齐备');
     ok(CO.DB.critters.every(c => c.name && c.fam && c.where && c.hint && c.bait.length &&
        typeof c.pow === 'number' && typeof c.spd === 'number' && typeof c.hp === 'number' && c.rar >= 1 && c.rar <= 3),
       '生物图鉴：名称/系别/出没/线索/诱饵/稀有度/三维字段齐备');
@@ -3338,12 +3338,12 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
     ok(A.Cal.energy === 49, '出手捕捉：精力 -1');
     await pump(A.Game.S.critterSpot({ pid: 'cy1', map: 'homeYard' }));
     ok(true, '窝点冷却：当日再探只提示不崩溃');
-    // —— 18 个窝点布点 ↔ 42 种出没地图全覆盖 ——
+    // —— 18 个窝点布点 ↔ 出没地图全覆盖（where:'none' = 饲养专属成体，不参与野外布点） ——
     const spotMaps = new Set();
     A.Maps.ids.forEach(id => A.Maps.get(id).objects.forEach(o => { if (o.kind === 'critter') spotMaps.add(o.map); }));
-    const needMaps = [...new Set(CO.DB.critters.map(c => c.where))];
+    const needMaps = [...new Set(CO.DB.critters.filter(c => c.where !== 'none').map(c => c.where))];
     ok(needMaps.every(m => spotMaps.has(m)), `窝点布点：${needMaps.length} 张出没地图全部有窝点覆盖`);
-    // —— 总进度并轨：生物 42 种计入总进度（虫系旧 8 种不重复计） ——
+    // —— 总进度并轨：生物 44 种计入总进度（虫系旧 8 种不重复计） ——
     ok(CO.progress().total >= CO.totalOf('critters') + CO.totalOf('books'), '总进度：生物图鉴并入收集总进度');
 
     // —— P1 随行伙伴：登记 / 生成 / 跨图跟随 / 亲密度 / Z 键互动 / 道别 ——
@@ -5156,6 +5156,62 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     const rep73a = A.Game.growthReport(), rep73b = A.Game.growthReport(), rep73c = A.Game.growthReport(true);
     ok(rep73a === rep73b && rep73c !== rep73a && rep73c.rows.length === 4,
       '成长报告缓存：growthReport() TTL 内复用，force 取新鲜值（毕业结算口径）');
+  }
+
+  console.log('\n[5.74] 玩法批次五：宠物线优化（命名统一 / 饲养保护 / 望月犬 / 亲密度提示 / 催化进石墩战）');
+  {
+    const F74 = A.Game.flags, CO74 = A.Collect;
+    // —— A 命名统一：成就文案与石屋场景都对上「雾隐婆婆」 ——
+    const achi74 = A.Game.achievements().find(a => a.name === '驯兽宗师');
+    ok(achi74 && achi74.desc.indexOf('雾隐婆婆') >= 0,
+      '命名统一：成就「驯兽宗师」文案改指雾隐婆婆（与石屋台词同口径）');
+    ok(String(A.Game.S.hermitHut).indexOf('山隐') < 0,
+      '命名统一：石屋场景源码无「山隐」残留');
+    // —— C 新饲养链：奶狗 → 望月犬（成体野生不出，仅饲养可得） ——
+    const m1374 = CO74.critter('m13'), m1474 = CO74.critter('m14');
+    ok(!!m1374 && !!m1474 && m1374.evolve && m1374.evolve.to === 'm14' && m1374.evolve.days === 6
+      && m1474.rar === 2 && m1474.where === 'none' && CO74.totalOf('critters') === 44,
+      '饲养链×3：奶狗（6 天）→ 望月犬入册——总数 44，成体 where=none 野外不出（图鉴专属）');
+    ok(String(A.Game.S.teacherPu).indexOf("totalOf('critters')") >= 0 && String(A.Game.S.teacherPu).indexOf('/ 42') < 0,
+      '蒲老师作业口径：图鉴进度分母动态取 totalOf（新增物种不再漏统计）');
+    // —— B 收购台/交换的饲养保护标记 ——
+    ok(String(A.Game.S.petShop).indexOf('critterRearing') >= 0 && String(A.Game.S.petShop).indexOf('🫙剩') >= 0
+      && String(A.Game.S.exchange).indexOf('critterRearing') >= 0,
+      '饲养保护：收购台与交换列表展示「🫙剩N天」倒计时，确认台词提示临进化');
+    // —— D 亲密度 perk 可见 ——
+    ok(String(A.Game.S._buddy).indexOf('亲密度加护') >= 0,
+      '亲密度可见化：随行互动菜单按阶段展示战斗加护说明');
+    // —— C/E 功能面：applyEvolve 化蝶 + 望月犬饲养 + duelRounds 催化（确定性桩） ——
+    const cal74 = A.Cal.dump();
+    const keep74 = { col: JSON.stringify(F74.col || null), buddy: JSON.stringify(F74.buddy || null),
+      boost: JSON.stringify(F74.buddyBoost || null) };
+    const realRnd74 = Math.random;
+    try {
+      A.Cal.load({ day: 10, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      F74.col = F74.col || {}; F74.col.insects = { i16: { s: 1, d: 4 } };   // 金色毛毛虫，10-4=6 ≥ 5 天
+      const ev74 = CO74.applyEvolve(10);
+      ok(CO74.has('critters', 'i2') && CO74.critterRearing('i16', 10) === -1
+        && ev74.length === 1 && ev74[0].indexOf('蝴蝶') >= 0,
+        '饲养进化（毛毛虫→蝴蝶）：applyEvolve 换日结算入册，幼体计时清除防重复');
+      ok(CO74.isShiny('critters', 'i2'), '饲养进化：异色位继承（金色毛毛虫养出金色蝴蝶）');
+      F74.col.insects = { m13: { s: 0, d: 3 } };                            // 奶狗 day3 饲养，day9 满 6 天
+      const ev74b = CO74.applyEvolve(9);
+      ok(CO74.has('critters', 'm14') && ev74b.length === 1 && ev74b[0].indexOf('望月犬') >= 0,
+        '望月犬：奶狗养足六天长成（仅饲养可得，进化链生效）');
+      // duelRounds 催化：Math.random 定桩 0.5 → 有/无催化双跑对比
+      Math.random = () => .5;
+      const me74 = CO74.critter('m1'), foe74 = CO74.critter('i16');          // 松鼠 vs 毛毛虫（兽克虫）
+      F74.buddy = null; F74.buddyBoost = null;
+      const d74plain = A.Game.S._duel(me74, foe74);
+      F74.buddy = { id: 'm1' }; F74.buddyBoost = { pow: 2, spd: 2 };
+      const d74boost = A.Game.S._duel(me74, foe74);
+      ok(d74boost.win && d74boost.body.indexOf('催化') >= 0 && d74boost.myHp > d74plain.myHp,
+        '催化进石墩战：出战者=随行时力/速 +2 生效（演出台词 + 战果更优），未催化对照不触发');
+    } finally {
+      Math.random = realRnd74;
+      F74.col = JSON.parse(keep74.col); F74.buddy = JSON.parse(keep74.buddy); F74.buddyBoost = JSON.parse(keep74.boost);
+      A.Cal.load(cal74);
+    }
   }
 
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
