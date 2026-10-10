@@ -343,8 +343,45 @@
     await say({ name: '小花', text: `「这个季节，${fl}最漂亮了。\n要不要来园艺社帮忙？」` });
   };
   S.sunyang = async () => {
+    const C = ADV.Cal, f = F();
+    // s6 时刻表偶遇：清晨（period 0）操场相遇可跟跑两圈——体魄小委托（每日一次）
+    if (C.period === 0 && f.jogDay !== C.day) {
+      await say({ name: '孙阳', text: '「早！晨跑的两圈刚热完身。\n……怎么样，跟两圈？」' });
+      const go = await choose(['跟跑两圈！', '下次吧'], { caption: { name: '晨跑小委托', text: '清晨限定 · 精力 -5 · 体魄成长' } });
+      if (go === 0) {
+        C.costEnergy(5);
+        if (ADV.Growth) ADV.Growth.addDim('body', 3, '晨跑');
+        gainBond('sunyang', 1);
+        f.jogDay = C.day;
+        ADV.Audio.sfx('emote');
+        UI().toast(' 🏃 晨跑两圈——风都是清醒的味道（体魄 +3） ');
+        save();
+      } else await say({ name: '孙阳', text: '「行，跑步不催人。\n不过记住——操场不关门，机会也是。」' });
+      return;
+    }
     await say({ name: '孙阳', text: '「今天投了两百个球。\n明天，投两百零一个。」' });
     if ((F().shootBest || 0) >= 5) { gainBond('sunyang', 3); await say({ name: '孙阳', text: `「你那${F().shootBest}连进我看到了。\n……队里的位置，给你留着。」` }); }
+  };
+  /* s6 时刻表偶遇：傍晚（period 4）喷泉边散步的李老师——每日一道抽背小题 */
+  S.teacherCnWalk = async () => {
+    const C = ADV.Cal, f = F();
+    if (f.walkQuizDay !== C.day) {
+      await say({ name: '李老师', text: '「傍晚的风不读书可惜了。\n我沿喷泉走一圈，你陪背一句？」' });
+      const go = await choose(['来一道！', '改天吧'], { caption: { name: '傍晚抽背', text: '每日一题 · 答对有零花钱' } });
+      f.walkQuizDay = C.day;
+      if (go === 0) {
+        if (await examOnce('李老师抽背', 'chinese', 'easy', C.day)) {
+          f.gold = (f.gold || 0) + 6;
+          ADV.Audio.sfx('save');
+          await say({ name: '李老师', text: '「一字不差——嘴上功夫也是真功夫。\n拿着，买支冰棍。」\n（零花钱 +6）' });
+        } else {
+          await say({ name: '李老师', text: '「唔，差一点点。听我念一遍。」\n她轻轻背完，晚风都慢了半拍。\n「明天再来。」' });
+        }
+        save();
+      } else await say({ name: '李老师', text: '「好，书不怕晚。\n喷泉的水声，也当歇脚。」' });
+      return;
+    }
+    await say({ name: '李老师', text: '（李老师绕着喷泉慢慢走，\n影子被夕阳拉得很长。）' });
   };
   S.datou = async () => { await say({ name: '大头', text: '「三碗！今天三碗！\n阿姨都说我是无底洞。」' }); };
   S.zhaoling = async () => { await say({ name: '赵大姐', text: '「今天的汤熬了四个钟头，\n喝完写作业都快些！」' }); };

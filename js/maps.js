@@ -208,6 +208,7 @@ ADV.Maps = (function () {
     m.npcs.push({ id: 'xiaohua', x: 30, y: 21, dir: 'left', pal: 'xiaohua', name: '小花', s: 'xiaohua', wander: 1, mood: '♥', acts: ['wave'] });
     m.npcs.push({ id: 'sunyang', x: 8, y: 9, dir: 'down', pal: 'sunyang', name: '孙阳', s: 'sunyang', wander: 2, acts: ['laugh', 'raise'] });
     m.npcs.push({ id: 'datou', x: 13, y: 29, dir: 'down', pal: 'datou', name: '大头', s: 'datou', wander: 2, acts: ['laugh', 'yawn'] });
+    m.npcs.push({ id: 'teacher_cn_dusk', x: 26, y: 25, dir: 'down', pal: 'teacher_cn', name: '李老师', s: 'teacherCnWalk', acts: ['walk', 'think'] });   // s6 傍晚限定：李老师喷泉边散步（仅傍晚在岗，见 SCHED）
     m.objects.push({ kind: 'sign', x: 20, y: 10, w: 1, h: 2, text: '许愿池', solidTiles: [[0, 1]], s: 'wishingWell' });
     m.objects.push({ kind: 'bikeRack', x: 35, y: 10, w: 1, h: 1, solidTiles: [], s: 'bikeRack' });
     m.objects.push({ kind: 'sign', x: 18, y: 8, w: 1, h: 2, text: '广播站', solidTiles: [[0, 1]], s: 'radioStation' });    // 校园广播站
@@ -2052,6 +2053,7 @@ ADV.Maps = (function () {
       xiaohua:   { 0: [16, 10], 1: [16, 10], 2: [26, 10], 3: [30, 21], 4: [17, 10], 5: null },
       sunyang:   { 0: [8, 9], 1: [8, 9], 2: [7, 22], 3: [5, 24], 4: [42, 14], 5: null },
       datou:     { 0: [13, 29], 1: [35, 28], 2: [36, 28], 3: [13, 29], 4: [36, 29], 5: null },
+      teacher_cn_dusk: { 0: null, 1: null, 2: null, 3: null, 4: [26, 25], 5: null },   // s6：李老师傍晚喷泉边散步（仅傍晚现身）
       cat:       { 0: [25, 17], 1: [25, 17], 2: [27, 18], 3: [25, 17], 4: [39, 16], 5: [25, 17] },
       dog2:      { 0: [20, 31], 1: [23, 13], 2: [18, 8], 3: [20, 31], 4: [20, 31], 5: [23, 13] },
       principal: { 0: [19, 12], 1: [19, 12], 2: [9, 7], 3: [19, 12], 4: [19, 12], 5: [19, 12] }

@@ -5875,6 +5875,55 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.87] 体验批次十八：时刻表偶遇——孙阳晨跑 + 李老师傍晚抽背');
+  {
+    const realIntro87 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      const body87 = () => A.Growth.dump().dim.body;
+      // —— A. 清晨孙阳：跟跑两圈（体魄 +3 · 精力 -5 · 好感 +1），同日再访被拦 ——
+      A.Cal.load({ day: 6, period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      const b87 = body87(), e87 = A.Cal.dump().energy;
+      await pump(A.Game.S.sunyang());
+      ok(A.Game.flags.jogDay === 6 && body87() === b87 + 3 && A.Cal.dump().energy === e87 - 5,
+        '时刻表偶遇：清晨跟孙阳跑两圈 → 体魄 +3 · 精力 -5，jogDay 入档');
+      await pump(A.Game.S.sunyang());
+      ok(body87() === b87 + 3 && A.Cal.dump().energy === e87 - 5,
+        '时刻表偶遇：同日再访孙阳只余闲聊（委托日锁，不重复结算）');
+      // —— B. 傍晚李老师：校园现身（SCHED 仅傍晚） + 抽背一道（答对 +6 金） ——
+      A.Cal.load({ day: 6, period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      A.Engine.loadMap('campus', 22, 30, 'up');
+      A.Engine.applySchedule(true);
+      const dusk87 = A.Engine.getNpc('teacher_cn_dusk');
+      ok(!!dusk87 && dusk87.hidden === true, '时刻表偶遇：李老师清晨不在校园（SCHED 白天离场）');
+      A.Cal.load({ day: 6, period: 4, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      A.Engine.applySchedule(true);
+      ok(!!dusk87 && dusk87.hidden === false && dusk87.x === 26 && dusk87.y === 25,
+        '时刻表偶遇：傍晚李老师现身喷泉边（26,25）——「固定时段必在」彩蛋');
+      const gold87 = A.Game.flags.gold;
+      await pump(A.Game.S.teacherCnWalk());                 // 拦截器按题库自动答对
+      ok(A.Game.flags.walkQuizDay === 6 && A.Game.flags.gold === gold87 + 6,
+        '时刻表偶遇：傍晚抽背答对 → 零花钱 +6，walkQuizDay 入档');
+      await pump(A.Game.S.teacherCnWalk());
+      ok(A.Game.flags.gold === gold87 + 6, '时刻表偶遇：同日再访只余散步（抽背日锁）');
+      // —— C. 源断言：SCHED 接线 + 两个时段门 ——
+      const maps87 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      const town87 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(maps87.includes('teacher_cn_dusk: { 0: null, 1: null, 2: null, 3: null, 4: [26, 25], 5: null }')
+        && town87.includes('S.teacherCnWalk = async'),
+        '点位接线：SCHED 傍晚限定条目 + S.teacherCnWalk 抽背脚本在位');
+      ok(town87.includes('C.period === 0 && f.jogDay !== C.day'),
+        '时段门：孙阳晨跑仅清晨（period 0）开放，非清晨保持原闲聊');
+    } finally {
+      A.Game.S._intro = realIntro87;
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
