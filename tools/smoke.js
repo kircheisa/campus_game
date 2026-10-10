@@ -45,7 +45,9 @@ global.innerWidth = 960; global.innerHeight = 640;
 
 /* ---------- 按依赖顺序加载脚本 ---------- */
 const ROOT = path.join(__dirname, '..');
-for (const f of ['audio', 'sprites', 'maps', 'ui', 'engine', 'cal', 'books', 'collect', 'mistake', 'growth', 'skills', 'ai', 'battle', 'minigame', 'game']) {
+const GAME_CHUNKS = ['game-core', 'game-event', 'game-scene', 'game-quest', 'game-retro', 'game-town', 'game-life', 'game-save'];
+const gameSrc = () => GAME_CHUNKS.map(f => fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8')).join('\n');
+for (const f of ['audio', 'sprites', 'maps', 'ui', 'engine', 'cal', 'books', 'collect', 'mistake', 'growth', 'skills', 'ai', 'battle', 'minigame', ...GAME_CHUNKS]) {
   vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 const A = global.ADV;
@@ -5519,7 +5521,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       ok(maps79.includes("s: 'tgameMath'") && maps79.includes("s: 'tgameCn'")
         && maps79.includes("s: 'tgameSci'") && maps79.includes("s: 'tgameEn'"),
         '接线：四块场地招牌（⚖ 教室 / 🎋 图书馆 / ⚡ 实验室 / 🕹 英语教室）已挂签名挑战');
-      const game79 = fs.readFileSync(path.join(ROOT, 'js', 'game.js'), 'utf8');
+      const game79 = gameSrc();
       ok(game79.includes("markTkind(subject, 'trial')") && game79.includes("markTkind(subject, 'hw')")
         && game79.includes("markTkind(cfg.en, 'olymp')"),
         '接线：试炼 / 今日作业 / 学科奥赛三处玩法打卡钩子已埋');
@@ -5591,7 +5593,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       ok(F81.capsuleDone === true && F81.col.photos.p_capsule === true,
         'NG+ 终章：重挖去年胶囊变体（张叔保管 + 第七封无名信）照常收口');
       // —— D. 接线面：NG_REUNION 补齐 / 包装器钩子 / 18 段数据 / 成就与照片上架 ——
-      const src80 = fs.readFileSync(path.join(ROOT, 'js', 'game.js'), 'utf8');
+      const src80 = gameSrc();
       ok(src80.includes("gainBond('dazhuang', 5)") && src80.includes("gainBond('xiaoying', 5)")
         && src80.includes("gainBond('lufei', 5)"),
         'NG_REUNION 补齐：大壮 / 小影 / 陆飞的新学期重逢过场已挂');
@@ -5612,6 +5614,38 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  console.log('\n[5.81] 工程批次十二：game.js 拆分为 8 段（分段在盘 / index.html 接线 / 导出面完好）');
+  {
+    // —— A. 文件面：8 段在盘、旧 monolith 移除 ——
+    ok(GAME_CHUNKS.every(f => fs.existsSync(path.join(ROOT, 'js', f + '.js'))),
+      '拆分：game-core → game-save 8 个分段文件全部在盘');
+    ok(!fs.existsSync(path.join(ROOT, 'js', 'game.js')), '拆分：旧 monolith js/game.js 已删除');
+    // —— B. 接线面：index.html 按语义顺序挂 8 个 defer 标签 ——
+    const html81 = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    ok(!html81.includes('js/game.js'), '拆分：index.html 不再引用旧 js/game.js');
+    let pos81 = -1, ordered81 = true;
+    for (const f of GAME_CHUNKS) {
+      const p = html81.indexOf('js/' + f + '.js');
+      if (p <= pos81) { ordered81 = false; break; }
+      pos81 = p;
+    }
+    ok(ordered81, '拆分：index.html 按 core→event→scene→quest→retro→town→life→save 顺序接线（加载序即语义）');
+    // —— C. 导出面：ADV.Game 回填完整，存取器仍可读可写 ——
+    const src81 = gameSrc();
+    ok(src81.includes('\nADV.Game = {\n'), '拆分：导出面在末段以 ADV.Game = { … } 字面量回填（getter 未被 Object.assign 拷值破坏）');
+    const G81 = A.Game;
+    ok(Object.keys(G81).length >= 55 && typeof G81.newGame === 'function' && typeof G81.save === 'function'
+      && typeof G81.S === 'object' && typeof G81.flags === 'object',
+      '拆分：导出面成员齐全（S / save / newGame / flags 等入口可用，共 ' + Object.keys(G81).length + ' 项）');
+    const heroKeep81 = G81.hero;
+    try {
+      G81.hero = 'hero_girl';
+      ok(G81.hero === 'hero_girl', '拆分：hero 存取器经 setter 回填仍可写');
+    } finally {
+      G81.hero = heroKeep81;
     }
   }
 

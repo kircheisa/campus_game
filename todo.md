@@ -1,6 +1,13 @@
 # todo.md — 剩余问题梳理
 
-> 更新于 2026-10-10，当前 smoke **1202/0** 全绿。
+> 更新于 2026-10-10，当前 smoke **1209/0** 全绿。
+> **工程批次十二（2026-10-10）✅**：`js/game.js`（10297 行 monolith）按分节横幅机械拆为 8 个连续片段
+> `game-core / game-event / game-scene / game-quest / game-retro / game-town / game-life / game-save`——
+> 经典 `<script defer>` 按序加载共享全局词法环境（无 module、无打包、file:// 双击即玩不变），
+> 正文逐字节不动（拆分脚本重建校验 byte-identical），初始化顺序 = 加载顺序，
+> 导出面在末段 `game-save.js` 以 `ADV.Game = { … }` 字面量回填（flags/friends/hero/busy/quickPick 存取器保真）；
+> 拆分暴露一例仅靠 monolith 函数提升存活的顶层死代码 `_examAskRaw`，已清除；
+> smoke 新增 [5.81] 七断言（分段在盘 / index.html 接线顺序 / 旧文件移除 / 导出面完整可写）。详见 [项目记录](docs/项目记录.md) 第二十章。
 > **体验批次十一（2026-10-10·用户点单）✅**：六挚友隐藏线——心里话后每挚友追加 3 段隐藏剧情
 > （首段下次对话即开、之后每段隔 2 游戏日；每段好感 +2 学院分 +2；第三段投「一封信」进时光胶囊），
 > 六信齐 → 时光胶囊终章（老樟树埋胶囊·当场读信·「时光胶囊大合影」入册 + 成就「时光信使」；
@@ -108,7 +115,11 @@
   消息回看层（L）、存档导出导入（剪贴板权限）、全屏按钮、BGM 淡切听感、好友页滚动、
   HUD 三态（Q 循环）与虚拟按键默认显隐（V）、小屏 `.soft` 清晰度、夜晚帧率对比。
 - [ ] **存档系统升级候选**：导出/导入已落地 ✅，剩余多槽位（`save_v1_a/b` 交替写 + 损坏回退，未排期）。
-- [ ] **game.js 拆分候选**：8483+ 行单体按板块注释边界拆模块（story/farm/market/friendship/mail 等）。
+- [x] **game.js 拆分** ✅（2026-10-10 工程批次十二）：10297 行 monolith 按分节横幅机械拆为
+  `game-core / game-event / game-scene / game-quest / game-retro / game-town / game-life / game-save`
+  八个连续片段（经典 `<script defer>` 按序加载共享全局词法环境，正文逐字节不动、无 module、file:// 双击即玩不变）；
+  导出面在末段 `ADV.Game = { … }` 字面量回填（getter 保真）；拆分暴露并清除唯一一例顶层死代码
+  `_examAskRaw`；smoke [5.81] 七断言守护接线与导出面（1209/0）。
 
 ## 二、测试侧遗留
 
