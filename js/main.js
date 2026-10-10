@@ -796,6 +796,13 @@ ADV.Main = (function () {
     } catch (e1) {}
   }
   window.addEventListener('error', e => {
+    // 游戏本体代码全部在 js/*.js 里；来源不是它们的错误（浏览器插件/用户脚本等）
+    // 不写入游戏内错误框，只留控制台——避免把外部脚本的报错当成游戏故障展示
+    const src = e.filename || '';
+    if (!/\/js\/[a-z]+\.js(\?|$)/i.test(src)) {
+      try { console.warn('[CampusAdv] 非游戏脚本的报错（已忽略，不进游戏错误框）：', e.message, src || '(无来源)'); } catch (e0) {}
+      return;
+    }
     showFatal((e.message || '未知错误') + ' @ ' + (e.lineno || '?'));
   });
   window.addEventListener('unhandledrejection', e => {          // 异步任务（AI 出题等）失败兜底

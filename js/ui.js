@@ -241,8 +241,12 @@ ADV.UI = (function () {
           if (press.cancel || active.capPage >= active.capPages.length - 1) active.capDone = true;
           else active.capPage++;
           ADV.Audio.sfx('ok');
+          return;
         }
-        return;
+        if (press.up || press.down || press.pageup || press.pagedown)
+          active.capDone = true;                          // 方向键：跳过说明直达选项，本键同帧生效（S 一按就动）
+        else
+          return;
       }
       const n = active.options.length;
       if (press.up) { active.index = (active.index + n - 1) % n; clampChooseScroll(active); ADV.Audio.sfx('cursor'); }

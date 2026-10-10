@@ -5411,6 +5411,30 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.78] 体验批次九：选项说明页方向键直达（S 一按就动）+ 错误框只认游戏脚本');
+  {
+    const qKeep = pressQueue; pressQueue = [];
+    try {
+      // —— 说明页阶段按 S：跳过说明并同帧生效（旧版方向键被吞，须先按 X/Z 才能导航） ——
+      let picked = -1;
+      const p78 = A.UI.choose(['甲', '乙', '丙'], { caption: { name: '店员', text: '一\n二\n三\n四' } });   // 4 行 → 2 页说明
+      p78.then(v => { picked = v; });
+      A.UI.update(1 / 60, { down: true });
+      ok(A.UI.activeInfo && A.UI.activeInfo.index === 1, '选项窗：说明页阶段按 S → 直达选项且光标移到第 2 项');
+      A.UI.update(1 / 60, { ok: true });
+      for (let i = 0; i < 20 && picked < 0; i++) await new Promise(r => setImmediate(r));
+      ok(picked === 1, '选项窗：S + Z 两键即选中「乙」（无需先按 X 跳说明）');
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+      // —— errbox 只认游戏自身 js 的错误（main.js 源码口径） ——
+      const main81 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      ok(main81.indexOf('[a-z]+\\.js') >= 0 && main81.indexOf('非游戏脚本') >= 0 && main81.indexOf('showFatal(') >= 0,
+        '错误框：window.onerror 按来源过滤 —— 仅 js/*.js 进错误框，插件/用户脚本报错只留控制台');
+    } finally {
+      pressQueue = qKeep;
+      for (let i = 0; i < 300 && (A.UI.busy || A.Game.busy); i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
