@@ -108,7 +108,10 @@ window.ADV = window.ADV || {};
     // —— 时段自习（批次十四）——
     morningReadDay: 0, nightStudyDay: 0,               // 晨读 / 晚自习：上次完成的游戏日（当日 buff 判定）
     // —— 学业光荣榜（批次十五）——
-    acadFirst: false, acadTopWeek: -1                  // 是否登顶过（成就「全校第一」）/ 上次领登顶奖学金的周
+    acadFirst: false, acadTopWeek: -1,                 // 是否登顶过（成就「全校第一」）/ 上次领登顶奖学金的周
+    // —— 道德抉择事件池（批次十六）——
+    moral: {},                                         // 本周目已做过的抉择 { 事件id: 'a'/'b' }
+    moralPrev: {}                                      // 「上一个你」的抉择留底（NG+ 跨周目累积，事件重演时引用）
   });
 
   const state = {

@@ -601,6 +601,8 @@ async function pump(promise, maxSteps) {
   ok(A.Game.flags.xiaoyingDone, '小影感化：夜晚天台归还画册');
   await pump(A.Game.S.wuyun({ id: 'wuyun' }));
   ok(A.Game.flags.wuyunStudy, '乌云感化：一起复习（3 题对 2）');
+  // 隔离：道德抉择池 8 枚全标记已放完——day≥3 奇数日的 boardCheck 不再被抉择事件拦路（[5.85] 自会 newGame 复位再测）
+  A.Game.flags.moral = { wallet: 'a', cheat: 'a', blame: 'a', change: 'a', catfish: 'a', tornpage: 'a', votes: 'a', umbrella: 'a' };
   // 运动会（act3 事件，先于月考触发）
   await pump(A.Game.S.boardCheck({}));
   ok(A.Game.flags.sportsDone, '运动会三连（竞速/投篮/对抗）完成');
@@ -5779,6 +5781,54 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         '成就与存档：全校第一成就行在位，blankFlags 只增补 acadFirst / acadTopWeek 两键');
     } finally {
       A.Game.S._intro = realIntro84;
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  console.log('\n[5.85] 体验批次十六：道德抉择事件池（8 枚两难小事件 + NG+「上一个你」回响）');
+  {
+    const realIntro85 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      A.Cal.load({ day: 3, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });  // day3（非节日，隔天触发窗）
+      const F85 = A.Game.flags;
+      // —— A. 首枚事件（钱包）默认选 A：声望/学院分入账，选择入档 ——
+      const cup85 = F85.cup, help0 = F85.helpPts || 0;
+      await pump(A.Game.S.boardCheck());
+      ok(F85.moral.wallet === 'a' && F85.helpPts === help0 + 2 && F85.cup === cup85 + 1,
+        '抉择池：day3 校务板链触发「走廊里的钱包」，选 A → 声望 +2 · 学院分 +1，选择入档 moral.wallet = a');
+      // —— B. 重开同事件改选 B：金币入账、声望回落 ——
+      F85.moral = {};
+      const gold85 = F85.gold;
+      choosePick = () => 1;
+      await pump(A.Game.S.boardCheck());
+      choosePick = null;
+      ok(F85.moral.wallet === 'b' && F85.gold === gold85 + 30 && F85.helpPts === help0,
+        '抉择池：同事件改选 B → 金币 +30 · 声望 -2（-2 后回到 help0），moral.wallet = b');
+      // —— C. NG+：抉择池重开，moralPrev 留底；重演时引用「上一个你」 ——
+      A.Game.ngStart();
+      const F86 = A.Game.flags;
+      ok(Object.keys(F86.moral).length === 0 && F86.moralPrev.wallet === 'b',
+        'NG+：moral 清零（池子重开），上一世选择留底 moralPrev.wallet = b');
+      A.Cal.load({ day: 3, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      await pump(A.Game.S.boardCheck());
+      ok(F86.moral.wallet === 'a',
+        'NG+ 回响：同一枚事件重演（开场提「上一个你」、结算对照异同），新选择重新入档');
+      // —— D. 源断言：数据面 / 接线 / 存档兼容 ——
+      const src85 = gameSrc();
+      ok((src85.match(/id: '(wallet|cheat|blame|change|catfish|tornpage|votes|umbrella)'/g) || []).length === 8,
+        '数据面：道德抉择池 8 枚齐全（钱包/纸条/玻璃/零钱/偷鱼猫/书页/选票/雨伞）');
+      ok(src85.includes('C.day >= 3 && C.day % 2 === 1 && await moralEvent()')
+        && src85.includes('moralPrev: Object.assign({}, F().moralPrev, F().moral)'),
+        '接线：校务板链挂 moralEvent（day≥3 隔天一枚、节日大事件优先）；ngStart 跨周目累积 moralPrev');
+      ok(src85.includes('moral: {},') && src85.includes('moralPrev: {}'),
+        '存档兼容：blankFlags 只增不改补 moral / moralPrev 两键（旧档合并自动补空）');
+    } finally {
+      A.Game.S._intro = realIntro85;
       A.Game.hero = 'hero_boy';
       try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
       A.Game.busy = false;

@@ -281,12 +281,14 @@
 
   // —— NG+：带着友谊与图鉴重新开学 ——
   function ngStart() {
-    const keep = { friends: JSON.parse(JSON.stringify(state.friends)), col: JSON.parse(JSON.stringify(F().col || {})), items: JSON.parse(JSON.stringify(F().items || {})), name: F().name || '', ngplus: true };
+    const keep = { friends: JSON.parse(JSON.stringify(state.friends)), col: JSON.parse(JSON.stringify(F().col || {})), items: JSON.parse(JSON.stringify(F().items || {})), name: F().name || '', ngplus: true,
+                   moralPrev: Object.assign({}, F().moralPrev, F().moral) };   // 「上一个你」跨周目累积
     state.flags = blankFlags();
     state.flags.col = keep.col;
     state.flags.items = keep.items;
     state.flags.name = keep.name;                        // 新学期还是同一个人
     state.flags.ngplus = keep.ngplus;
+    state.flags.moralPrev = keep.moralPrev;              // 抉择池重开，但旧选择都记得
     state.friends = keep.friends;
     ADV.Cal.load({ day: 1, period: 0, weather: '晴', checkedIn: false, streak: 0 });
     // NG+ 信物（成长系统三选一，由标题菜单进入时选择；默认笔记本）
@@ -1037,6 +1039,75 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     CO.gainCritter(pick.id, true);
   }
   S._petGift = petExamGift;                              // 测试钩子（同 S._famAdv 惯例）
+  /* —— 道德抉择事件池（C8）：8 枚两难小事件，影响声望/好感/钱包；选择入档，NG+ 重演时「上一个你」回响 ——
+   * 效果字段：help 声望 / gold 金币 / cup 学院分 / energy 精力 / bond {id,n} 好感（helpPts 夹 0 下限） */
+  const MORAL_EVENTS = [
+    { id: 'wallet', title: '走廊里的钱包',
+      setup: '走廊拐角，一个鼓鼓的钱包躺在地上。\n四周一个人影都没有。',
+      a: { t: '交给老师', help: 2, cup: 1,
+           text: '你把钱包送到了教务处。\n失主是食堂张叔——他连声道谢。\n（帮助板声望 +2 · 学院分 +1）' },
+      b: { t: '悄悄收起来', gold: 30, help: -2,
+           text: '你左右看看，把它塞进了书包。\n钱包里 30 文钱……沉甸甸的。\n（金币 +30 · 心里有点过意不去：声望 -2）' } },
+    { id: 'cheat', title: '邻座的纸条',
+      setup: '随堂测验，邻座同学悄悄捅了捅你：\n「第五题……给我瞄一眼嘛。」',
+      a: { t: '小声给他讲思路', bond: { id: 'dazhuang', n: 2 }, kp: 1,
+           text: '你没给他看答案，但把思路讲了一遍。\n「……哦——原来是这样！」他眼睛亮了。\n（大壮好感 +2 · 知识点 +1：讲一遍记得更牢）' },
+      b: { t: '把卷子挪过去', bond: { id: 'dazhuang', n: 1 }, help: -1,
+           text: '你把卷子挪了挪。他飞快抄完，冲你比了个大拇指。\n监考老师似乎没发现……但你心里毛毛的。\n（大壮好感 +1 · 声望 -1）' } },
+    { id: 'blame', title: '碎掉的玻璃',
+      setup: '操场边「哗啦」一声——大壮踢球砸碎了窗。\n他脸都白了：「千万别说是我……」\n这时老师正朝这边走来。',
+      a: { t: '替大壮认下来', bond: { id: 'dazhuang', n: 3 }, help: -1,
+           text: '「是我不小心。」你说。\n老师批评了你。大壮低下头，攥紧了拳头。\n（大壮好感 +3 · 声望 -1）' },
+      b: { t: '说出真相', bond: { id: 'dazhuang', n: -1 }, help: 2,
+           text: '「是大壮踢的。」你如实说。\n大壮挨了批评，气鼓鼓地瞪了你一眼——\n但放学时他小声说了句「……其实该谢谢你」。\n（声望 +2 · 大壮好感 -1）' } },
+    { id: 'change', title: '多找的五文钱',
+      setup: '食堂结账，阿姨手一抖，多找了 5 文钱。\n她已经转身去忙下一单了。',
+      a: { t: '退回去', help: 1, text: '「阿姨，多找了五文！」\n她笑着直夸你实在。（声望 +1）' },
+      b: { t: '收下', gold: 5, text: '你默默把五文钱收进兜里。\n（金币 +5。好像也没人知道……）' } },
+    { id: 'catfish', title: '偷鱼的猫',
+      setup: '食堂后门，一只小猫叼着条鱼——\n被帮工阿姨当场逮住。猫委屈地「喵」了一声。',
+      a: { t: '替猫赔鱼钱', gold: -3, bond: { id: 'cat', n: 2 },
+           text: '你掏出 3 文替小猫埋了单。\n小猫蹭了蹭你的裤脚，叼着鱼跑了。\n（金币 -3 · 小猫好感 +2）' },
+      b: { t: '说这只猫不认识', help: -1, text: '你摇摇头走开了。\n身后传来猫的叫声，你没回头。\n（声望 -1……总觉得欠了点什么）' } },
+    { id: 'tornpage', title: '被撕的书页',
+      setup: '图书馆还书时，你发现书里有一页\n被前一位读者撕走了。没人注意到。',
+      a: { t: '主动告诉秦墨', help: 1, cup: 1,
+           text: '你把缺页的事告诉了秦墨。\n他愣了一下，轻声道谢，补记了书目。\n（声望 +1 · 学院分 +1）' },
+      b: { t: '装作没看见', text: '你把书塞回还书箱，快步走开。\n（就当……没看见吧。）' } },
+    { id: 'votes', title: '多出来的三票',
+      setup: '班委计票结束——你比林小雨多三票。\n可你瞥见唱票时有一列被念重了。\n说实话，那三票……不该算你的。',
+      a: { t: '当场提出来', bond: { id: 'linxiaoyu', n: 2 }, help: 2, cup: 1,
+           text: '「等等——有一列念重了。」\n全班安静了两秒，随后为你鼓掌。\n林小雨看你的眼神都变了。\n（声望 +2 · 林小雨好感 +2 · 学院分 +1）' },
+      b: { t: '沉默接过班委', gold: 20, help: -2,
+           text: '你什么也没说，接过了班委的牌子。\n（班委补贴 +20 文 · 声望 -2：总有人看出了破绽）' } },
+    { id: 'umbrella', title: '暴雨的校门口',
+      setup: '放学暴雨。校门口，小影没带伞，\n抱着书包发呆。你家就在隔壁街。',
+      a: { t: '送小影回家', energy: 5, bond: { id: 'xiaoying', n: 2 },
+           text: '你把伞塞给小影，两人挤着走了一路。\n淋湿了半边肩膀，但聊得很开心。\n（精力 -5 · 小影好感 +2）' },
+      b: { t: '自己先走', text: '你撑着伞小跑回家。\n透过雨幕，好像看见小影还在屋檐下。\n（……明天带两块糖赔个罪吧。）' } }
+  ];
+  async function moralEvent() {
+    const f = F(), C = ADV.Cal;
+    const ev = MORAL_EVENTS.find(e => !f.moral[e.id]);
+    if (!ev) return false;                               // 全池放完收口
+    const prev = (f.moralPrev || {})[ev.id];
+    await say({ name: '抉择', text: (prev ? '（恍惚间想起——上一个「你」，也在这里犹豫过。）\n' : '') + ev.setup });
+    const i = await choose([ev.a.t, ev.b.t], { caption: { name: ev.title, text: '怎么选，都会成为你的一部分。' } });
+    const pick = i === 0 ? ev.a : ev.b;
+    f.moral[ev.id] = i === 0 ? 'a' : 'b';
+    if (pick.help) f.helpPts = Math.max(0, (f.helpPts || 0) + pick.help);
+    if (pick.gold) f.gold = Math.max(0, (f.gold || 0) + pick.gold);
+    if (pick.cup) addCup(pick.cup);
+    if (pick.energy) C.costEnergy(pick.energy);
+    if (pick.kp && ADV.Mistake) ADV.Mistake.gain('final', pick.kp);
+    if (pick.bond) gainBond(pick.bond.id, pick.bond.n);
+    let tail = '';
+    if (prev) tail = prev === f.moral[ev.id] ? '\n（和上一个你，选了同一条路。）' : '\n（这一次，你走了另一条路。）';
+    await say({ name: ev.title, text: pick.text + tail });
+    logEvent(`「${ev.title}」你选择了：${pick.t}`);
+    save();
+    return true;
+  }
   S.boardCheck = async () => {
     const f = F(), C = ADV.Cal;
     // —— 每日一题打卡（难度随天数加强；答错的题要重做，做对才能完成打卡） ——
@@ -1097,6 +1168,8 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     }
     // —— s7 节日联动：植树节/读书日/风筝节……当日小活动（打卡后触发） ——
     if (await festivalLink()) return;
+    // —— 道德抉择事件池（C8）：day≥3 起隔天一枚（全池放完收口；节日/大事件优先） ——
+    if (C.day >= 3 && C.day % 2 === 1 && await moralEvent()) return;
     // —— 期中风波（第三幕后） ——
     if (f.act >= 3 && C.day >= 17 && !f.boar) {
       await say({ name: '广播', text: '【紧急】校园花坛一夜之间被毁！\n有人指认……乌云帮三人昨夜出现在现场。' });
