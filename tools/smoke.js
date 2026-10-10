@@ -5836,6 +5836,45 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.86] 体验批次十七：抉择心迹——钟楼回想点 + 成长页心迹行');
+  {
+    const realIntro86 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      A.Cal.load({ day: 3, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      // —— A. 零抉择回想：全「还未遇到」白纸分支，完整播放 ——
+      await pump(A.Game.S.reminisce());
+      ok(Object.keys(A.Game.flags.moral).length === 0, '心迹：新档零抉择，回想完整播放（白纸分支）');
+      // —— B. 面对一枚后回想：已选行入列 ——
+      await pump(A.Game.S.boardCheck());                    // day3 校务板链 → 钱包事件（默认选 A）
+      await pump(A.Game.S.reminisce());
+      ok(A.Game.flags.moral.wallet === 'a', '心迹：面对「走廊里的钱包」后回想列出已选行（moral.wallet = a）');
+      // —— C. NG+ 回响：上一世留底 + 重演后再回想（同路对照分支） ——
+      A.Game.ngStart();
+      A.Cal.load({ day: 3, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      ok(A.Game.flags.moralPrev.wallet === 'a' && Object.keys(A.Game.flags.moral).length === 0,
+        '心迹：NG+ 池子重开、上一世选择留底 moralPrev.wallet = a');
+      await pump(A.Game.S.boardCheck());                    // 重演钱包（默认 A）——与上一世同路
+      await pump(A.Game.S.reminisce());
+      ok(A.Game.flags.moral.wallet === 'a', '心迹：NG+ 重演后回想列出回响行（和上一个你一样）');
+      // —— D. 源断言：点位接线 + 成长页心迹行 ——
+      const maps86 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      const ui86 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      const town86 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(maps86.includes("s: 'reminisce'") && town86.includes('S.reminisce = async'),
+        '点位接线：钟楼旁 💭 心迹 sign 已挂（北新区），S.reminisce 回想脚本在位');
+      ok(ui86.includes('💭 心迹 ') && ui86.includes('上一世回响'),
+        '成长页：心迹行（n/8 + NG+ 上一世回响计数）在位');
+    } finally {
+      A.Game.S._intro = realIntro86;
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

@@ -1108,6 +1108,25 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     save();
     return true;
   }
+  /* —— 抉择心迹（批次十七）：钟楼边回想点——把这一路做过的两难选择翻出来重看；NG+ 有上一世对照 —— */
+  S.reminisce = async () => {
+    const f = F();
+    const done = MORAL_EVENTS.filter(e => f.moral[e.id]);
+    await say({ name: '钟楼边', text: '钟楼的长椅被太阳晒得暖暖的。\n你坐下来，翻看这段时间留在心里的抉择。' });
+    if (!done.length) {
+      await say({ name: '心迹', text: '……还是白纸。\n有些选择，要等日子把它们送到你面前。' });
+      return;
+    }
+    const lines = done.map(e => {
+      const pick = f.moral[e.id] === 'a' ? e.a : e.b;
+      const prev = (f.moralPrev || {})[e.id];
+      const echo = prev ? (prev === f.moral[e.id] ? '（和上一个你一样）' : '（上一个你选了另一边）') : '';
+      return `「${e.title}」你选了：${pick.t}${echo}`;
+    });
+    for (let i = 0; i < lines.length; i += 4) await say({ name: '心迹', text: lines.slice(i, i + 4).join('\n') });
+    const rest = MORAL_EVENTS.length - done.length;
+    await say({ name: '心迹', text: (rest ? `还有 ${rest} 枚抉择，在往后的日子里等你。\n` : '八枚抉择，你都面对过了。\n') + '怎么选，都会成为你的一部分。' });
+  };
   S.boardCheck = async () => {
     const f = F(), C = ADV.Cal;
     // —— 每日一题打卡（难度随天数加强；答错的题要重做，做对才能完成打卡） ——

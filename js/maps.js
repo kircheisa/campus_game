@@ -870,6 +870,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'lamp', x: 15, y: 8, w: 1, h: 2, solidTiles: [[0, 1]] });
     m.objects.push({ kind: 'sign', x: 16, y: 9, w: 1, h: 1, text: '💡', solidTiles: [], s: 'nightLamp' });
     m.objects.push({ id: 'bell', kind: 'sign', x: 18, y: 8, w: 1, h: 2, text: '钟楼', solidTiles: [[0, 1]], s: 'bellTower' });
+    m.objects.push({ kind: 'sign', x: 19, y: 9, w: 1, h: 1, text: '💭', solidTiles: [], s: 'reminisce' });   // 抉择心迹回想点（钟楼旁长椅）
     // 道场 / 社团楼 / 宿舍 / 医务室
     building(m, 3, 2, 9, 5, { roof: 'roofR', name: '道场', to: ['dojo', 15, 16, 'up'] });
     building(m, 14, 2, 9, 5, { roof: 'roofB', name: '社团楼', to: ['club', 15, 16, 'up'] });

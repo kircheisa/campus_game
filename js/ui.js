@@ -609,6 +609,12 @@ ADV.UI = (function () {
       text(g, `第${m.day}天`, x + 380, y + 64 + i * 32, 12, '#8a94c0', undefined, 'normal');
       text(g, m.text.slice(0, 20), x + 424, y + 64 + i * 32, 13, '#e8ecff', undefined, 'normal');
     });
+    // 心迹行：道德抉择进度（与钟楼旁 💭 回想点同源；NG+ 追加上一世回响计数）
+    try {
+      const moralRec = ADV.Game.flags.moral || {}, moralPrevRec = ADV.Game.flags.moralPrev || {};
+      text(g, `💭 心迹 ${Object.keys(moralRec).length}/8${Object.keys(moralPrevRec).length ? ` · 上一世回响 ${Object.keys(moralPrevRec).length}` : ''}`,
+        x + 40, y + h - 102, 12, '#cfe0ff', undefined, 'normal');
+    } catch (e) {}
     // 期末成长报告条（与毕业报告同源数据，随时可看；窄列截断防压右侧大事记）
     try {
       const rep = ADV.Game.growthReport();
