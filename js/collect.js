@@ -582,6 +582,8 @@ ADV.Collect = (function () {
     if (!cr) return { ok: false, msg: '阿橘翻了翻货架：「好像没这一只诶。」' };
     const price = critterPrice(cr);
     const F = ADV.Game.flags;
+    if (F.ranch && (F.ranch.a === id || F.ranch.b === id))
+      return { ok: false, msg: `「${cr.name}正住在你家牧场盒里呢——\n想接它回家，去后院的盒子看看吧。」` };
     if ((F.gold || 0) < price) return { ok: false, msg: `金币不够（还差 ${price - (F.gold || 0)} 文）……阿橘惋惜地摆摆手。` };
     F.gold -= price;
     const k = col()['insects'] || (col()['insects'] = {});

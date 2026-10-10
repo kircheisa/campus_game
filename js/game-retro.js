@@ -424,7 +424,8 @@ E().playAction(E().player, 'laugh', 1.6);
         if (!shelf.length) { await say({ name: '阿橘', text: '今天的好货都被人抱走啦，\n明天再来看看吧！' }); continue; }
         const opts = shelf.map(id => {
           const cr = CO.critter(id), e = CO.critterEntry(id);
-          const tag = e ? (e.gone ? '（可接回家）' : '（已住你家）') : '';
+          const boxed = e && e.gone && f.ranch && (f.ranch.a === id || f.ranch.b === id);
+          const tag = e ? (e.gone ? (boxed ? '（🥚 牧场盒）' : '（可接回家）') : '（已住你家）') : '';
           return `${cr.name}（${cr.fam}系·${'★'.repeat(cr.rar)}）💰${CO.critterPrice(cr)}${tag}`;
         }).concat(['不买了']);
         const i = await choose(opts, { caption: { name: '阿橘', text: `今天的珍稀架！就这三格，\n明天就换新伙伴咯～（金币：${f.gold}）` } });

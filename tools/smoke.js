@@ -6106,6 +6106,48 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.90] 打磨批次二十一：孵蛋与温室可见性——HUD 🥚 / 温室垄玻璃纹 / 牧场盒柜台口径');
+  {
+    const snap90 = JSON.stringify(A.Game.flags);          // 快照：收尾礼貌还原（本块是最后一块，主要防状态外溢）
+    try {
+      const F90 = A.Game.flags;
+      // —— A. 带蛋 HUD 指示 ——
+      const ui90 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      ok(ui90.includes("if (f.ranchEgg) s += '🥚'"), '带蛋赶路：HUD buff 图标串补 🥚（activeBuffIcons，两态共用）');
+      // —— B. 温室垄玻璃视觉：opt 编码 + makePlot 第五参 ——
+      const eng90 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      const spr90 = fs.readFileSync(path.join(ROOT, 'js', 'sprites.js'), 'utf8');
+      ok(eng90.includes('o.pid >= 100 ? 10000 : 0') && spr90.includes('opt >= 10000') &&
+         spr90.includes('makePlot(stage, watered, fert, spk, gh)'),
+        '温室垄：drawObj 缓存键 +10000 编码，makePlot 玻璃反光斜纹（与室外垄一眼区分）');
+      F90.greenhouse = true;
+      A.Engine.loadMap('homeYard', 11, 8, 'down');
+      A.Engine.render(makeCtx(makeCanvas()));
+      ok(true, '温室垄渲染不崩（含 pid 100+ 高亮变体进缓存）');
+      // —— C. 牧场盒柜台口径：盒中个体拒售 + 珍稀架专属标注 ——
+      F90.ranch = { a: 'i1', b: 'i2' };
+      F90.gold = 500;
+      const r90 = A.Collect.buyCritter('i1');
+      ok(r90.ok === false && r90.msg.includes('牧场盒'), '阿橘柜台：盒中个体拒购（买回会静默拆盒——先去后院接回）');
+      F90.ranch = {};
+      ok(A.Collect.buyCritter('i1').ok === true, '清盒后购买恢复（接回家/新种入册照常）');
+      const retro90 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      ok(retro90.includes('（🥚 牧场盒）'), '珍稀架：盒中个体标注「🥚 牧场盒」（不再误标可接回家）');
+    } finally {
+      choosePick = null;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap90);
+        const cur = A.Game.flags;
+        cur.greenhouse = old.greenhouse || false;
+        cur.ranch = old.ranch || {};
+        cur.gold = old.gold || 0;
+        cur.col = old.col || {};
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

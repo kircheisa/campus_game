@@ -963,7 +963,7 @@ ADV.UI = (function () {
     } catch (e) {}
   }
 
-  /* 当日生效的 buff 图标串（🧠🍖👟 + 自习 📖✍），无则空串——HUD 两态共用 */
+  /* 当日生效的 buff 图标串（🧠🍖👟 + 自习 📖✍ + 孵蛋 🥚），无则空串——HUD 两态共用 */
   function activeBuffIcons() {
     try {
       const f = ADV.Game && ADV.Game.flags, BM = ADV.Game && ADV.Game.BUFF_META;
@@ -972,6 +972,7 @@ ADV.UI = (function () {
       if (BM && f.buff) s = Object.keys(BM).filter(k => f.buff[k] === ADV.Cal.day).map(k => BM[k].icon).join('');
       if (f.morningReadDay === ADV.Cal.day) s += '📖';   // 晨读：今日答题知识点 +1
       if (f.nightStudyDay === ADV.Cal.day) s += '✍';     // 晚自习：今晚答题经验 +50%
+      if (f.ranchEgg) s += '🥚';                         // 牧场盒孵蛋：带蛋赶路中（回盒子看步数）
       return s;
     } catch (e) { return ''; }
   }

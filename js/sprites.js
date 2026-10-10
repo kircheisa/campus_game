@@ -1405,7 +1405,7 @@ ADV.Sprites = (function () {
   }
 
   // 农田地块：0 荒草 / 1 翻好的土 / 2 幼苗 / 3 可收获（watered=今天浇过土色更深；fert=施过肥；spk=装有洒水器）
-  function makePlot(stage, watered, fert, spk) {
+  function makePlot(stage, watered, fert, spk, gh) {
     const c = cnv(32, 24), g = c.getContext('2d');
     if (stage === 0) {                                    // 荒地：杂草石子
       q(g, 2, 8, 28, 14, '#7d9b4e');
@@ -1436,6 +1436,12 @@ ADV.Sprites = (function () {
         g.fillStyle = '#5d6578'; g.fillRect(26, 16, 3, 1);
         g.fillStyle = '#7ec8e8'; g.fillRect(27, 13, 1, 2); g.fillRect(25, 14, 1, 1); g.fillRect(29, 14, 1, 1);
       }
+    }
+    if (gh) {                                             // 温室培养土：玻璃反光斜纹 + 左缘高光（与室外垄一眼区分）
+      g.fillStyle = 'rgba(150,215,255,.30)';
+      g.fillRect(4, 7, 10, 1); g.fillRect(16, 12, 12, 1); g.fillRect(8, 19, 14, 1);
+      g.fillStyle = 'rgba(255,255,255,.35)';
+      g.fillRect(2, 6, 2, 14);
     }
     return c;
   }
@@ -2157,7 +2163,7 @@ ADV.Sprites = (function () {
       case 'busStop': c = makeBusStopSign(); break;
       case 'bikeRack': c = makeBikeRack(); break;
       case 'starFruit': c = makeStarFruit(); break;
-      case 'plot': c = makePlot(opt % 10, (opt % 100) >= 10, (opt % 1000) >= 100, opt >= 1000); break;
+      case 'plot': c = makePlot(opt % 10, (opt % 100) >= 10, (opt % 1000) >= 100, opt >= 1000, opt >= 10000); break;
       case 'coop': c = makeCoop(!!opt); break;
       case 'cowShed': c = makeCowShed(!!opt); break;
       case 'sheepPen': c = makeSheepPen(!!opt); break;

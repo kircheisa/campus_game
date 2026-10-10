@@ -1033,7 +1033,7 @@ ADV.Engine = (function () {
       : o.kind === 'dog' ? o.sleep
       : o.kind === 'lamp' ? (night ? 1 : 0)
       : o.kind === 'tree' ? o.v
-      : o.kind === 'plot' ? ((o.stage | 0) + (o.watered ? 10 : 0) + (o.fert ? 100 : 0) + (o.spk ? 1000 : 0))   // +10=浇过水，+100=施过肥，+1000=洒水器
+      : o.kind === 'plot' ? ((o.stage | 0) + (o.watered ? 10 : 0) + (o.fert ? 100 : 0) + (o.spk ? 1000 : 0) + (o.pid >= 100 ? 10000 : 0))   // +10=浇过水，+100=施过肥，+1000=洒水器，+10000=温室培养土
       : o.kind === 'scarecrow' ? (o.fixed ? 1 : 0)                   // 翻新后的稻草人
       : o.kind === 'coop' ? o.hasChicken
       : o.kind === 'cowShed' ? o.hasCow
