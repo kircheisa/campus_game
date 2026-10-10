@@ -272,7 +272,9 @@
       ['小镇之光', (f.helpPts || 0) >= 12, '帮助板声望 12：全镇的感谢都归你'],
       ['驯兽宗师', !!f.buddyBoost, '接受雾隐婆婆的进化催化'],
       // —— 四师签名挑战 ——
-      ['文理四通', ['math', 'chinese', 'science', 'english'].every(s => Object.keys((f.tkind || {})[s] || {}).length >= 4), '每门学科的试炼 / 作业 / 奥赛 / 签名挑战都体验过']
+      ['文理四通', ['math', 'chinese', 'science', 'english'].every(s => Object.keys((f.tkind || {})[s] || {}).length >= 4), '每门学科的试炼 / 作业 / 奥赛 / 签名挑战都体验过'],
+      // —— 时段自习 & 学业榜 ——
+      ['全校第一', !!f.acadFirst, '登上学业光荣榜榜首（每周刷新的虚拟榜）']
     ];
     return A.map(([name, done, desc]) => ({ name, done: !!done, desc }));
   }

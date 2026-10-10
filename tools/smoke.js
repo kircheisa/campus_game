@@ -5740,6 +5740,52 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.84] 体验批次十五：学业光荣榜（每周虚拟榜 + 成就全校第一）+ 自习 buff HUD 图标');
+  {
+    const realIntro84 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      A.Cal.load({ day: 6, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });  // 第 1 周
+      const F84 = A.Game.flags;
+      // —— A. 新档低分：榜单只围观，不发奖 ——
+      const gold84 = F84.gold;
+      await pump(A.Game.S.academicBoard());
+      ok(F84.acadFirst === false && F84.gold === gold84 && F84.acadTopWeek === -1,
+        '学业榜：新档综合分垫底时只围观（不登顶、不发奖学金）');
+      // —— B. 刷高分登顶：成就 + 每周奖学金 ——
+      F84.kp = { math: 200, chinese: 100 };               // 综合分 1200 稳超程学霸（第 1 周 ≈ 340-370）
+      const cup0 = F84.cup;
+      await pump(A.Game.S.academicBoard());
+      ok(F84.acadFirst === true && F84.gold === 10 && F84.acadTopWeek === 1 && F84.cup === cup0 + 2,
+        '学业榜：登顶落 acadFirst + 首周奖学金 +10 + 学院分 +2');
+      ok(A.Game.achievements().find(a => a.name === '全校第一').done,
+        '成就「全校第一」点亮');
+      // —— C. 同周再访 / 跨周再访：奖学金按周发放 ——
+      await pump(A.Game.S.academicBoard());
+      ok(F84.gold === 10, '学业榜：同一周再访不重复发奖学金');
+      A.Cal.load({ day: 13, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });  // 第 2 周
+      await pump(A.Game.S.academicBoard());
+      ok(F84.gold === 20 && F84.acadFirst === true,
+        '学业榜：跨周登顶奖学金再发一次（成就不重复结算）');
+      // —— D. 源断言：buff 图标 + 榜单接线 + 存档兼容 ——
+      const ui84 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      ok(ui84.includes("if (f.morningReadDay === ADV.Cal.day) s += '📖'") && ui84.includes("if (f.nightStudyDay === ADV.Cal.day) s += '✍'"),
+        '自习 buff 可见化：activeBuffIcons 在料理图标后追加 📖（晨读日）/ ✍（晚自习夜），HUD 两态共用');
+      const maps84 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      ok(maps84.includes("s: 'academicBoard'"), '点位接线：教室 📊 学业光荣榜 sign 已挂（奥赛公告栏旁）');
+      const src84 = gameSrc();
+      ok(src84.includes("['全校第一', !!f.acadFirst") && src84.includes('acadFirst: false, acadTopWeek: -1'),
+        '成就与存档：全校第一成就行在位，blankFlags 只增补 acadFirst / acadTopWeek 两键');
+    } finally {
+      A.Game.S._intro = realIntro84;
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

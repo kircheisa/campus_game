@@ -587,6 +587,48 @@
     save();
   };
 
+  /* —— 学业光荣榜（C5）：知识点 × 学识 × 知识树的每周虚拟榜——同学分数按周种子刷新，登顶拿成就 —— */
+  const ACAD_RIVALS = [
+    { name: '程学霸', base: 300, grow: 40 },   // 常年霸榜的传说级对手
+    { name: '小红',   base: 240, grow: 30 },
+    { name: '黄宇',   base: 180, grow: 24 },
+    { name: '小明',   base: 150, grow: 20 },
+    { name: '小影',   base: 120, grow: 18 },
+    { name: '陆飞',   base: 90,  grow: 14 },
+    { name: '林小雨', base: 70,  grow: 12 },
+    { name: '大壮',   base: 50,  grow: 10 }
+  ];
+  function acadHash(n) { const h = Math.sin(n * 12.9898) * 43758.5453; return h - Math.floor(h); }  // 稳定伪随机（周种子）
+  S.academicBoard = async () => {
+    const f = F(), C = ADV.Cal, M = ADV.Mistake, G = ADV.Growth;
+    const week = C.weekIndex();
+    const kpSum = Object.values(f.kp || {}).reduce((s, n) => s + (n | 0), 0);
+    const myScore = kpSum * 4 + (G ? G.dump().dim.knowledge : 0) * 2 + (M ? M.totalNodes() : 0) * 5;
+    const rows = ACAD_RIVALS.map((r, i) => ({ name: r.name, score: r.base + week * r.grow + ((acadHash(week * 17 + i + 3) * 30) | 0) }));
+    rows.push({ name: (f.name || '你') + '（你）', score: myScore, me: true });
+    rows.sort((a, b) => b.score - a.score);
+    const myRank = rows.findIndex(r => r.me) + 1;
+    const board = rows.slice(0, 5).map((r, i) => `${i + 1}.${i + 1 > 3 ? ' ' : ''}${r.name}　${r.score} 分`).join('\n');
+    await say({ name: '学业光荣榜', text: `📢 第 ${week} 周 · 全校学业综合分\n（全科知识点 + 学识 + 知识树，每周一刷新）\n\n${board}\n─────────────\n你的名次：第 ${myRank} 名（${myScore} 分）` });
+    if (myRank !== 1) {
+      await say({ name: '学业光荣榜', text: '（榜首的位置还被人占着。\n多上课、多答题、多读几本书，下周再来！）' });
+      return;
+    }
+    logEvent('登上了学业光荣榜榜首');
+    if (!f.acadFirst) {
+      f.acadFirst = true;
+      addCup(2);
+      await say({ name: '学业光荣榜', text: `🏆 榜首写着你的名字！（${f.name || '你'} · ${myScore} 分）\n全校第一！同学们都看呆了。\n学院分 +2 · 成就「全校第一」点亮` });
+      ADV.Audio.sfx('photo');
+    }
+    if (f.acadTopWeek !== week) {
+      f.acadTopWeek = week;
+      f.gold = (f.gold || 0) + 10;
+      UI().toast(' 🏆 每周登顶奖学金 · 金币 +10 ');
+    }
+    save();
+  };
+
   // 教室讲台：课本
   /* —— 上课：每日一课（白天 · 校历有课 · 当天未上）。主科 = 抢答小游戏 + 两道随堂题，
         副科（体育/音乐/美术/阅读/社团）= 动手环节 + 一道综合题；答对自动得知识点 —— */

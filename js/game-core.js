@@ -106,7 +106,9 @@ window.ADV = window.ADV || {};
     htaleDay: {},                                      // 各挚友上一段隐藏剧情的游戏日（段间隔 2 天）
     capsuleDone: false,                                // 时光胶囊终章是否已播放
     // —— 时段自习（批次十四）——
-    morningReadDay: 0, nightStudyDay: 0                // 晨读 / 晚自习：上次完成的游戏日（当日 buff 判定）
+    morningReadDay: 0, nightStudyDay: 0,               // 晨读 / 晚自习：上次完成的游戏日（当日 buff 判定）
+    // —— 学业光荣榜（批次十五）——
+    acadFirst: false, acadTopWeek: -1                  // 是否登顶过（成就「全校第一」）/ 上次领登顶奖学金的周
   });
 
   const state = {
