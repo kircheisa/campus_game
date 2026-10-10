@@ -1364,6 +1364,13 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'cowShed', x: 21, y: 10, w: 1, h: 1, s: 'cowShed', solidTiles: [[0, 0]] });
     m.objects.push({ kind: 'sheepPen', x: 21, y: 12, w: 1, h: 1, s: 'sheepPen', solidTiles: [[0, 0]] });
     m.objects.push({ kind: 'scarecrow', x: 9, y: 12, w: 1, h: 1, s: 'scarecrow', solidTiles: [[0, 0]] });   // 稻草人守田（Z 键调查 / 工具包翻新）
+    // —— s2 温室：请田伯盖好后出现——玻璃房 + 4 垄四季培养土（pid 100+；未建时是一块平整好的空地） ——
+    if (ADV.Game.flags.greenhouse) {
+      building(m, 12, 5, 5, 4, { roof: 'roofB', name: '温室', to: null });
+      for (let px = 0; px < 4; px++)
+        m.objects.push({ kind: 'plot', x: 13 + px, y: 9, w: 1, h: 1, pid: 100 + px,
+                         stage: 0, watered: false, s: 'farmPlot', solidTiles: [] });
+    } else m.objects.push({ kind: 'sign', x: 14, y: 9, w: 1, h: 1, text: '🌱', solidTiles: [] });   // 平整好的空地（田伯能盖温室）
     // 生物窝点：新手村窝点——瓢虫/蚂蚁/蜗牛/蟾蜍/田螺都在院子里
     m.objects.push({ kind: 'critter', x: 19, y: 12, w: 1, h: 1, pid: 'cy1', map: 'homeYard', s: 'critterSpot', solidTiles: [] });
     // 清晨随机拜访：同伴在家门口（难忘的暑假式）

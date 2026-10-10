@@ -471,6 +471,7 @@
     winter: []                                            // 冬天休耕，田地歇一歇
   };
   const seasonSeeds = () => FARM_CROPS[ADV.Cal.seasonEn()] || [];
+  const ALL_SEEDS = ['spring', 'summer', 'autumn'].reduce((a, s) => a.concat(FARM_CROPS[s]), []);   // 温室目录：四季种子全年有售
   // 同步地块物件到当前 flags 状态（交互后立刻刷新画面）
   function syncPlot(o) {
     const p = (F().farm || {})[o.pid];
@@ -501,6 +502,7 @@
     const f = F(), C = ADV.Cal;
     if (!f.farm) f.farm = {};
     const p = f.farm[o.pid] || (f.farm[o.pid] = { st: 0, wd: 0, crop: '' });
+    const gh = o.pid >= 100;                              // 温室垄：四季任意作物、喷淋自动浇水、乌鸦进不去
     syncPlot(o);
     if (f.crowNews) { await say({ name: '稻草人', text: f.crowNews + '\n（翻新稻草人，才能赶走偷嘴的乌鸦）' }); f.crowNews = ''; }
     // —— 成熟：收获（作物回到土垄，可接着种下一茬） ——
@@ -535,7 +537,7 @@ p.st = 1;
 ADV.Audio.sfx('dig');
 if (ADV.Skills) ADV.Skills.add('farm', 3, '翻土');
       const hoeLv = (f.toolLv && f.toolLv.hoe) || 0;
-      if (hoeLv) {                                             // 宽口锄 I：十字耕地 / II 开垄锄：整垄翻土
+      if (hoeLv && !gh) {                                    // 宽口锄 I：十字耕地 / II 开垄锄：整垄翻土（温室垄不参与连耕）
         const col = o.pid % 4;
         const ids = hoeLv >= 2
           ? [0, 1, 2, 3].map(k => o.pid - col + k)
@@ -552,9 +554,9 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       syncPlot(o); save();
       return;
     }
-    // —— 土垄（未播种）：挑当季种子种下 ——
+    // —— 土垄（未播种）：挑种子种下（温室垄四季全目录，室外只认当季） ——
     if (!p.crop) {
-      const seeds = seasonSeeds();
+      const seeds = gh ? ALL_SEEDS : seasonSeeds();
       if (!seeds.length) {
         await say({ text: '冬天土面冻得梆硬。\n田伯说：地也要歇一歇，\n开春再来种吧。' });
         return;
@@ -562,11 +564,13 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       const opts = seeds.map(s => {
         const own = ADV.Collect.count(s.seed);
         return `${s.name}种子（有 ${own} · 田伯有售）`;
-      }).concat(['先不种', '放置洒水器', '撒肥料']);
-      const i = await choose(opts, { caption: { text: `松软的土垄，正适合播种。\n现在是${C.season()}。` } });
+      }).concat(gh ? ['先不种', '撒肥料'] : ['先不种', '放置洒水器', '撒肥料']);
+      const i = await choose(opts, { caption: { text: gh
+        ? `温室里暖融融的，喷淋喷头闪着细光。\n四季的种子都种得活——现在是${C.season()}。`
+        : `松软的土垄，正适合播种。\n现在是${C.season()}。` } });
       if (i === seeds.length) return;
-      if (i === seeds.length + 1) return placeSprinkler(p, o);
-      if (i === seeds.length + 2) return addFertilizer(p, o);
+      if (i === opts.length - 1) return addFertilizer(p, o);
+      if (!gh && i === seeds.length + 1) return placeSprinkler(p, o);
       if (i > seeds.length) return;
       const s = seeds[i];
       const free = ADV.Skills && ADV.Skills.seedSave();   // 省种技能：20% 概率不消耗种子
@@ -577,7 +581,10 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       p.crop = s.crop;
       ADV.Audio.sfx('item');
       if (free) UI().toast(' 🌾 省种手熟：这粒种子是从指缝里省下的！ ');
-      await say({ text: `你把${s.name}种子埋进土里。\n记得每天浇水——三天就能收获！🌱` });
+      await say({ text: gh
+        ? `你把${s.name}种子埋进培养土。\n温室喷淋会替你浇水——等着收获就行！🌱`
+        : `你把${s.name}种子埋进土里。\n记得每天浇水——三天就能收获！🌱` });
+      if (gh) p.wd = C.day;                               // 喷淋立刻接管，种下当天就算浇过
       if (ADV.Skills) ADV.Skills.add('farm', 4, '播种');
       syncPlot(o); save();
       return;
@@ -585,7 +592,7 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     // —— 已播种：浇水（一天一次，浇了次日才长） ——
     const info = ADV.Collect.itemInfo(p.crop);
     if (p.wd === C.day) {
-      await say({ text: `（${info.name}苗今天喝饱了，\n${p.st >= 2 ? '都开始挂果了！' : '叶子舒展着，晒着太阳'}）` });
+      await say({ text: `（${info.name}苗今天喝饱了，\n${p.st >= 2 ? '都开始挂果了！' : gh ? '喷淋正下着细细的雨' : '叶子舒展着，晒着太阳'}）` });
       return;
     }
     const go = await choose(['浇水（精力 -1）', '先不了', '放置洒水器', '撒肥料'], { caption: { text: `${info.name}苗（第 ${p.st} 天）\n土面有点发白。` } });
@@ -596,7 +603,7 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     p.wd = C.day;
     ADV.Audio.sfx('water');
     const canLv = (f.toolLv && f.toolLv.can) || 0;
-    if (canLv) {                                               // 三嘴壶 I：左右田垄 / II 五嘴壶：整垄浇灌
+    if (canLv && !gh) {                                      // 三嘴壶 I：左右田垄 / II 五嘴壶：整垄浇灌（温室垄自带喷淋，不参与连浇）
       const col = o.pid % 4;
       const ids = canLv >= 2 ? [0, 1, 2, 3].map(k => o.pid - col + k) : [col > 0 ? o.pid - 1 : -1, col < 3 ? o.pid + 1 : -1];
       let wet = 0;
@@ -790,12 +797,14 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     const rainy = /雨/.test(C.weather || '');             // 睡醒已是新一天，此时天气即当天天气
     if (f.farm) for (const k in f.farm) {
       const p = f.farm[k];
-      if (p.crop && p.st >= 1 && p.st < 3 && (p.spk || p.wd === C.day - 1)) p.st += 1;  // 昨天浇过水（或洒水器值班）→ 长一截
-      // 新的一天：水干了；但雨天老天爷帮忙、洒水器勤恳值班，正在生长的地块自动盖好水
-      p.wd = ((rainy || p.spk) && p.crop && p.st >= 1 && p.st < 3) ? C.day : 0;
+      const gh = +k >= 100;                               // 温室垄：喷淋全天候值班，天天算浇过水
+      if (p.crop && p.st >= 1 && p.st < 3 && (gh || p.spk || p.wd === C.day - 1)) p.st += 1;  // 昨天浇过水（或洒水器/喷淋值班）→ 长一截
+      // 新的一天：水干了；但雨天老天爷帮忙、洒水器与温室喷淋勤恳值班，正在生长的地块自动盖好水
+      p.wd = ((rainy || p.spk || gh) && p.crop && p.st >= 1 && p.st < 3) ? C.day : 0;
     }
-    // 乌鸦事件：每隔几天的清晨溜进没看管的田里偷嘴（翻新稻草人后绝迹）
+    // 乌鸦事件：每隔几天的清晨溜进没看管的田里偷嘴（翻新稻草人后绝迹；温室隔着玻璃，乌鸦进不去）
     if (f.farm && !f.scarecrowFixed) for (const k in f.farm) {
+      if (+k >= 100) continue;
       const pp = f.farm[k];
       if (pp.crop && pp.st >= 1 && pp.st < 3 && (C.day * 5 + k * 3) % 13 === 0) {
         pp.crop = ''; pp.st = 1; pp.wd = 0;

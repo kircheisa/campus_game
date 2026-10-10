@@ -5924,6 +5924,94 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.88] 玩法批次十九：s2 温室——四季任意作物 · 喷淋自动浇水 · 乌鸦进不去');
+  {
+    const said88 = [];
+    const realSay88 = A.UI.say;
+    A.UI.say = o => { said88.push((o.name ? o.name + '：' : '') + (o.text || '')); return Promise.resolve(); };
+    const snap88 = JSON.stringify(A.Game.flags);          // 快照：收尾礼貌还原（本块是最后一块，主要防状态外溢）
+    const realIntro88 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F88 = A.Game.flags;                           // newGame 换了 flags 对象，之后取新引用
+      // —— A. 布点：未建时是空地，建成后玻璃房 + 4 垄培养土 ——
+      const yard0 = A.Maps.get('homeYard');
+      ok(!yard0.objects.some(o => o.kind === 'plot' && o.pid >= 100) && yard0.objects.some(o => o.kind === 'sign' && o.text === '🌱'),
+        '温室：未购建时后院只有一块平整好的空地（blankFlags 旧档兼容）');
+      F88.greenhouse = true;
+      const yard88 = A.Maps.get('homeYard');
+      const ghPlots = yard88.objects.filter(o => o.kind === 'plot' && o.pid >= 100);
+      ok(ghPlots.length === 4, '温室：玻璃房落成，后院多出 4 垄培养土（pid 100+）');
+      ok(yard88.g[5][14] === 'roofB' && String(yard88.g[7][14]).indexOf('plaque') === 0,
+        '温室：蓝玻璃屋顶 +「温室」门匾落在院子东侧（farm 区旁）');
+      // —— B. 冬天反季种植：室外休耕，温室照种春天的草莓 ——
+      F88.badges.science = false;                         // 关科学加成保证生长确定
+      A.Collect.addItem('seedStraw', 2);
+      A.Cal.load({ day: 31, period: 3, weather: '晴', checkedIn: true, streak: 1, energy: 50 });   // 第 31 天 = 冬
+      choosePick = () => 0;
+      await pump(A.Game.S.farmPlot(ghPlots[0]), 2000);    // 翻土
+      ok(F88.farm[100] && F88.farm[100].st === 1, '温室：培养土翻土开垦');
+      await pump(A.Game.S.farmPlot(ghPlots[0]), 2000);    // 播种（冬季仍列全目录）
+      ok(F88.farm[100].crop === 'strawberry' && F88.farm[100].wd === 31,
+        '温室：冬天种下草莓种子，喷淋当天接管浇水（wd 入账）');
+      const out0 = yard88.objects.filter(o => o.kind === 'plot' && o.pid < 100)[0];
+      said88.length = 0;
+      await pump(A.Game.S.farmPlot(out0), 2000);          // 室外翻土
+      await pump(A.Game.S.farmPlot(out0), 2000);          // 室外播种 → 冬天拒绝
+      ok(said88.some(t => t.includes('冻得梆硬')) && !F88.farm[0].crop, '室外对照：冬天休耕拒绝播种——温室的反季价值成立');
+      // —— C. 喷淋自动浇水：全程零操作，隔天就长 ——
+      A.Cal.load({ day: 32, period: 3, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Game.farmTick();
+      ok(F88.farm[100].st === 2 && F88.farm[100].wd === 32, '温室：喷淋自动浇水——没人管也长一截');
+      A.Cal.load({ day: 33, period: 3, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Game.farmTick();
+      ok(F88.farm[100].st === 3, '温室：第二天清晨成熟挂果（全程零浇水）');
+      const straw88 = A.Collect.count('strawberry');
+      await pump(A.Game.S.farmPlot(ghPlots[0]), 2000);    // 收获
+      ok(A.Collect.count('strawberry') > straw88 && !F88.farm[100].crop, '温室：冬天收获草莓——四季任意作物成立');
+      // —— D. 田伯处购建：💰300 高价一次买断 ——
+      F88.greenhouse = false;
+      F88.farmQuest = true; F88.farmDone = true;
+      F88.gold = 350;
+      choosePick = opts => opts.findIndex(s => String(s).indexOf('盖间温室') === 0);
+      await pump(A.Game.S.farmer({}), 3000);
+      ok(F88.greenhouse === true && F88.gold === 50, '田伯：盖间温室 💰300 一次买断（350→50，greenhouse 入档）');
+      // —— E. 温室建成后台账升级：田伯冬天也卖全季种子 ——
+      const seeds88 = A.Collect.count('seedStraw');
+      let step88 = 0;
+      choosePick = opts => {                              // 外层挑“买点种子”→ 内层买第一包 → 再挑“不买了”离场
+        const k = step88++;
+        if (k === 0) return opts.findIndex(s => s === '买点种子');
+        if (k === 1) return 0;
+        return opts.length - 1;
+      };
+      await pump(A.Game.S.farmer({}), 3000);
+      ok(A.Collect.count('seedStraw') === seeds88 + 1, '温室：田伯冬天也卖全季种子（冬季购得草莓种子）');
+      // —— F. 源断言：存档兼容 + farmTick 喷淋/乌鸦守卫 ——
+      const src88 = gameSrc();
+      const town88 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(src88.includes('greenhouse: false'), '温室：blankFlags 只增不改——旧档自动补 greenhouse 字段');
+      ok(town88.includes('(gh || p.spk || p.wd === C.day - 1)') && town88.includes('if (+k >= 100) continue;'),
+        '温室：farmTick 喷淋值班生长 + 乌鸦进不去玻璃房（守卫在位）');
+      choosePick = null;
+    } finally {
+      A.UI.say = realSay88;
+      A.Game.S._intro = realIntro88;
+      choosePick = null;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap88);
+        const cur = A.Game.flags;
+        cur.greenhouse = old.greenhouse || false;
+        cur.gold = old.gold || 0;
+        cur.farm = old.farm || {};
+        if (cur.badges && old.badges) cur.badges.science = old.badges.science;
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

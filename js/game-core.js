@@ -111,7 +111,9 @@ window.ADV = window.ADV || {};
     acadFirst: false, acadTopWeek: -1,                 // 是否登顶过（成就「全校第一」）/ 上次领登顶奖学金的周
     // —— 道德抉择事件池（批次十六）——
     moral: {},                                         // 本周目已做过的抉择 { 事件id: 'a'/'b' }
-    moralPrev: {}                                      // 「上一个你」的抉择留底（NG+ 跨周目累积，事件重演时引用）
+    moralPrev: {},                                     // 「上一个你」的抉择留底（NG+ 跨周目累积，事件重演时引用）
+    // —— 温室（批次十九 · s2）——
+    greenhouse: false                                  // 温室已建成（田伯处高价购买；四季任意作物 + 喷淋自动浇水 + 乌鸦进不去）
   });
 
   const state = {

@@ -1064,17 +1064,20 @@ const sp = ADV.Collect.info('fish', rollFish(bait, rainy));
       return;
     }
     if (f.farmDone) {
-      // 当季种子摊：种后院田地靠他进货（冬天休耕不卖）；s5 畜牧：小牛犊 / 小羊羔
-      const seeds = seasonSeeds();
+      // 当季种子摊：种后院田地靠他进货（冬天休耕不卖；盖了温室则四季全目录）；s5 畜牧：小牛犊 / 小羊羔；s2 温室：高价代建
+      const seeds = f.greenhouse ? ALL_SEEDS : seasonSeeds();
       const stock = [];
       if (seeds.length) stock.push('买点种子');
       if (!f.cow) stock.push('抱只小牛犊（💰120）');
       if (!f.sheep) stock.push('抱只小羊羔（💰100）');
+      if (!f.greenhouse) stock.push('盖间温室（💰300）');
       stock.push('请教种田门道');
       const pick = await choose(stock, {
         caption: { name: '田伯', text: seeds.length
-          ? '后院的地翻好了？来，\n我这儿有当季的好种子——还有牲口。'
-          : '冬天地要歇着，种子开春才卖。\n要抱只牲口回去养吗？' }
+          ? (f.greenhouse ? '温室都盖起来了，四季的种子\n我这儿全年备着——还有牲口。'
+                          : '后院的地翻好了？来，\n我这儿有当季的好种子——还有牲口。')
+          : (f.greenhouse ? '冬天地要歇着，可你的温室不歇。\n四季的种子，我这儿都备着。'
+                          : '冬天地要歇着，种子开春才卖。\n要抱只牲口回去养吗？还是……盖间温室？') }
       });
       const sel = stock[pick];
       if (sel === '买点种子') {
@@ -1091,6 +1094,18 @@ const sp = ADV.Collect.info('fish', rollFish(bait, rainy));
           save();
         }
         await say({ name: '田伯', text: '种下去记得天天浇水，\n土干了苗可不等人。' });
+        return;
+      }
+      if (sel === '盖间温室（💰300）') {
+        if ((f.gold || 0) < 300) { await say({ name: '田伯', text: '温室要 300 文工钱——\n先去攒攒吧，材料我都给你记着账。' }); return; }
+        f.gold -= 300;
+        f.greenhouse = true;
+        ADV.Audio.sfx('fanfare');
+        await say({ name: '田伯', text: '好嘞，材料都是现成的——\n这就去你后院开工！' });
+        await say({ text: '后院立起一间亮晶晶的玻璃温室：\n里面四垄培养土四季恒温，\n喷淋会自动浇水，乌鸦也飞不进去。🏠' });
+        UI().toast(' 🏠 温室落成：四季都能种菜了！ ');
+        logEvent('请田伯在后院盖起一间温室');
+        save();
         return;
       }
       if (sel === '抱只小牛犊（💰120）' || sel === '抱只小羊羔（💰100）') {
