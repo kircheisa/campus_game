@@ -91,7 +91,11 @@ ADV.Game = (function () {
     buddyBoost: null,                                  // 驯兽导师「进化催化」：随行伙伴力/速 +1
     // —— 四师签名挑战 ——
     tgame: {},                                         // 各科签名挑战进度 { 科目: { lv: 1-4 } }（4 = 大师毕业）
-    tkind: {}                                          // 各科玩法打卡 { 科目: { trial/hw/olymp/mini: true } }
+    tkind: {},                                         // 各科玩法打卡 { 科目: { trial/hw/olymp/mini: true } }
+    // —— 六挚友隐藏线（批次十一）——
+    htale: {},                                         // 各挚友隐藏剧情已看段数 { id: 0-3 }
+    htaleDay: {},                                      // 各挚友上一段隐藏剧情的游戏日（段间隔 2 天）
+    capsuleDone: false                                 // 时光胶囊终章是否已播放
   });
 
   const state = {
@@ -778,6 +782,24 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
       await say({ name: '乌云', text: '他盯着你看了三秒，忽然抱起手臂笑了：\n「……有意思。你这种眼神，我在哪儿见过。」' });
       await say({ name: '乌云', text: '「道场见。别让我等太久——\n这次我不会留级了。」' });
       gainBond('wuyun', 5);
+    },
+    dazhuang: async () => {
+      const np = E().getNpc('dazhuang'); if (np) E().playAction(np, 'laugh', 1.6);
+      await say({ name: '大壮', text: '「新同学！你这手……握过扳手吧？」\n他用力握了握你的手，「握过扳手的人，靠得住。」' });
+      await say({ name: '大壮', text: '「工具箱在修理部，渴了自取汽水——\n对谁都一样，对老朋友……也一样！」' });
+      gainBond('dazhuang', 5);
+    },
+    xiaoying: async () => {
+      const np = E().getNpc('xiaoying'); if (np) E().emote(np, '♪');
+      await say({ name: '小影', text: '她安静地看了你三秒，翻开画册的一角：\n「这里……总觉得画过你。」' });
+      await say({ name: '小影', text: '「……可能是我画谁都像你吧。\n（她合上册子，耳朵有点红）」' });
+      gainBond('xiaoying', 5);
+    },
+    lufei: async () => {
+      const np = E().getNpc('lufei'); if (np) E().playAction(np, 'wave', 1.4);
+      await say({ name: '陆飞', text: '「咦，你的跑步姿势——好像在哪见过！」\n他绕着你看了半圈，「校运会传说级别的既视感！」' });
+      await say({ name: '陆飞', text: '「放学操场比一场？放心，\n老朋友之间——我只让你半圈！」' });
+      gainBond('lufei', 5);
     },
   };
   async function ngReunion(id) {
@@ -6183,6 +6205,7 @@ E().playAction(E().player, 'laugh', 1.6);
       // —— P-B 期 / 驯兽三期 / s5-s8 成就 ——
       ['晨曦的祝福', f.dawnAltar, '唤醒四季花园的晨曦祭坛（圣物伏笔回收）'],
       ['心满益善', HEART_IDS.every(k => f.heartDone[k]), '听完六位挚友的心里话'],
+      ['时光信使', f.capsuleDone, '走完六挚友隐藏线，打开时光胶囊'],
       ['不败之壁', (f.rushBest || 0) >= 6, '挑战榜极限连战六连胜'],
       ['连战入门', (f.rushBest || 0) >= 3, '挑战榜极限连战三连胜'],
       ['斗虫大会冠军', f.bugKing, '斗虫大会三连胜夺杯'],
@@ -9538,6 +9561,161 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
     }
     return true;
   }
+  /* —— 体验批次十一：六挚友隐藏线（心里话后解锁）——
+   * 每位挚友在听完心里话（heartDone）后开启 3 段隐藏剧情：第一段下次对话即可触发，
+   * 之后每段间隔 2 个游戏日；各线第三段把「一封信」投进时光胶囊；
+   * 六封信集齐 → 与任一挚友对话触发时光胶囊终章（六人齐聚老樟树，埋胶囊、读信、合影）；
+   * NG+ 终章走「重新挖开去年那颗胶囊」变体。 */
+  const HIDDEN_TALES = {
+    xiaohong: [
+      { pages: [
+        { name: '小红', text: '「跟你说个只有你知道的事——\n每次比赛前，我手心全是汗。」\n她摊开手心，又飞快握住。' },
+        { name: '小红', text: '「发卡其实是心理安慰。\n真正让我安心的，是起跑前回头——\n总能看见你站在跑道边。」' },
+      ] },
+      { pages: [
+        { name: '小红', text: '「四年级运动会，我扭了脚，\n躲在器材室哭。有个人递给我一瓶水，\n什么都没问就走了。」' },
+        { name: '小红', text: '「我一直想再说声谢谢。\n后来你转学过来，我第一眼就觉得——\n原来我们早就见过啦。」' },
+      ] },
+      { pages: [
+        { name: '小红', text: '「给一年后的我写封信吧，你说写什么好？」\n她没等回答，笑着写下第一行。' },
+        { name: '小红', text: '「——希望我还在跑。\n还在和你们，一起跑。」\n她把信折成纸飞机的形状，投进了胶囊。' },
+      ] },
+    ],
+    xiaoming: [
+      { pages: [
+        { name: '小明', text: '「我的投稿被拒了！理由是——\n『主角太普通，没有记忆点』。」' },
+        { name: '小明', text: '「可是普通人才会去冒险啊！\n……诶，你刚才皱眉的样子——\n就是分镜里缺的那格！借我画一下！」' },
+      ] },
+      { pages: [
+        { name: '小明', text: '他带你溜上教学楼天台的角落：\n「我的秘密基地。从这儿能看见全校。」' },
+        { name: '小明', text: '「下一话，我不想画冒险王一个人了。\n想画我们六个人，把日常画成大冒险——\n你已经出现在第三格了，别乱动！」' },
+      ] },
+      { pages: [
+        { name: '小明', text: '「最终话的结局，我写好了。」\n他把信封捂在胸口，一脸郑重。' },
+        { name: '小明', text: '「先封印进时光胶囊！等打开那天——\n我们一起验证，冒险王的结局\n是不是和现实一样热血！」' },
+      ] },
+    ],
+    wuyun: [
+      { pages: [
+        { name: '乌云', text: '清晨的道场，他一个人在擦木人桩。\n桩身一道旧裂痕，被摩挲得发亮。' },
+        { name: '乌云', text: '「留级那年打裂的。师傅说要给我换新的。\n我没换——裂痕也是练过的证据。」' },
+      ] },
+      { pages: [
+        { name: '乌云', text: '「旧学校寄来一封信，说要『再分高下』。」\n他捏着信纸，半天没说话。' },
+        { name: '乌云', text: '「你陪我写封回信吧。\n就写——这次不用分高下，\n我来把当年没打完的招呼打完。」' },
+      ] },
+      { pages: [
+        { name: '乌云', text: '「我的信，只有一句话。」\n他写完折好，动作难得地轻。' },
+        { name: '乌云', text: '「——输赢写不完的，\n都写在朋友里了。」' },
+      ] },
+    ],
+    dazhuang: [
+      { pages: [
+        { name: '大壮', text: '「广播站那只老喇叭，其实是我修好的。」\n他挠挠头，「但我跟张叔说是他修的。」' },
+        { name: '大壮', text: '「张叔快退休啦。\n人老了，就想再多被需要一阵子。」\n他笑得憨憨的，「这事儿你知我知。」' },
+      ] },
+      { pages: [
+        { name: '大壮', text: '「跟你说个丢人的——我怕黑。\n小时候被反锁在储藏室，一下午。」' },
+        { name: '大壮', text: '你陪他把储藏室的灯换成了暖色。\n他按了三次开关，最后一次笑了：\n「……嗯，现在里面住着太阳了。」' },
+      ] },
+      { pages: [
+        { name: '大壮', text: '他给时光胶囊配了一把小锁，\n用爷爷的扳手一点一点拧紧。' },
+        { name: '大壮', text: '「爷爷说，扳手要传给最信得过的兄弟。\n锁也是——六把『钥匙』，\n就是咱们六个人，缺一个都打不开。」' },
+      ] },
+    ],
+    xiaoying: [
+      { pages: [
+        { name: '小影', text: '「我偷偷投稿了市里的绘画比赛。\n主题是『看不见的人』。」' },
+        { name: '小影', text: '「我画的是每天清晨扫操场的那个人。\n……别告诉别人，我还挺怕输的。」\n她把画册往怀里抱紧了一点。' },
+      ] },
+      { pages: [
+        { name: '小影', text: '「其实我分不太清红色和绿色。」\n她说得很轻，「颜料都是靠贴标签记的。」' },
+        { name: '小影', text: '你陪她把颜料管重新标了一遍。\n「所以我的画里，人是用形状记住的——\n你就是那种，一眼就认得出的形状。」' },
+      ] },
+      { pages: [
+        { name: '小影', text: '她的信封比别人的厚——\n里面是一张小小的画。' },
+        { name: '小影', text: '「画放进胶囊会褪色吧？没关系。\n颜色我记住了，\n闭上眼睛也都在。」' },
+      ] },
+    ],
+    lufei: [
+      { pages: [
+        { name: '陆飞', text: '「告诉你个秘密——我起跑超烂的。\n全队倒数那种。全靠后程追。」' },
+        { name: '陆飞', text: '「所以别怕开头慢。\n人生这条道长着呢，\n风都在后半程等你。」' },
+      ] },
+      { pages: [
+        { name: '陆飞', text: '他翻开手机里的计时 App：\n每个人的成绩都记着，一页一页。' },
+        { name: '陆飞', text: '「你的第一条——八分半，跑一半就喘。」\n他笑得特别得意，「我都留着。\n人要记得自己从哪儿开始跑的。」' },
+      ] },
+      { pages: [
+        { name: '陆飞', text: '他的信封里是一张空白的计时纸条。' },
+        { name: '陆飞', text: '「等打开胶囊那天，我们再跑一次——\n把新成绩写上去。\n这叫……和过去的自己同场竞技！」' },
+      ] },
+    ],
+  };
+  // 在对话包装器里调用：心里话之后逐段解锁隐藏剧情（第一段即刻，之后每段间隔 2 天）
+  async function maybeHiddenTale(id) {
+    const f = F();
+    const tale = HIDDEN_TALES[id];
+    if (!tale || !f.heartDone[id] || f.capsuleDone) return false;
+    const done = f.htale[id] || 0;
+    if (done >= tale.length) return false;
+    if (done > 0 && ADV.Cal.day - (f.htaleDay[id] || 0) < 2) return false;
+    f.htale[id] = done + 1;
+    f.htaleDay[id] = ADV.Cal.day;
+    ADV.Audio.sfx('emote');
+    const np = E().getNpc(id); if (np) E().playAction(np, 'shy', 1.4);
+    for (const p of tale[done].pages) await say(p);
+    gainBond(id, 2);
+    addCup(2);
+    save();
+    if (done === tale.length - 1) {
+      const letters = HEART_IDS.filter(k => (f.htale[k] || 0) >= HIDDEN_TALES[k].length).length;
+      UI().toast(` 🫙 ${BOND[id] ? BOND[id].name : id}把信投进了时光胶囊（${letters}/${HEART_IDS.length}）`);
+      if (letters >= HEART_IDS.length) UI().toast(' 📮 六封信都齐了——放学后的老樟树下，好像有人在等你 ');
+    } else {
+      UI().toast(` 🌙 ${BOND[id] ? BOND[id].name : id}的隐藏剧情 ${done + 1}/${tale.length} · 好感 +2 `);
+    }
+    return true;
+  }
+  // 时光胶囊终章：六条隐藏线全部完成后，与任一挚友对话触发（NG+ 走重挖变体）
+  async function capsuleFinale(id) {
+    const f = F();
+    if (!HIDDEN_TALES[id] || f.capsuleDone) return false;
+    if (!HEART_IDS.every(k => (f.htale[k] || 0) >= HIDDEN_TALES[k].length)) return false;
+    f.capsuleDone = true;
+    ADV.Audio.sfx('emote');
+    if (f.ngplus) {
+      await say({ text: '放学前，五个人不约而同把你拉到操场东边的老樟树下。\n树底下有个浅浅的旧坑——去年埋胶囊的地方。' });
+      await say({ name: '大壮', text: '「坑还在！胶囊……咦，胶囊不见了？」' });
+      await say({ name: '小红', text: '「张叔！」——正在巡逻的张叔从口袋里\n掏出那把小锁的胶囊：「就知道你们会回来。\n去年就等着看你们挖坑的样子呢。」' });
+      await say({ name: '乌云', text: '「……连信都没受潮。开锁吧，六把『钥匙』都到齐了。」' });
+      await say({ text: '六封信读到最后，胶囊底部还压着第七封——\n没有署名，字迹却眼熟：' });
+      await say({ text: '『致又一年夏天：学校记得每一个认真跑过操场的孩子。\n——你们的老朋友』' });
+      await say({ name: '小影', text: '（她在速写本上飞快地画：六个读信的人，\n和一棵把影子借给所有人的老樟树。）' });
+      await say({ name: '陆飞', text: '「新学期第一条纪录，从现在开始计时——\n目标：把这年也跑成值得埋起来的样子！」' });
+    } else {
+      await say({ text: '放学前，五个人不约而同把你拉到操场东边的老樟树下。\n大壮扛着铁锹，小明抱着画板，乌云拎着那只上锁的胶囊。' });
+      await say({ name: '大壮', text: '「坑我挖好了！按规矩——\n六封信一起放，锁一起上。」' });
+      await say({ text: '就在胶囊落进坑里的时候——' });
+      await say({ name: '乌云', text: '「……我说，等什么一年。\n信都写了，现在就想听。」' });
+      await say({ name: '小明', text: '「有道理！堆沙漏不如现在读——」\n「那是成语都让你说串了，但同意！」' });
+      await say({ text: '于是六个人围着小坑坐成一圈，把胶囊又挖了出来。\n大壮的锁拧开，六封信一人一封，谁也没先偷看别人的。' });
+      await say({ text: '读信声、笑声，还有小影偷偷抹眼睛的吸鼻子声，\n混在傍晚的风里。' });
+      await say({ name: '小红', text: '「重新埋回去之前——来拍照！\n一年后的我们，要对着照片来对暗号！」' });
+      await say({ text: '快门按下：六个人、一棵树、一坑黄昏。\n这就是你们和这所学校的约定。' });
+    }
+    HEART_IDS.forEach(k => gainBond(k, 3));
+    addCup(30);
+    ADV.Collect.gain('photos', 'p_capsule');
+    save();
+    logEvent(f.ngplus ? '在新学期重新打开了时光胶囊' : '埋下并打开了时光胶囊，读完六封给彼此的信');
+    UI().toast(f.ngplus
+      ? ' ⏳ 时光胶囊·新学期 · 全员好感 +3 · 学院分 +30 '
+      : ' ⏳ 时光胶囊终章 · 全员好感 +3 · 学院分 +30 ');
+    return true;
+  }
+  S._htale = id => maybeHiddenTale(id);          // 测试钩子：隐藏剧情逐段推进
+  S._capsule = () => capsuleFinale('xiaohong');  // 测试钩子：终章直达（条件仍需满足）
   function npcMindLine(npcId) {
     const f = F(), fr = friend(npcId);
     const pools = [];
@@ -9574,6 +9752,9 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
       await fn(ent);
       // s8 心级事件：好感 ≥90 的心里话过场（每人一次，优先于日常闲话）
       if (BOND[k] && await maybeHeartEvent(k)) return;
+      // 批次十一：时光胶囊终章（六线全完）→ 六挚友隐藏线（心里话后逐段解锁）
+      if (BOND[k] && await capsuleFinale(k)) return;
+      if (BOND[k] && await maybeHiddenTale(k)) return;
       const fr = friend(k);
       // 45% 概率触发闲话；好感 +1 每日至多一次（mindDay 登记，防反复对话刷好感）
       if (BOND[k] && fr.mindDay !== ADV.Cal.day && Math.random() < .45) {

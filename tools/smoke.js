@@ -5536,6 +5536,85 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.80] 体验批次十一：六挚友隐藏线（心里话后逐段解锁）+ 时光胶囊终章');
+  {
+    // —— A. 解锁门与逐段推进（S._htale 测试钩子，真实 say 流程 pump） ——
+    const KMAIN = 'campus_adventure_save_v1', KA = KMAIN + '_a', KB = KMAIN + '_b';
+    const keepLS = {};
+    for (const k of [KMAIN, KA, KB]) keepLS[k] = localStorage.getItem(k);
+    const realIntro80 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};   // 同 [5.79]：隔离 ngStart 遗留的 80ms 序章定时器
+    const CAL80 = { period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 };
+    try {
+      A.Game.newGame('hero_boy', false);
+      A.Cal.load(Object.assign({ day: 10 }, CAL80));
+      const F80 = A.Game.flags;
+      ok(await A.Game.S._htale('xiaohong') === false, '隐藏线：没听心里话时不开线');
+      F80.heartDone.xiaohong = true;
+      await pump(A.Game.S._htale('xiaohong'));
+      ok(F80.htale.xiaohong === 1 && F80.htaleDay.xiaohong === 10, '隐藏线：心里话后首聊开段 1（小红·晨跑的真相）');
+      ok(await A.Game.S._htale('xiaohong') === false, '隐藏线：同日不连播（段间隔 2 天）');
+      A.Cal.load(Object.assign({ day: 12 }, CAL80));
+      await pump(A.Game.S._htale('xiaohong'));
+      A.Cal.load(Object.assign({ day: 14 }, CAL80));
+      await pump(A.Game.S._htale('xiaohong'));
+      ok(F80.htale.xiaohong === 3, '隐藏线：小红线三段走完（每段间隔 2 日），信已投进胶囊');
+      ok(await A.Game.S._capsule() === false, '终章门：六封信未齐时不开终章');
+      // —— B. 五线并行推进 → 六信齐 → 终章 ——
+      const cup80 = F80.cup;
+      for (const id of ['xiaoming', 'wuyun', 'dazhuang', 'xiaoying', 'lufei']) {
+        F80.heartDone[id] = true;
+        for (let d = 0; d < 3; d++) {
+          A.Cal.load(Object.assign({ day: 20 + d * 2 }, CAL80));
+          await pump(A.Game.S._htale(id));
+        }
+      }
+      ok(['xiaoming', 'wuyun', 'dazhuang', 'xiaoying', 'lufei'].every(id => F80.htale[id] === 3),
+        '隐藏线：五线并行推进完毕，六封信全部投递（htale 全 3）');
+      ok(F80.cup === cup80 + 30, '隐藏线奖励：五线 15 段各 +2 学院分（小红线已计入快照）落账');
+      await pump(A.Game.S._capsule());
+      ok(F80.capsuleDone === true && F80.col.photos.p_capsule === true,
+        '时光胶囊终章：老樟树埋胶囊 · 读六封信 · 「时光胶囊大合影」入册');
+      const ach80 = A.Game.achievements().find(a => a.name === '时光信使');
+      ok(ach80 && ach80.done, '成就「时光信使」点亮');
+      ok(await A.Game.S._capsule() === false && await A.Game.S._htale('xiaohong') === false,
+        '终章后：隐藏线与终章都收口（不重播）');
+      // —— C. NG+：状态随新档重置，终章走「重挖去年胶囊」变体 ——
+      A.Game.ngStart();
+      const F81 = A.Game.flags;
+      ok(F81.capsuleDone === false && !F81.htale.xiaohong && F81.ngplus === true,
+        'NG+：隐藏线 / 胶囊状态随新档重置');
+      for (const id of ['xiaohong', 'xiaoming', 'wuyun', 'dazhuang', 'xiaoying', 'lufei']) {
+        F81.heartDone[id] = true; F81.htale[id] = 3;
+      }
+      await pump(A.Game.S._capsule());
+      ok(F81.capsuleDone === true && F81.col.photos.p_capsule === true,
+        'NG+ 终章：重挖去年胶囊变体（张叔保管 + 第七封无名信）照常收口');
+      // —— D. 接线面：NG_REUNION 补齐 / 包装器钩子 / 18 段数据 / 成就与照片上架 ——
+      const src80 = fs.readFileSync(path.join(ROOT, 'js', 'game.js'), 'utf8');
+      ok(src80.includes("gainBond('dazhuang', 5)") && src80.includes("gainBond('xiaoying', 5)")
+        && src80.includes("gainBond('lufei', 5)"),
+        'NG_REUNION 补齐：大壮 / 小影 / 陆飞的新学期重逢过场已挂');
+      ok(src80.includes('await capsuleFinale(k)) return') && src80.includes('await maybeHiddenTale(k)) return'),
+        '接线：对话包装器已挂终章 + 隐藏线钩子（心里话之后）');
+      ok((src80.match(/pages: \[/g) || []).length === 18,
+        '数据面：六挚友 × 3 段 = 18 段隐藏剧情齐全');
+      const col80 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      ok(col80.includes("id: 'p_capsule'") && src80.includes("'时光信使'"),
+        '上架：照片「时光胶囊大合影」+ 成就「时光信使」');
+    } finally {
+      A.Game.S._intro = realIntro80;
+      for (const k of [KMAIN, KA, KB]) {
+        if (keepLS[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS[k]);
+      }
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
