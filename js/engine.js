@@ -394,6 +394,14 @@ ADV.Engine = (function () {
         }
       } else B.wildSteps = 0;
     }
+    // 牧场盒孵蛋：揣着蛋走路，每一步都在暖它（走满 300 步破壳——步数口径与牧场盒进度提示一致）
+    if (B && B.ranchEgg && ADV.Game.S && ADV.Game.S.eggHatch) {
+      B.eggSteps = (B.eggSteps || 0) + 1;
+      if (B.eggSteps >= 300) {
+        B.eggSteps = 0;
+        runScript('eggHatch', {});
+      }
+    }
   }
 
   /* ---------- 场景切换 ---------- */

@@ -652,6 +652,102 @@
     }
   };
 
+  /* —— P3 牧场盒孵蛋：铺着干草的小木盒（后院鸡舍旁）——
+   * 同系的两只小伙伴住进去，睡一觉（farmTick）就会产下一枚蛋；
+   * 揣着蛋走满 300 步破壳，孵出三系混血新种（异色亲本把金色传给蛋）。
+   * 步数口径 300 与 engine onArrive 的破壳钩子保持一致。 */
+  const EGG_STEPS = 300;
+  const EGG_NEWBORN = { 虫: 'i19', 水: 'c13', 兽: 'm15' };   // 系别 → 混血新种
+  S.ranchBox = async () => {
+    const f = F(), CO = ADV.Collect;
+    while (true) {
+      f.ranch = f.ranch || {};
+      const a = f.ranch.a, b = f.ranch.b;
+      const nm = id => { const cr = CO.critter(id); return cr ? cr.name : id; };
+      const cap = f.ranchEgg
+        ? `干草窝里躺着一枚${f.ranchEgg.shiny ? '泛着淡淡金光的' : ''}${f.ranchEgg.fam}系蛋。🥚\n（揣着它走 ${Math.max(0, EGG_STEPS - (f.eggSteps || 0))} 步左右就能孵化）`
+        : a && b ? `${nm(a)}和${nm(b)}挤在干草窝里，处得很好。\n（睡一觉说不定会有惊喜……）`
+        : a || b ? `住着：${nm(a || b)}。\n（它还想找个同系的同伴才住得惯）`
+        : '铺着软干草的小木盒，空空的。\n（听说同系的两只小伙伴住在一起，\n会有奇妙的事发生）';
+      const opts = [];
+      if (!f.ranchEgg && (!a || !b)) opts.push('寄存一只小伙伴');
+      if (!f.ranchEgg && (a || b)) opts.push('接回小伙伴');
+      opts.push('就这样吧');
+      const i = await choose(opts, { cancelIndex: opts.length - 1, caption: { name: '牧场盒', text: cap } });
+      if (i < 0 || i === opts.length - 1) return;
+      if (opts[i] === '寄存一只小伙伴') {
+        const held = CO.heldCritters().filter(h => !h.gone && h.id !== a && h.id !== b && !(f.buddy && f.buddy.id === h.id));
+        if (!held.length) { await say({ name: '牧场盒', text: '（手上没有能寄存的小伙伴——\n先去草丛里认识几只吧）' }); continue; }
+        const hi = await choose(held.map(h => `${h.cr.name}${h.shiny ? ' ✨' : ''}（${h.cr.fam}系）`),
+          { caption: { name: '牧场盒', text: a ? `盒里已经住着${nm(a)}（${CO.critter(a).fam}系）——\n得找个同系的伙伴才住得惯。` : '轻轻把它放进干草窝……' } });
+        if (hi < 0) continue;
+        const pick = held[hi];
+        if (a && CO.critter(a).fam !== pick.cr.fam) {
+          await say({ name: '牧场盒', text: `${pick.cr.name}和${nm(a)}不住一块儿——\n（盒子里的两只得是同系才行）` });
+          continue;
+        }
+        if (!a) f.ranch.a = pick.id; else f.ranch.b = pick.id;
+        const e = CO.critterEntry(pick.id);
+        if (e) e.gone = 1;                                // 住进牧场盒：图鉴收录保留，但不在手上（防误卖/误换）
+        ADV.Audio.sfx('item');
+        ADV.UI.toast(` ${pick.cr.name} 住进了牧场盒 `);
+        save();
+        continue;
+      }
+      // 接回小伙伴
+      const ins = [a, b].filter(Boolean);
+      const ti = await choose(ins.map(id => `${nm(id)}（${CO.critter(id).fam}系）`), { caption: { name: '牧场盒', text: '干草窝的门开着，随时欢迎回来住。' } });
+      if (ti < 0 || ti >= ins.length) continue;
+      const out = ins[ti];
+      if (f.ranch.a === out) delete f.ranch.a; else delete f.ranch.b;
+      const e = CO.critterEntry(out);
+      if (e) e.gone = 0;                                  // 接回家：恢复「在手上」
+      ADV.Audio.sfx('item');
+      ADV.UI.toast(` 把${nm(out)}接回了家 `);
+      save();
+    }
+  };
+
+  /* —— 破壳时刻：engine onArrive 带蛋走满 300 步触发 ——
+   * 按蛋的系别孵出混血新种；异色蛋孵出异色个体；
+   * 首次孵出的孩子格外亲人——邀请随行时亲密度 +15（一种一次）。 */
+  S.eggHatch = async () => {
+    const f = F(), CO = ADV.Collect;
+    const egg = f.ranchEgg;
+    if (!egg) return;
+    const id = EGG_NEWBORN[egg.fam] || 'i19';
+    const cr = CO.critter(id);
+    ADV.Audio.sfx('fanfare');
+    await say({ text: '走了这么多路，怀里的蛋微微发烫——\n「咔」的一声，壳上裂出一道小缝！🥚' });
+    await say({ text: egg.shiny
+      ? `蛋壳轻轻散开，一道金光跳了出来——\n${cr.name}破壳而出，绒毛上闪着细细的金斑！✨`
+      : `蛋壳簌簌剥落，一只湿漉漉的小家伙\n探出脑袋，打了个大大的喷嚏——\n${cr.name}破壳而出！🐣` });
+    CO.hatchCritter(id, !!egg.shiny);
+    const first = !f.hatchedSpecies[id];
+    f.hatchedSpecies[id] = true;
+    f.ranchEgg = null;                                    // 蛋已破壳，干草窝重新空出来
+    f.ranch = {};                                         // 爸爸妈妈功成身退（想再孵就再寄存一对）
+    logEvent(`牧场盒的蛋孵出了${cr.name}${egg.shiny ? '（金色异色！）' : ''}`);
+    if (!f.buddy) {
+      const inv = await choose([`让${cr.name}跟着你走`, '让它在盒里先睡一觉'],
+        { caption: { name: `刚出生的${cr.name}`, text: '它睁开水汪汪的眼睛，\n把你当成了家里人——' } });
+      if (inv === 0) {
+        const e = CO.critterEntry(id);
+        f.buddy = { id, shiny: e && e.s ? 1 : 0 };
+        ADV.Engine.spawnBuddy();
+        if (first) {
+          f.buddyBond = Math.min(100, (f.buddyBond || 0) + 15);
+          ADV.UI.toast(' 🐣 亲人加成：牧场出生的孩子格外黏人（亲密度 +15） ');
+        }
+        ADV.UI.toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
+        logEvent(`${cr.name} 成了随行伙伴`);
+      }
+    } else {
+      await say({ text: `（身边已有随行伙伴。\n${cr.name}在干草窝里打了个滚，睡得香喷喷）` });
+    }
+    save();
+  };
+
   /* —— 矿道：无限层下探（入口裂缝 / 下行裂缝 / 出口绳索 / 矿脉敲采） —— */
   async function mineJump() {                           // 矿道换层转场（淡出 → 载入对应层 → 淡入）
     ADV.Game.busy = true;

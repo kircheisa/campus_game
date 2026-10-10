@@ -1360,6 +1360,8 @@ ADV.Maps = (function () {
       m.objects.push({ kind: 'plot', x: 5 + px, y: 10 + py, w: 1, h: 1, pid: py * 4 + px,
                        stage: 0, watered: false, s: 'farmPlot', solidTiles: [] });
     m.objects.push({ kind: 'coop', x: 19, y: 9, w: 1, h: 1, s: 'chickenCoop', solidTiles: [[0, 0]] });
+    // —— P3 牧场盒：同系小伙伴寄存一窝 → 产蛋 → 走路孵化（Z 键调查） ——
+    m.objects.push({ kind: 'sign', x: 19, y: 10, w: 1, h: 1, text: '🥚', solidTiles: [], s: 'ranchBox' });
     // —— s5 畜牧扩展：牛棚 / 羊圈（田伯处把小牛小羊抱回来，每天挤奶剪毛） ——
     m.objects.push({ kind: 'cowShed', x: 21, y: 10, w: 1, h: 1, s: 'cowShed', solidTiles: [[0, 0]] });
     m.objects.push({ kind: 'sheepPen', x: 21, y: 12, w: 1, h: 1, s: 'sheepPen', solidTiles: [[0, 0]] });

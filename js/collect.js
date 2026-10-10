@@ -55,7 +55,8 @@ ADV.Collect = (function () {
       { id: 'l7', name: '榆树叶', desc: '锯齿边的小椭圆。' },
       { id: 'l8', name: '竹叶', desc: '风一吹就沙沙响。' }
     ],
-    /* —— 生物图鉴：宝可梦式收集（44 种 = 虫 18 + 水 12 + 走兽 14；m14 望月犬 only 饲养进化可得）
+    /* —— 生物图鉴：宝可梦式收集（47 种 = 虫 19 + 水 13 + 走兽 15；m14 望月犬 only 饲养进化可得，
+     *    i19/c13/m15 三只混血新种 only 牧场盒孵蛋可得）
      *   fam=系别（虫/水/兽，斗虫擂台循环克制） rar=稀有度1-3 hp/pow/spd=对战三维
      *   bait=诱饵偏好（背包物品 id） where=主要出没地图 hint=图鉴出没线索
      *   when={p:[时段0-5] se:[季节en] we:[天气]} 缺省=全天候  need=图鉴进度解锁
@@ -107,7 +108,11 @@ ADV.Collect = (function () {
       { id: 'm11', name: '白鼬', desc: '雪地上一道白影子。', fam: '兽', rar: 2, pow: 5, spd: 7, hp: 9, bait: ['egg'], where: 'hillside', when: { se: ['winter'] }, hint: '落雪后的山脚雪窝边。' },
       { id: 'm12', name: '山神小狐狸', desc: '尾巴尖挑着一粒月光，看见它的人会有好运。', fam: '兽', rar: 3, pow: 6, spd: 8, hp: 13, bait: ['sevenFlower'], where: 'hillside', when: { p: [5], we: ['晴'] }, need: 30, hint: '月圆深夜的山径尽头——图鉴攒够 30 种，七色花为礼。' },
       { id: 'm13', name: '奶狗', desc: '闻到面包味就摇尾巴。', fam: '兽', rar: 1, pow: 2, spd: 3, hp: 7, bait: ['bread'], where: 'seasonPlaza', when: { p: [0, 1, 2, 3] }, hint: '广场长椅边等人分早餐。', evolve: { to: 'm14', days: 6 } },
-      { id: 'm14', name: '望月犬', desc: '月圆之夜，吠声能传过三座山。', fam: '兽', rar: 2, pow: 5, spd: 5, hp: 10, bait: ['bread'], where: 'none', when: {}, hint: '奶狗在院子里养足六天，月圆夜长成。', evolve: { to: 'm14', from: 'm13', days: 6 } }
+      { id: 'm14', name: '望月犬', desc: '月圆之夜，吠声能传过三座山。', fam: '兽', rar: 2, pow: 5, spd: 5, hp: 10, bait: ['bread'], where: 'none', when: {}, hint: '奶狗在院子里养足六天，月圆夜长成。', evolve: { to: 'm14', from: 'm13', days: 6 } },
+      // —— 混血新种（P3 牧场盒孵蛋限定：同系两只能量交汇的奇迹，野外永不见） ——
+      { id: 'i19', name: '斑纹光蝶', desc: '虎纹与月光在翅膀上交汇，飞过之处留下细碎光尘。', fam: '虫', rar: 2, pow: 5, spd: 7, hp: 12, bait: ['peach', 'moonGrass'], where: 'none', when: {}, hint: '牧场盒里住着一对虫系伙伴，某天清晨会多出一枚蛋。' },
+      { id: 'c13', name: '珠鳞小鲤', desc: '鳞片像一粒粒小珍珠，游动时整条溪都亮了。', fam: '水', rar: 2, pow: 4, spd: 6, hp: 12, bait: ['bread', 'pea'], where: 'none', when: {}, hint: '牧场盒里住着一对水系伙伴，蛋宝宝会在干草窝里等风来。' },
+      { id: 'm15', name: '绒耳小兽', desc: '耳朵软软垂着，走路时一颠一颠像团会跑的棉花糖。', fam: '兽', rar: 2, pow: 6, spd: 6, hp: 12, bait: ['strawberry', 'bread'], where: 'none', when: {}, hint: '牧场盒里住着一对兽系伙伴，感情好了就会有新生命。' }
     ],
     /* —— 百果园：果园四季果树（season=成熟季节，item=摘下进背包的物品） —— */
     fruits: [
@@ -461,6 +466,27 @@ ADV.Collect = (function () {
     ADV.Game.save();
     return true;
   }
+  /* —— 牧场盒孵化（P3）：新种直接入册；已收录的清 gone 标记（蛋里孵出的是「接回家」的个体）。
+   *    异色蛋孵出异色：已收的普通个体也会升格金色——血脉里的光藏不住。返回 { ok, fresh }。 —— */
+  function hatchCritter(id, shiny) {
+    const cr = critter(id);
+    if (!cr) return { ok: false, fresh: false };
+    const k = col()['insects'] || (col()['insects'] = {});
+    const e = k[id];
+    let fresh = false;
+    if (!e) {
+      k[id] = { s: shiny ? 1 : 0, d: ADV.Cal ? ADV.Cal.day : 0 };
+      fresh = true;
+      ADV.UI.toast(shiny ? ` ✨ 金色异色个体！${cr.name} 破壳而出！ ` : ` 收藏入手：${cr.name}（破壳而出）🐣 `);
+      checkCritterMiles();
+      checkFull('critters');
+    } else {
+      e.gone = 0;
+      if (shiny && !e.s) { e.s = 1; ADV.UI.toast(` ✨ 蛋里的光藏不住——${cr.name}升格成了金色异色！ `); }
+    }
+    ADV.Game.save();
+    return { ok: true, fresh };
+  }
   /* —— 图鉴阶梯奖励闭环：收录数里程碑（10/20/30/40 只）发金币 + 称号，
    *    传说三只集齐另有大奖；称号同时记入成长大事记 —— */
   const CRIT_MILES = [
@@ -484,7 +510,7 @@ ADV.Collect = (function () {
       if (ADV.Growth) ADV.Growth.milestone('🌙 集齐传说三只，获得称号「传说研究员」');
     }
   }
-  /* 图鉴总数含异色位：44 常规 + 已收异色补充 */
+  /* 图鉴总数含异色位：47 常规 + 已收异色补充 */
   function shinyCount() { return DB.critters.filter(c => isShiny('critters', c.id)).length; }
 
   /* —— 落叶册阶梯奖励闭环（仿图鉴里程碑）：8 种叶子收集到 3/5/8 种时发金币 + 称号 —— */
@@ -662,7 +688,7 @@ ADV.Collect = (function () {
   }
 
   return { DB, CATS, ITEMS, has, gain, info, ids, catCount, totalOf, progress, whenOk,
-           critter, critterList, needOk, rollShiny, isShiny, gainCritter, shinyCount,
+           critter, critterList, needOk, rollShiny, isShiny, gainCritter, hatchCritter, shinyCount,
            netTier, cageTier, shinyMult,
            applyEvolve, critterRearing,
            critterPrice, sellPrice, critterEntry, heldCritters, buyCritter, sellCritter, petShelf,

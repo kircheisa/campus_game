@@ -113,7 +113,12 @@ window.ADV = window.ADV || {};
     moral: {},                                         // 本周目已做过的抉择 { 事件id: 'a'/'b' }
     moralPrev: {},                                     // 「上一个你」的抉择留底（NG+ 跨周目累积，事件重演时引用）
     // —— 温室（批次十九 · s2）——
-    greenhouse: false                                  // 温室已建成（田伯处高价购买；四季任意作物 + 喷淋自动浇水 + 乌鸦进不去）
+    greenhouse: false,                                 // 温室已建成（田伯处高价购买；四季任意作物 + 喷淋自动浇水 + 乌鸦进不去）
+    // —— 牧场盒孵蛋（批次二十 · P3）——
+    ranch: {},                                         // 牧场盒寄存的同系对 { a: 图鉴id, b: 图鉴id }
+    ranchEgg: null,                                    // 盒中的蛋 { fam, shiny, day }（shiny=异色亲本遗传位）
+    eggSteps: 0,                                       // 带蛋散步步数计数（走满 300 步破壳）
+    hatchedSpecies: {}                                 // 孵化过的物种（首次邀请随行发「亲人加成」，一种一次）
   });
 
   const state = {

@@ -965,7 +965,7 @@ async function pump(promise, maxSteps) {
   console.log('\n[5.14] 童年怀旧玩法包（六个小游戏 + 广播体操 + 小卖部集卡）');
   // —— 图鉴第 8 类 ——
   ok(A.Collect.CATS.length === 9 && A.Collect.CATS.some(c => c[0] === 'cards') && A.Collect.CATS.some(c => c[0] === 'scenes')
-     && A.Collect.DB.critters.length === 44, '图鉴 9 类 + 生物图鉴 44 种（虫系旧 8 种并入生物图鉴）');
+     && A.Collect.DB.critters.length === 47, '图鉴 9 类 + 生物图鉴 47 种（虫系旧 8 种并入生物图鉴）');
   ok(A.Collect.DB.cards.length === 12 && A.Collect.DB.cards.every(c => c.id && c.name && c.star >= 1 && c.star <= 3),
      `童年卡 ${A.Collect.DB.cards.length} 张齐备（含 1-3 星）`);
   // —— 地图触发点 ——
@@ -3296,13 +3296,13 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
     ok(true, `室内地图 ${indoorMapsIds.length} 张×季节系统: 粒子系统在 indoor=true 下正常关闭无崩溃`);
   }
 
-  console.log('\n[7.0] 生物图鉴：44 种三系收集 · 窝点捕捉 · 金色异色');
+  console.log('\n[7.0] 生物图鉴：47 种三系收集 · 窝点捕捉 · 金色异色');
   {
     const CO = A.Collect;
-    // —— 数据完整性：44 种 = 虫18 / 水12 / 兽14（m14 望月犬仅饲养可得），字段齐备 ——
-    ok(CO.critterList().length === 44, '生物图鉴：44 种入册');
-    ok(CO.critterList('虫').length === 18 && CO.critterList('水').length === 12 && CO.critterList('兽').length === 14,
-      '生物图鉴：虫18 / 水12 / 兽14 三系齐备');
+    // —— 数据完整性：47 种 = 虫19 / 水13 / 兽15（m14 仅饲养可得；i19/c13/m15 仅牧场盒孵蛋可得），字段齐备 ——
+    ok(CO.critterList().length === 47, '生物图鉴：47 种入册');
+    ok(CO.critterList('虫').length === 19 && CO.critterList('水').length === 13 && CO.critterList('兽').length === 15,
+      '生物图鉴：虫19 / 水13 / 兽15 三系齐备');
     ok(CO.DB.critters.every(c => c.name && c.fam && c.where && c.hint && c.bait.length &&
        typeof c.pow === 'number' && typeof c.spd === 'number' && typeof c.hp === 'number' && c.rar >= 1 && c.rar <= 3),
       '生物图鉴：名称/系别/出没/线索/诱饵/稀有度/三维字段齐备');
@@ -3348,7 +3348,7 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
     A.Maps.ids.forEach(id => A.Maps.get(id).objects.forEach(o => { if (o.kind === 'critter') spotMaps.add(o.map); }));
     const needMaps = [...new Set(CO.DB.critters.filter(c => c.where !== 'none').map(c => c.where))];
     ok(needMaps.every(m => spotMaps.has(m)), `窝点布点：${needMaps.length} 张出没地图全部有窝点覆盖`);
-    // —— 总进度并轨：生物 44 种计入总进度（虫系旧 8 种不重复计） ——
+    // —— 总进度并轨：生物 47 种计入总进度（虫系旧 8 种不重复计） ——
     ok(CO.progress().total >= CO.totalOf('critters') + CO.totalOf('books'), '总进度：生物图鉴并入收集总进度');
 
     // —— P1 随行伙伴：登记 / 生成 / 跨图跟随 / 亲密度 / Z 键互动 / 道别 ——
@@ -3480,13 +3480,13 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
       ok(F44.ladderTier === 3 && F44.gold === g44 + 63, '训练家：冠军蝉鸣大爷三连（传说压轴）→ 登顶 + 40 金');
       ok(said44.some(t => t.includes('山神小狐狸') && t.includes('倒吸')), '训练家：王牌山神小狐狸有传说级登场演出');
 
-      // —— 自由擂台：44 种全可上场；兽系神兽撞水系 → 被克 0.75 仍凭硬实力取胜 ——
+      // —— 自由擂台：47 种全可上场；兽系神兽撞水系 → 被克 0.75 仍凭硬实力取胜 ——
       loadDay44(5);
       CO.DB.critters = [db44.find(c => c.id === 'c1'), zz44];   // 池定桩：蝌蚪（水系）+ 神兽（留在池中才能上场）
       said44.length = 0;
       pickPlan44(['上擂台斗虫', '擂台神兽']);
       await pump(S44.bugArena(), 6000);
-      ok(F44.bugWins === bw44 + 1 && F44.gold === g44 + 75, '自由擂台：兽系上场亦受理（44 种全可战）→ 每日首胜 12 金');
+      ok(F44.bugWins === bw44 + 1 && F44.gold === g44 + 75, '自由擂台：兽系上场亦受理（47 种全可战）→ 每日首胜 12 金');
       ok(said44.some(t => t.includes('擂台神兽') && t.includes('效果不佳')), '自由擂台：兽撞水 0.75 被克战报如实标注');
 
       // —— 传说演出：窝点抽中山神小狐狸 → appear / catch 专属文案（压过异色播报）——
@@ -5176,8 +5176,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     // —— C 新饲养链：奶狗 → 望月犬（成体野生不出，仅饲养可得） ——
     const m1374 = CO74.critter('m13'), m1474 = CO74.critter('m14');
     ok(!!m1374 && !!m1474 && m1374.evolve && m1374.evolve.to === 'm14' && m1374.evolve.days === 6
-      && m1474.rar === 2 && m1474.where === 'none' && CO74.totalOf('critters') === 44,
-      '饲养链×3：奶狗（6 天）→ 望月犬入册——总数 44，成体 where=none 野外不出（图鉴专属）');
+      && m1474.rar === 2 && m1474.where === 'none' && CO74.totalOf('critters') === 47,
+      '饲养链×3：奶狗（6 天）→ 望月犬入册——总数 47，成体 where=none 野外不出（图鉴专属）');
     ok(String(A.Game.S.teacherPu).indexOf("totalOf('critters')") >= 0 && String(A.Game.S.teacherPu).indexOf('/ 42') < 0,
       '蒲老师作业口径：图鉴进度分母动态取 totalOf（新增物种不再漏统计）');
     // —— B 收购台/交换的饲养保护标记 ——
@@ -6006,6 +6006,100 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         cur.gold = old.gold || 0;
         cur.farm = old.farm || {};
         if (cur.badges && old.badges) cur.badges.science = old.badges.science;
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  console.log('\n[5.89] 玩法批次二十：P3 牧场盒孵蛋——同系寄存产蛋 · 走 300 步破壳 · 三系混血新种');
+  {
+    const said89 = [];
+    const realSay89 = A.UI.say;
+    A.UI.say = o => { said89.push((o.name ? o.name + '：' : '') + (o.text || '')); return Promise.resolve(); };
+    const snap89 = JSON.stringify(A.Game.flags);          // 快照：收尾礼貌还原（本块是最后一块，主要防状态外溢）
+    const realIntro89 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F89 = A.Game.flags, CO89 = A.Collect;         // newGame 换了 flags 对象，之后取新引用
+      // —— A. 数据面：三只混血新种入册（孵蛋限定：where=none / when 空 / 诱饵齐备） ——
+      const hyb89 = ['i19', 'c13', 'm15'].map(id => CO89.critter(id));
+      ok(hyb89.every(c => c && c.where === 'none' && c.when && !Object.keys(c.when).length &&
+         c.bait.length >= 1 && c.rar === 2 && c.pow > 0 && c.spd > 0 && c.hp > 0),
+        '孵蛋限定：斑纹光蝶/珠鳞小鲤/绒耳小兽入册——where=none 野外不出、字段齐备');
+      // —— B. 布点：后院鸡舍旁常驻牧场盒 ——
+      const yard89 = A.Maps.get('homeYard');
+      ok(yard89.objects.some(o => o.s === 'ranchBox' && o.text === '🥚'), '布点：后院鸡舍旁常驻「牧场盒」木牌（Z 键调查）');
+      // —— C. 寄存同系校验：异系拒收 + 住盒打 gone 标记 ——
+      CO89.gainCritter('i1', false); CO89.gainCritter('i2', false); CO89.gainCritter('m1', false);
+      let step89 = 0;
+      choosePick = opts => {                              // 主菜单寄松鼠 → 再寄瓢虫（异系被拒）→ 就这样吧离场
+        const k = step89++;
+        if (k === 0 || k === 2) return 0;
+        if (k === 1) return opts.findIndex(s => String(s).indexOf('松鼠') === 0);
+        if (k === 3) return opts.findIndex(s => String(s).indexOf('七星瓢虫') === 0);
+        return opts.length - 1;
+      };
+      await pump(A.Game.S.ranchBox({}), 1500);
+      ok(said89.some(t => t.includes('同系')) && F89.ranch.a === 'm1' && !F89.ranch.b &&
+         F89.col.insects.m1.gone === 1,
+        '牧场盒：异系伙伴拒收同窝（虫兽不住一块儿）——寄存个体打 gone 标记防误卖');
+      F89.ranch = {}; F89.col.insects.m1.gone = 0;
+      // —— D. farmTick 产蛋 + 异色遗传 ——
+      F89.col.insects.i2.s = 1;                           // 蝴蝶是金色亲本
+      F89.ranch = { a: 'i1', b: 'i2' };
+      A.Cal.load({ day: 40, period: 3, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Game.farmTick();
+      ok(F89.ranchEgg && F89.ranchEgg.fam === '虫' && F89.ranchEgg.shiny === true,
+        '产蛋：同系 pair 睡一觉产下虫系蛋——金色亲本把异色传给蛋');
+      // —— E. 破壳 + 亲人加成：孵出金色斑纹光蝶，邀为随行 +15 ——
+      F89.eggSteps = 300;                                 // 带蛋步数已走满（onArrive 钩子见源断言）
+      choosePick = () => 0;                               // 邀请随行 → 让它跟着走
+      await pump(A.Game.S.eggHatch({}), 2500);
+      ok(CO89.has('critters', 'i19') && CO89.isShiny('critters', 'i19') &&
+         F89.ranchEgg === null && !F89.ranch.a && !F89.ranch.b,
+        '破壳：金色蛋孵出金色斑纹光蝶（新种入册），蛋清空、干草窝功成身退');
+      ok(F89.buddy && F89.buddy.id === 'i19' && F89.buddy.shiny === 1 &&
+         (F89.buddyBond || 0) >= 15 && F89.hatchedSpecies.i19 === true,
+        '亲人加成：首次孵出的孩子邀为随行，亲密度 +15 起步（hatchedSpecies 留档）');
+      choosePick = null;
+      // —— F. 重复孵化：已收录路径——清 gone / 异色保持 / 已有随行时孩子回盒睡 ——
+      F89.col.insects.i19.gone = 1;                       // 模拟曾放归
+      F89.ranchEgg = { fam: '虫', shiny: false, day: 41 };
+      await pump(A.Game.S.eggHatch({}), 2500);
+      ok(F89.col.insects.i19.gone === 0 && CO89.isShiny('critters', 'i19') && F89.ranchEgg === null &&
+         said89.some(t => t.includes('睡得香喷喷')),
+        '重复孵化：已收录个体清 gone「接回家」，异色位保持，已有随行时孩子回盒睡');
+      // —— G. 系别映射：水系蛋 → 珠鳞小鲤 / 兽系蛋 → 绒耳小兽 ——
+      F89.ranchEgg = { fam: '水', shiny: false, day: 42 };
+      await pump(A.Game.S.eggHatch({}), 2500);
+      F89.ranchEgg = { fam: '兽', shiny: false, day: 43 };
+      await pump(A.Game.S.eggHatch({}), 2500);
+      ok(CO89.has('critters', 'c13') && CO89.has('critters', 'm15'),
+        '系别映射：水系蛋孵珠鳞小鲤 / 兽系蛋孵绒耳小兽（三系混血齐活）');
+      // —— H. 源断言：blankFlags 只增不改 + engine 破壳钩子在位 ——
+      const src89 = gameSrc();
+      const eng89 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      ok(src89.includes('ranchEgg: null') && src89.includes('hatchedSpecies: {}'),
+        '存档兼容：blankFlags 只增不改——旧档自动补牧场盒四字段');
+      ok(eng89.includes('B.eggSteps') && eng89.includes("runScript('eggHatch'"),
+        '破壳钩子：engine onArrive 带蛋计步 300 步触发孵化事件');
+    } finally {
+      A.UI.say = realSay89;
+      A.Game.S._intro = realIntro89;
+      choosePick = null;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap89);
+        const cur = A.Game.flags;
+        cur.ranch = old.ranch || {};
+        cur.ranchEgg = old.ranchEgg || null;
+        cur.eggSteps = old.eggSteps || 0;
+        cur.hatchedSpecies = old.hatchedSpecies || {};
+        cur.buddy = old.buddy === undefined ? null : old.buddy;
+        cur.buddyBond = old.buddyBond || 0;
+        cur.col = old.col || {};
+        cur.gold = old.gold || 0;
       } catch (e) {}
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
