@@ -88,7 +88,10 @@ ADV.Game = (function () {
     helpPts: 0, helpDone: {},                          // 帮助板：累计完成数 / 当日完成登记
     fest: {},                                          // 节日联动：当日活动参与登记
     heartReady: {}, heartDone: {},                     // 心级事件：待触发 / 已触发
-    buddyBoost: null                                   // 驯兽导师「进化催化」：随行伙伴力/速 +1
+    buddyBoost: null,                                  // 驯兽导师「进化催化」：随行伙伴力/速 +1
+    // —— 四师签名挑战 ——
+    tgame: {},                                         // 各科签名挑战进度 { 科目: { lv: 1-4 } }（4 = 大师毕业）
+    tkind: {}                                          // 各科玩法打卡 { 科目: { trial/hw/olymp/mini: true } }
   });
 
   const state = {
@@ -548,6 +551,7 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     }
     const rank = wrongs.n === 0 ? 4 : wrongs.n <= 1 ? 3 : wrongs.n <= 2 ? 2 : 1;
     stt.rank = rank;
+    markTkind(cfg.en, 'olymp');                                  // 玩法打卡：学科奥赛
     const RW = { 4: [60, 6], 3: [30, 3], 2: [15, 1], 1: [5, 0] };
     const [g, cup] = RW[rank];
     f.gold = (f.gold || 0) + g;
@@ -622,6 +626,7 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
       for (let i = 0; i < qs.length; i++) await ask(teacher, qs[i], wrongs, npc, subject);
       if (wrongs.n === 0) {
         F().homeworkDay[subject] = day;
+        markTkind(subject, 'hw');                                // 玩法打卡：今日作业
         F().gold = (F().gold || 0) + (office ? 16 : 8);          // 办公时间作业：奖励翻倍
         addCup(office ? 2 : 1);
         // 奖励按日期轮换：书 → 昆虫图册 → 小动物图册
@@ -687,6 +692,7 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     await UI().itemGet(badge + '徽章', gemColor);
     E().playAction(E().player, 'raise', 1.3);                    // 玩家高举徽章欢呼
     F().badges[subject] = true;
+    markTkind(subject, 'trial');                                 // 玩法打卡：学科试炼
     F().badgeEver = F().badgeEver || { math: false, chinese: false, science: false, english: false };
     F().badgeEver[subject] = true;                               // 永久记录（石门主线不受每日重置影响）
     addGold(5);                                                  // 每日重新收集也有零花钱
@@ -877,6 +883,160 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     after: '你的冒险故事，用英语说就是——Amazing！\n继续向前吧，孩子！',
     ...OFFICE_LINES.english
   });
+
+  /* ==================== 四师签名挑战 ====================
+   * 每科一款专属 canvas 小游戏（王老师·速算天平 / 李老师·飞花令 /
+   * 陈老师·电路连通 / 吴老师·单词街机），三关递进：
+   * 过 1/2 关 +5 金，第三关通关授「大师奖章」（+15 金 +3 学院分）；
+   * 毕业后每天可打一局「复健局」（+6 金 +1 学院分）。
+   * 试炼 / 作业 / 奥赛 / 签名挑战四玩法在 f.tkind 打卡，
+   * 单科集齐 4 种发奖学金，四科全齐解锁成就「文理四通」。 */
+  const TGAME = {
+    math: {
+      kind: 'balance', cn: '速算天平', teacher: '王老师', npcId: 'teacher_math',
+      medal: '天平大师奖章', medalColor: '#5a8aff',
+      prompt: '来一盘速算天平吗？',
+      intro: ['看到讲台边的老天平了吗？\n放对砝码，算式才能成立。\n第一关是加减法，试试手！',
+              '第二轮要用乘法口诀了——\n口诀背得熟，天平才听话。',
+              '最后一关是两步混合运算。\n先乘后加，沉住气——\n你有数学家的脑子！'],
+      clear: ['手感不错！下一关乘法等你来。', '口诀这么熟？最后一关混合运算，敢应战吗？'],
+      finish: '三关全破——这座小天平送你！\n从今天起，你就是「天平大师」！',
+      fail: ['天平歪了不要紧，数学就是试出来的。', '口诀再背一背，我随时等你。', '混合运算要多想一步——深呼吸，再来！'],
+      bye: '好，天平我先收着，随时光临。',
+      gradReplay: '大师也要天天练手——\n今日复健局，来一盘？',
+      gradDone: '今天已经练过啦，让天平也歇歇。明天见！',
+      gradWin: '宝刀未老！这份复健奖励拿好。',
+      gradLose: '偶失一局而已，大师也会手生嘛。'
+    },
+    chinese: {
+      kind: 'flower', cn: '飞花令', teacher: '李老师', npcId: 'teacher_cn',
+      medal: '飞花令金牌', medalColor: '#ff6a7a',
+      prompt: '要不要来玩一局飞花令？',
+      intro: ['古人以诗会友，行令赋诗。\n第一关诗句缺一字——\n接住飘落的花瓣，把字补上。',
+              '第二关换七言，花瓣也落得急了。\n稳住手，心里默念那句诗。',
+              '终局是「飞花令」本令——主题字「月」。\n缺字在何处不可知，\n唯月字必在其中。'],
+      clear: ['好接！下一局七言，更难些。', '接得漂亮——敢不敢赴「月」字之局？'],
+      finish: '月字令成，花瓣满篮。\n这块「飞花令金牌」，非你莫属！',
+      fail: ['接漏了也不要紧，诗句多念几遍就熟了。', '七言长，花瓣急——再试一回。', '月字难寻，诗人也是找了一生的。再来。'],
+      bye: '去吧，书页间的风会替我等你。',
+      gradReplay: '旧令重开，温故知新——\n今日再行一局？',
+      gradDone: '今日花令已毕，明日再会。',
+      gradWin: '诗心不减当年。这份彩头收好。',
+      gradLose: '心不静则令不成。喝口茶，再来。'
+    },
+    science: {
+      kind: 'circuit', cn: '电路连通', teacher: '陈老师', npcId: 'teacher_sci',
+      medal: '电路大师铭牌', medalColor: '#4ae86c',
+      prompt: '来接一块电路板吗？',
+      intro: ['这块电路板还没接通！\n转动接头，把电池和灯泡连起来。\n第一块板很简单，热热身！',
+              '第二块板拐了两个弯——\n接口有限，先想好再动手！',
+              '终极大板：十二个接头全要用上！\n每转一次都算数——稳住！'],
+      clear: ['有点电工的样子了！下一块板拐弯更多。', '漂亮！终极电路板在向你放电——上！'],
+      finish: '灯亮了！十二个接头一个没浪费！\n「电路大师铭牌」归你了！',
+      fail: ['接头拧错很正常，爱迪生也试了上千次。', '接口省着点用——先想清楚再拧！', '差一点点就亮了！再来，我有的是电路板。'],
+      bye: '电路板我留着，随时来电。',
+      gradReplay: '大师复审——今天的电路有点意思，接吗？',
+      gradDone: '今天复审过了，让灯泡也休息休息。',
+      gradWin: '手艺没生疏！这点材料费收好。',
+      gradLose: '今天的电路闹脾气，不怪你。明天再战！'
+    },
+    english: {
+      kind: 'arcade', cn: '单词街机', teacher: '吴老师', npcId: 'teacher_en',
+      medal: '单词街机奖券', medalColor: '#ffd94c',
+      prompt: 'Play a game? 来一局单词街机？',
+      intro: ['这台街机是我的宝贝！\n地鼠举着字母，按顺序敲出单词。\n三个字母，小意思！',
+              'Level 2! 四个字母的单词——\n地鼠也变快了，Watch out!',
+              'Final round! 五个字母大单词——\n敲错一次扣四秒，Be quick!'],
+      clear: ['Nice! 升级！下局四个字母！', 'Excellent! 最后一局，五个字母等着你！'],
+      finish: 'GAME CLEAR! 全部打通！\n这张「单词街机奖券」送你——You did it!',
+      fail: ["Don't worry! 三个字母多敲几遍就熟啦。", 'So close! 四个字母的词多拼几次！', 'Time is up! 五个字母要更专注哦，再来！'],
+      bye: 'See you! 街机随时开着。',
+      gradReplay: 'Daily practice! 每日一局，保持手感？',
+      gradDone: "That's enough for today! 明天再来！",
+      gradWin: 'Perfect! 手感还在！奖励拿好！',
+      gradLose: "It's OK! 失误是学习的一部分！"
+    }
+  };
+  const TGAME_KIND_CN = { trial: '试炼', hw: '作业', olymp: '奥赛', mini: '签名挑战' };
+
+  // 玩法打卡：单科四玩法（试炼/作业/奥赛/签名挑战）集齐发奖学金
+  function markTkind(subj, kind) {
+    const f = F();
+    f.tkind = f.tkind || {};
+    f.tkind[subj] = f.tkind[subj] || {};
+    if (f.tkind[subj][kind]) return;
+    f.tkind[subj][kind] = true;
+    const cfg = TGAME[subj];
+    if (Object.keys(f.tkind[subj]).length >= 4) {
+      f.gold = (f.gold || 0) + 20;
+      UI().toast(` 🎓 ${cfg.teacher}看见你玩遍${cfg.cn}——奖学金 +20 金！ `);
+      logEvent(`集齐${cfg.teacher}的四种${cfg.cn}玩法记录`);
+    } else {
+      UI().toast(` 📔 ${cfg.cn}玩法打卡：${TGAME_KIND_CN[kind]}（${Object.keys(f.tkind[subj]).length}/4） `);
+    }
+  }
+
+  // 签名挑战主流程：三关递进 → 大师毕业 → 每日复健局
+  async function tgameFlow(subj) {
+    const cfg = TGAME[subj], f = F();
+    f.tgame = f.tgame || {};
+    f.tgame[subj] = f.tgame[subj] || { lv: 1 };
+    const st = f.tgame[subj], npc = E().getNpc(cfg.npcId);
+    if ((st.lv || 1) >= 4) {                                     // 已毕业：每日一局复健
+      const ds = daySlot('tgameDay');
+      if (ds[subj]) { await say({ name: cfg.teacher, text: cfg.gradDone }); return; }
+      await say({ name: cfg.teacher, text: cfg.gradReplay });
+      const go = await choose(['来一盘！', '今天先走啦……'], { caption: { name: cfg.teacher, text: cfg.prompt } });
+      if (go === 1) { await say({ name: cfg.teacher, text: cfg.bye }); return; }
+      const win = await new Promise(res => ADV.Mini.start(cfg.kind, res, { lv: 3 }));
+      if (win) {
+        ds[subj] = true;
+        f.gold = (f.gold || 0) + 6;
+        addCup(1);
+        markTkind(subj, 'mini');
+        E().playAction(npc, 'laugh', 1.2);
+        await say({ name: cfg.teacher, text: cfg.gradWin });
+        logEvent(`完成${cfg.teacher}的每日复健挑战`);
+        save();
+      } else {
+        E().playAction(npc, 'doubt', 1.2);
+        await say({ name: cfg.teacher, text: cfg.gradLose });
+      }
+      return;
+    }
+    const lv = st.lv || 1;
+    E().playAction(npc, 'wave', 1.4);
+    await say({ name: cfg.teacher, text: cfg.intro[lv - 1] });
+    const go = await choose(['来一局！', '今天先告辞……'], { caption: { name: cfg.teacher, text: cfg.prompt } });
+    if (go === 1) { await say({ name: cfg.teacher, text: cfg.bye }); return; }
+    const win = await new Promise(res => ADV.Mini.start(cfg.kind, res, { lv }));
+    if (win) {
+      markTkind(subj, 'mini');
+      E().playAction(npc, 'laugh', 1.4);
+      if (lv >= 3) {
+        st.lv = 4;                                               // 4 = 大师毕业，此后走每日复健
+        addGold(15);
+        addCup(3);
+        await UI().itemGet(cfg.medal, cfg.medalColor);
+        await say({ name: cfg.teacher, text: cfg.finish });
+        logEvent(`拿下${cfg.teacher}的「${cfg.cn}」大师奖章`);
+      } else {
+        st.lv = lv + 1;
+        addGold(5);
+        await say({ name: cfg.teacher, text: cfg.clear[lv - 1] });
+        logEvent(`通过${cfg.teacher}的${cfg.cn}第 ${lv} 关`);
+      }
+      save();
+    } else {
+      E().playAction(npc, 'doubt', 1.2);
+      await say({ name: cfg.teacher, text: cfg.fail[lv - 1] });
+    }
+  }
+
+  S.tgameMath = () => tgameFlow('math');
+  S.tgameCn = () => tgameFlow('chinese');
+  S.tgameSci = () => tgameFlow('science');
+  S.tgameEn = () => tgameFlow('english');
 
   /* —— 自然魔法课 · 蒲老师：动物学/昆虫学教学 + 每日问答 + 捕捉作业 —— */
   const NATURAL_QUIZ = [
@@ -6029,7 +6189,9 @@ E().playAction(E().player, 'laugh', 1.6);
       ['钓鱼大赛冠军', (f.contestChamp || 0) >= 1, '周日钓鱼大赛夺魁'],
       ['牧场主', f.cow && f.sheep, '牛棚羊圈双全（挤奶与剪毛都上手）'],
       ['小镇之光', (f.helpPts || 0) >= 12, '帮助板声望 12：全镇的感谢都归你'],
-      ['驯兽宗师', !!f.buddyBoost, '接受雾隐婆婆的进化催化']
+      ['驯兽宗师', !!f.buddyBoost, '接受雾隐婆婆的进化催化'],
+      // —— 四师签名挑战 ——
+      ['文理四通', ['math', 'chinese', 'science', 'english'].every(s => Object.keys((f.tkind || {})[s] || {}).length >= 4), '每门学科的试炼 / 作业 / 奥赛 / 签名挑战都体验过']
     ];
     return A.map(([name, done, desc]) => ({ name, done: !!done, desc }));
   }

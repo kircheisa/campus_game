@@ -18,6 +18,11 @@
  *   longjump  沙坑跳远：助跑条冲进绿区按 Z 起跳，3 跳取最远破 4 米
  *   tug       拔河：连按 Z 与渐强的对手拉锯，红标先过 ±0.8 线定胜负
  *   relay     班级接力：节奏条绿区按 Z 迈步，4 棒 × 3 步抢先冲线
+ * —— 四师签名玩法包（学科试炼 canvas 关，难度随 lv 1-3 递进） ——
+ *   balance   速算天平：数学·←→ 挑砝码 Z 放上天平，3 题配平 2 题获胜
+ *   flower    飞花令：语文·接住补全诗句的「对字」花瓣，三句全中（终局主题字「月」）
+ *   circuit   电路连通：科学·Z 旋转接头把电池和灯泡接通，接口步数有限
+ *   arcade    单词街机：英语·敲中举字母的地鼠按顺序拼词，两个单词即胜
  * X / Esc 随时退出（视为未获胜）
  * ========================================================= */
 window.ADV = window.ADV || {};
@@ -37,6 +42,62 @@ ADV.Mini = (function () {
   const CARDGLYPH = ['陀', '珠', '蛙', '绳', '机', '包', '蜻', '镜', '弓', '画', '雪', '章'];
   const CARDHEX = ['#e8746a', '#5aa8e8', '#6ac86a', '#d9a05a', '#8a7ad9', '#c86ab4',
     '#5ad4c8', '#e8c85a', '#a8e85a', '#e88ac8', '#7ab0ff', '#ffd0a0'];
+
+  /* —— 四师签名玩法数据 —— */
+  // 速算天平：按难度出一道缺项算式 + 4 个候选砝码
+  function mkBalance(lv) {
+    const rnd = n => (Math.random() * n) | 0;
+    let q, ans;
+    if (lv <= 1) {                                            // 第一关：加减法
+      const a = 2 + rnd(10), r = 1 + rnd(10);
+      if (Math.random() < .5) { q = `${a} + ? = ${a + r}`; ans = r; }
+      else { q = `${a + r} − ? = ${a}`; ans = r; }
+    } else if (lv === 2) {                                    // 第二关：乘法口诀
+      const b = 2 + rnd(7), r = 2 + rnd(8);
+      if (Math.random() < .5) { q = `? × ${b} = ${b * r}`; ans = r; }
+      else { q = `${b} × ? = ${b * r}`; ans = r; }
+    } else {                                                  // 终关：先乘后加两步运算
+      const b = 2 + rnd(5), r = 2 + rnd(6), c = 1 + rnd(9);
+      q = `${b} × ? + ${c} = ${b * r + c}`; ans = r;
+    }
+    const poolSet = new Set([ans]);
+    while (poolSet.size < 4) {
+      const d = ans + (Math.random() < .5 ? -1 : 1) * (1 + rnd(6));
+      if (d > 0) poolSet.add(d);
+    }
+    const pool = [...poolSet];
+    for (let i = pool.length - 1; i > 0; i--) {               // 洗牌：正确项位置随机
+      const j = (Math.random() * (i + 1)) | 0, t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    return { q, ans, pool };
+  }
+  // 飞花令：诗句库（lv1 五言 / lv2 七言 / lv3 月字令）
+  const FLOWER_BANK = [
+    { v: '春眠不觉晓', lv: 1 }, { v: '谁知盘中餐', lv: 1 }, { v: '白毛浮绿水', lv: 1 },
+    { v: '红掌拨清波', lv: 1 }, { v: '低头思故乡', lv: 1 }, { v: '欲穷千里目', lv: 1 },
+    { v: '两个黄鹂鸣翠柳', lv: 2 }, { v: '一行白鹭上青天', lv: 2 }, { v: '窗含西岭千秋雪', lv: 2 },
+    { v: '春风又绿江南岸', lv: 2 }, { v: '不知细叶谁裁出', lv: 2 }, { v: '万条垂下绿丝绦', lv: 2 },
+    { v: '月落乌啼霜满天', lv: 3 }, { v: '海上生明月', lv: 3 }, { v: '明月松间照', lv: 3 },
+    { v: '月出惊山鸟', lv: 3 }, { v: '峨眉山月半轮秋', lv: 3 }
+  ];
+  const FLOWER_CHARS = '花风雪松江水云天心人白青翠柳黄鹂岸秋声'.split('');
+  function flowerDecoy(need) {
+    let c;
+    do { c = FLOWER_CHARS[(Math.random() * FLOWER_CHARS.length) | 0]; } while (c === need);
+    return c;
+  }
+  // 单词街机：按长度分级的词库
+  const ARCADE_WORDS = {
+    1: ['cat', 'dog', 'sun', 'box', 'map', 'hat', 'cup', 'bed', 'pig', 'run'],
+    2: ['fish', 'book', 'star', 'moon', 'tree', 'cake', 'jump', 'blue', 'wind', 'frog'],
+    3: ['apple', 'smile', 'cloud', 'dance', 'green', 'house', 'light', 'music', 'night', 'piano']
+  };
+  // 电路连通：每关一条电池→灯泡的折线路径（4×3 格，坐标 [x, y]）
+  const CIRCUIT_PATHS = {
+    1: { path: [[0, 1], [1, 1], [2, 1], [3, 1]] },
+    2: { path: [[0, 1], [0, 2], [1, 2], [2, 2], [3, 2], [3, 1]] },
+    3: { path: [[0, 0], [1, 0], [2, 0], [3, 0], [3, 1], [2, 1], [1, 1], [0, 1], [0, 2], [1, 2], [2, 2], [3, 2]] }
+  };
 
   function text(g, s, x, y, size, color, align) {
     g.font = FONT(size); g.textAlign = align || 'center'; g.textBaseline = 'top';
@@ -170,6 +231,43 @@ ADV.Mini = (function () {
         zoneL: .74, zoneR: .92,
         msg: '木刀来回瞄准——红心处按 Z 落刀！切中 3 刀开瓜（共 5 刀）'
       };
+    } else if (kind === 'balance') {
+      // 速算天平：选砝码配平算式，3 题对 2 题胜
+      const lv = (opt && opt.lv) || 1;
+      act = {
+        kind, onDone, lv, round: 1, sel: 0, hits: 0,
+        cur: mkBalance(lv), tilt: 0, tiltT: 0,
+        msg: '← → 挑砝码，Z 放上天平——把算式配平！'
+      };
+    } else if (kind === 'flower') {
+      // 飞花令：接住补全诗句的「对字」花瓣，三句全中；接错不扣，漏接扣心
+      const lv = (opt && opt.lv) || 1;
+      act = {
+        kind, onDone, lv, round: 1, hearts: 3,
+        bx: W / 2, petals: [], disp: [], need: '', seen: 0, spawnT: 0, shakeT: 0,
+        msg: lv >= 3 ? '主题字「月」——接住它，补全诗句！' : '接住正确的字，补全诗句！'
+      };
+      flowerRound(act);
+    } else if (kind === 'circuit') {
+      // 电路连通：旋转接头接通电池→灯泡，接口步数有限
+      const lv = (opt && opt.lv) || 1;
+      const board = mkCircuit(lv);
+      act = {
+        kind, onDone, lv, grid: board.grid, moves: board.moves,
+        start: board.start, exit: board.exit, cx: 0, cy: 0,
+        msg: '← ↑ ↓ → 选接头，Z 顺时针转——把电路接通点亮灯泡！'
+      };
+    } else if (kind === 'arcade') {
+      // 单词街机：敲中举着「下一个字母」的地鼠，按顺序拼出两个单词
+      const lv = (opt && opt.lv) || 1;
+      const bank = (ARCADE_WORDS[lv] || ARCADE_WORDS[1]).slice();
+      const w1 = bank.splice((Math.random() * bank.length) | 0, 1)[0];
+      const w2 = bank[(Math.random() * bank.length) | 0];
+      act = {
+        kind, onDone, lv, t: 40, words: [w1, w2], wi: 0, ci: 0,
+        cur: 0, moles: Array.from({ length: 6 }, () => null), spawnT: .5,
+        msg: '按顺序敲出目标单词——敲错一次扣 4 秒！'
+      };
     }
     ADV.Audio.sfx('start');
   }
@@ -209,6 +307,80 @@ ADV.Mini = (function () {
   function relayZone() {
     const w = .2, l = .04 + Math.random() * .72;
     return { l, r: l + w };
+  }
+
+  /* —— 四师签名玩法辅助 —— */
+  // 飞花令：开新一局（按等级选诗、挖空、清空花瓣）
+  function flowerRound(a) {
+    const pool = FLOWER_BANK.filter(v => v.lv === a.lv);
+    const pick = pool[(Math.random() * pool.length) | 0];
+    const chars = pick.v.split('');
+    const idx = a.lv >= 3 ? chars.indexOf('月') : (Math.random() * chars.length) | 0;
+    a.need = chars[idx];
+    a.disp = chars.map((c, i) => (i === idx ? null : c));
+    a.petals = []; a.spawnT = .3; a.seen = 0;
+  }
+  // 电路：接头的连通方向（rot 顺时针，I 型两态、L 型四态）
+  function circuitConns(c) {
+    if (c.type === 'I') return c.rot % 2 === 0 ? ['left', 'right'] : ['up', 'down'];
+    const names = ['right', 'down', 'left', 'up'];
+    return [names[c.rot % 4], names[(c.rot + 1) % 4]];
+  }
+  // 电路：生成一块「可解」的板——解路线给定，打乱后回算步数预算
+  function mkCircuit(lv) {
+    const spec = CIRCUIT_PATHS[Math.min(3, Math.max(1, lv))];
+    const DIRV = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] };
+    const dirTo = (a, b) => {
+      for (const d in DIRV) if (a[0] + DIRV[d][0] === b[0] && a[1] + DIRV[d][1] === b[1]) return d;
+      return null;
+    };
+    const grid = Array.from({ length: 12 }, () => null);
+    let need = 0;
+    spec.path.forEach((cell, i) => {
+      const [x, y] = cell;
+      const d1 = i === 0 ? 'left' : dirTo(cell, spec.path[i - 1]);           // 首格必接电池（左）
+      const d2 = i === spec.path.length - 1 ? 'right' : dirTo(cell, spec.path[i + 1]);  // 末格必接灯泡（右）
+      let type, sol;
+      if ((d1 === 'left' && d2 === 'right') || (d1 === 'right' && d2 === 'left')) { type = 'I'; sol = 0; }
+      else if ((d1 === 'up' && d2 === 'down') || (d1 === 'down' && d2 === 'up')) { type = 'I'; sol = 1; }
+      else {
+        type = 'L';
+        const names = ['right', 'down', 'left', 'up'];
+        sol = 0;
+        for (let r = 0; r < 4; r++) {
+          if (names[r] === d1 && names[(r + 1) % 4] === d2) { sol = r; break; }
+          if (names[r] === d2 && names[(r + 1) % 4] === d1) { sol = r; break; }
+        }
+      }
+      const off = type === 'I' ? (Math.random() < .5 ? 0 : 1) : 1 + ((Math.random() * 2) | 0);
+      need += off;                                             // 逆时针打乱 off 格 → 顺时针拧 off 次还原
+      grid[y * 4 + x] = { type, rot: (sol - off + 4) % 4, sol, wire: true };
+    });
+    for (let i = 0; i < 12; i++) {                             // 空位填干扰管（可旋转、不接线）
+      if (!grid[i]) grid[i] = { type: Math.random() < .5 ? 'I' : 'L', rot: (Math.random() * 4) | 0, sol: 0, wire: false };
+    }
+    const first = grid[spec.path[0][1] * 4 + spec.path[0][0]];
+    if (first.rot === first.sol) { first.rot = (first.rot + 3) % 4; need += 1; }   // 兜底：保证初始不通
+    return { grid, moves: need + [0, 3, 4, 6][Math.min(3, Math.max(1, lv))], start: spec.path[0], exit: spec.path[spec.path.length - 1] };
+  }
+  // 电路：从电池极 BFS，接通灯泡极即胜（干扰管也可能歪打正着，算数）
+  function circuitSolved(a) {
+    const DIRV = { right: [1, 0], left: [-1, 0], up: [0, -1], down: [0, 1] };
+    const OPP = { left: 'right', right: 'left', up: 'down', down: 'up' };
+    const si = a.start[1] * 4 + a.start[0], ei = a.exit[1] * 4 + a.exit[0];
+    if (!circuitConns(a.grid[si]).includes('left')) return false;   // 电池极没接上
+    const seen = new Set([si]), q = [si];
+    while (q.length) {
+      const i = q.shift(), cs = circuitConns(a.grid[i]);
+      for (const d of cs) {
+        const nx = (i % 4) + DIRV[d][0], ny = ((i / 4) | 0) + DIRV[d][1];
+        if (nx < 0 || nx > 3 || ny < 0 || ny > 2) continue;
+        const j = ny * 4 + nx;
+        if (seen.has(j) || !circuitConns(a.grid[j]).includes(OPP[d])) continue;
+        seen.add(j); q.push(j);
+      }
+    }
+    return seen.has(ei) && circuitConns(a.grid[ei]).includes('right');
   }
 
   function update(dt, p, held) {
@@ -627,6 +799,125 @@ ADV.Mini = (function () {
           }
           act.phase = 'aim'; act.marker = 0; act.dir = 1;
           act.msg = (act.lastHit ? '好刀法！' : '劈偏了……') + '切中 ' + act.hits + ' 刀，还剩 ' + (5 - act.swings) + ' 刀';
+        }
+      }
+    } else if (act.kind === 'balance') {
+      if (act.tiltT > 0) {                              // 结算动画：天平回弹后开下一题
+        act.tiltT -= dt;
+        if (act.tiltT <= 0) {
+          if (act.round > 3) {
+            act.msg = act.hits >= 2 ? '三道配平两道中，天平稳稳当当！' : '砝码总差一点……再练练手感。';
+            finish(act.hits >= 2); return;
+          }
+          act.cur = mkBalance(act.lv); act.sel = 0; act.tilt = 0;
+          act.msg = '第 ' + act.round + ' 题：配平这个算式！';
+        }
+      } else {
+        if (p.left && act.sel > 0) { act.sel -= 1; ADV.Audio.sfx('cursor'); }
+        if (p.right && act.sel < 3) { act.sel += 1; ADV.Audio.sfx('cursor'); }
+        if (p.ok) {
+          const pick = act.cur.pool[act.sel], good = pick === act.cur.ans;
+          act.hits += good ? 1 : 0;
+          act.tilt = good ? 0 : (pick < act.cur.ans ? -.5 : .5);    // 轻→左沉，重→右沉
+          act.tiltT = .9; act.round += 1;
+          ADV.Audio.sfx(good ? 'correct' : 'wrong');
+          act.msg = good ? '平了！算式成立！' : '歪了——这枚砝码' + (pick < act.cur.ans ? '轻' : '重') + '了！';
+        }
+      }
+    } else if (act.kind === 'flower') {
+      if (p.left) act.bx = Math.max(160, act.bx - 360 * dt);
+      if (p.right) act.bx = Math.min(800, act.bx + 360 * dt);
+      if (act.shakeT > 0) act.shakeT -= dt;
+      act.spawnT -= dt;
+      const needUp = act.petals.some(pt => !pt.dead && pt.ch === act.need);
+      if (act.spawnT <= 0 && act.seen < 5) {            // 每句 5 片花瓣，第 2 片必是对字（保底）
+        const ch = act.seen === 1 || (!needUp && act.seen >= 3) ? act.need : flowerDecoy(act.need);
+        const spd = act.lv >= 3 ? 88 : act.lv === 2 ? 74 : 60;
+        act.petals.push({ x: 180 + Math.random() * 600, y: 155, vy: spd * (0.9 + Math.random() * .25), ch, dead: false });
+        act.seen += 1; act.spawnT = .75 + Math.random() * .35;
+      }
+      for (const pt of act.petals) {
+        if (pt.dead) continue;
+        pt.y += pt.vy * dt;
+        if (pt.y >= 415 && pt.y <= 468 && Math.abs(pt.x - act.bx) < 50) {   // 篮口接住
+          pt.dead = true;
+          if (pt.ch === act.need) {
+            act.round += 1; ADV.Audio.sfx('correct');
+            if (act.round > 3) { act.msg = '好句配成！花瓣落满了书页。'; finish(true); return; }
+            act.msg = '「' + act.need + '」接得妙！下一句——';
+            flowerRound(act);
+          } else {
+            ADV.Audio.sfx('cursor');
+            act.msg = '「' + pt.ch + '」不是这个字……接着等！';
+          }
+        } else if (pt.y > 470) {                                            // 落地：对字漏接才扣心
+          pt.dead = true;
+          if (pt.ch === act.need) {
+            act.hearts -= 1; act.shakeT = .5; ADV.Audio.sfx('wrong');
+            act.msg = '「' + act.need + '」落地了……（还剩 ' + act.hearts + ' 颗心）';
+            if (act.hearts <= 0) { act.msg = '花瓣落了一地，令还没成……'; finish(false); return; }
+            flowerRound(act);
+          }
+        }
+      }
+      act.petals = act.petals.filter(pt => !pt.dead);
+    } else if (act.kind === 'circuit') {
+      if (p.left && act.cx > 0) { act.cx -= 1; ADV.Audio.sfx('cursor'); }
+      if (p.right && act.cx < 3) { act.cx += 1; ADV.Audio.sfx('cursor'); }
+      if (p.up && act.cy > 0) { act.cy -= 1; ADV.Audio.sfx('cursor'); }
+      if (p.down && act.cy < 2) { act.cy += 1; ADV.Audio.sfx('cursor'); }
+      if (p.ok) {
+        const c = act.grid[act.cy * 4 + act.cx];
+        c.rot = (c.rot + 1) % 4;
+        act.moves -= 1;
+        ADV.Audio.sfx('cursor');
+        if (circuitSolved(act)) { act.msg = '咔哒——电流通过，灯泡亮了！'; finish(true); return; }
+        if (act.moves <= 0) { act.msg = '接口用完了，电路还是暗的……'; finish(false); return; }
+        act.msg = '还剩 ' + act.moves + ' 个接口，接着拧！';
+      }
+    } else if (act.kind === 'arcade') {
+      act.t -= dt;
+      if (act.t <= 0) { act.msg = '时间到，街机熄屏……'; finish(false); return; }
+      if (p.left && act.cur % 3 > 0) { act.cur -= 1; ADV.Audio.sfx('cursor'); }
+      if (p.right && act.cur % 3 < 2) { act.cur += 1; ADV.Audio.sfx('cursor'); }
+      if (p.up && act.cur >= 3) { act.cur -= 3; ADV.Audio.sfx('cursor'); }
+      if (p.down && act.cur < 3) { act.cur += 3; ADV.Audio.sfx('cursor'); }
+      act.moles.forEach((m, i) => {                     // 地鼠寿命与起立动画
+        if (!m) return;
+        m.life -= dt; m.up = Math.min(1, m.up + 4 * dt);
+        if (m.life <= 0) act.moles[i] = null;
+      });
+      const need = act.words[act.wi][act.ci];
+      if (!act.moles.some(m => m && m.ch === need)) {   // 保底：场上始终有「下一个字母」
+        const free = act.moles.map((m, i) => m ? -1 : i).filter(i => i >= 0);
+        if (free.length) act.moles[free[(Math.random() * free.length) | 0]] = { ch: need, life: 2.5 - act.lv * .3, up: 0 };
+      }
+      act.spawnT -= dt;                                 // 干扰地鼠：举着无关字母凑热闹
+      if (act.spawnT <= 0) {
+        const upN = act.moles.filter(Boolean).length;
+        const free = act.moles.map((m, i) => m ? -1 : i).filter(i => i >= 0);
+        if (upN < 4 && free.length) {
+          act.moles[free[(Math.random() * free.length) | 0]] = {
+            ch: String.fromCharCode(97 + ((Math.random() * 26) | 0)), life: 1.6 + Math.random() * .8, up: 0
+          };
+        }
+        act.spawnT = 1.2 - act.lv * .15 + Math.random() * .5;
+      }
+      if (p.ok) {
+        const m = act.moles[act.cur];
+        if (!m) ADV.Audio.sfx('cursor');
+        else if (m.ch === need) {
+          act.moles[act.cur] = null; act.ci += 1;
+          ADV.Audio.sfx('correct');
+          if (act.ci >= act.words[act.wi].length) {
+            act.wi += 1; act.ci = 0;
+            if (act.wi >= act.words.length) { act.msg = 'WORD CLEAR! 街机被你打通啦！'; finish(true); return; }
+            act.msg = '下一个词：' + act.words[act.wi].toUpperCase() + '！';
+          } else act.msg = act.words[act.wi].slice(0, act.ci).toUpperCase() + ' _ ……接着敲！';
+        } else {
+          act.t -= 4; ADV.Audio.sfx('wrong');
+          act.msg = '敲错啦！时间 −4 秒';
+          if (act.t <= 0) { act.msg = '时间耗光，街机熄屏……'; finish(false); return; }
         }
       }
     }
@@ -1158,6 +1449,154 @@ ADV.Mini = (function () {
       }
       text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
       text(g, '绿区按 Z 迈步 · 12 步冲线 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+    } else if (act.kind === 'balance') {
+      const f = drawFrame(g, '⚖ 速算天平（第 ' + Math.min(act.round, 3) + '/3 题 · 已中 ' + act.hits + '）');
+      text(g, act.cur.q, W / 2, f.y + 74, 40, '#ffe9a8');
+      // 天平：横梁随 tilt 倾斜，双盘悬挂
+      const bx = W / 2, by = f.y + 240, armW = 300;
+      const ang = act.tilt * Math.min(1, act.tiltT * 1.8);
+      g.fillStyle = '#7a4a28'; g.fillRect(bx - 8, by - 4, 16, 84);
+      g.fillRect(bx - 46, by + 78, 92, 14);
+      g.save(); g.translate(bx, by); g.rotate(ang);
+      g.fillStyle = '#8a5a34'; g.fillRect(-armW / 2, -7, armW, 14);
+      g.fillStyle = '#6a4326';
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(side * armW / 2, -4);
+        g.lineTo(side * armW / 2 - 36, 54);
+        g.lineTo(side * armW / 2 + 36, 54);
+        g.closePath(); g.fill();
+      }
+      g.restore();
+      // 候选砝码（块越高越重）
+      const wY = f.y + f.h - 96;
+      act.cur.pool.forEach((v, i) => {
+        const x = W / 2 - 225 + i * 150, sel = i === act.sel, h = 16 + v * 3;
+        g.fillStyle = sel ? '#ffd94c' : '#4a5a8a';
+        g.fillRect(x - 32, wY + 48 - h, 64, h);
+        g.strokeStyle = sel ? '#fff' : '#2a3a5a'; g.lineWidth = 2;
+        g.strokeRect(x - 32, wY + 48 - h, 64, h);
+        text(g, String(v), x, wY + 54, 22, sel ? '#ffe9a8' : '#cfd8f0');
+        if (sel) { g.fillStyle = '#ffd94c'; g.beginPath(); g.moveTo(x - 10, wY - 8); g.lineTo(x + 10, wY - 8); g.lineTo(x, wY + 4); g.closePath(); g.fill(); }
+      });
+      text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
+      text(g, '← → 选砝码 · Z 放上去 · 3 题对 2 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+    } else if (act.kind === 'flower') {
+      const f = drawFrame(g, '🎋 飞花令（第 ' + Math.min(act.round, 3) + '/3 句）');
+      const sh = act.shakeT > 0 ? Math.sin(act.shakeT * 40) * 4 : 0;
+      // 诗句：缺字处画空框
+      const v = act.disp, cw = 46, x0 = W / 2 - (v.length - 1) * cw / 2;
+      g.save(); g.translate(sh, 0);
+      v.forEach((c, i) => {
+        const x = x0 + i * cw, y = f.y + 84;
+        if (c) text(g, c, x, y, 36, '#ffe9a8');
+        else { g.strokeStyle = 'rgba(255,233,168,.9)'; g.lineWidth = 2; g.strokeRect(x - 21, y - 8, 42, 44); }
+      });
+      g.restore();
+      for (let i = 0; i < 3; i++) text(g, i < act.hearts ? '❤' : '♡', f.x + f.w - 104 + i * 26, f.y + 52, 22, '#ff6a7a');
+      // 花瓣（对字与干扰字同色，不剧透）
+      for (const pt of act.petals) {
+        if (pt.dead) continue;
+        g.save(); g.translate(pt.x, pt.y); g.rotate(Math.sin(pt.y * .04) * .4);
+        g.fillStyle = '#ffb7d0';
+        g.beginPath(); g.ellipse(0, 0, 21, 16, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.5)';
+        g.beginPath(); g.ellipse(-5, -5, 7, 4, -.6, 0, Math.PI * 2); g.fill();
+        g.restore();
+        text(g, pt.ch, pt.x, pt.y - 11, 18, '#5a2a3a');
+      }
+      // 竹篮
+      g.fillStyle = '#a8823f';
+      g.beginPath();
+      g.moveTo(act.bx - 48, 412); g.lineTo(act.bx + 48, 412);
+      g.lineTo(act.bx + 34, 454); g.lineTo(act.bx - 34, 454);
+      g.closePath(); g.fill();
+      g.strokeStyle = '#7a5a28'; g.lineWidth = 3;
+      g.beginPath(); g.arc(act.bx, 412, 48, Math.PI, 0); g.stroke();
+      for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(act.bx + i * 22, 414); g.lineTo(act.bx + i * 16, 452); g.stroke(); }
+      text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
+      text(g, '← → 移动竹篮 · 接住缺字 · 对字落地扣一颗心 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+    } else if (act.kind === 'circuit') {
+      const f = drawFrame(g, '⚡ 电路连通（剩余接口 ' + act.moves + '）');
+      const S = 64, gx = W / 2 - 2 * S, gy = f.y + 92;
+      // 电池（首格左侧）与灯泡（末格右侧）
+      const batX = gx - 52, batY = gy + act.start[1] * S + S / 2;
+      g.fillStyle = '#3a3a4a'; g.fillRect(batX - 24, batY + 14, 48, 4);
+      g.fillStyle = '#e8b84a'; g.fillRect(batX - 22, batY - 18, 44, 32);
+      g.fillStyle = '#8a6a1a'; g.fillRect(batX + 22, batY - 12, 8, 20);
+      text(g, '电池', batX, batY - 44, 15, '#e8d05a');
+      const bulbX = gx + 4 * S + 52, bulbY = gy + act.exit[1] * S + S / 2;
+      g.strokeStyle = '#3a3a4a'; g.lineWidth = 4;
+      g.beginPath(); g.moveTo(bulbX - 26, bulbY); g.lineTo(bulbX - 12, bulbY); g.stroke();
+      g.fillStyle = '#5a6a8a'; g.beginPath(); g.arc(bulbX, bulbY - 8, 17, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#8a8a9a'; g.fillRect(bulbX - 8, bulbY + 6, 16, 9);
+      text(g, '灯泡', bulbX, bulbY - 48, 15, '#9ad0ff');
+      // 格子与导线
+      for (let i = 0; i < 12; i++) {
+        const x = gx + (i % 4) * S, y = gy + ((i / 4) | 0) * S, c = act.grid[i];
+        g.fillStyle = c.wire ? '#26355a' : '#202436';
+        g.fillRect(x + 3, y + 3, S - 6, S - 6);
+        g.strokeStyle = '#3a4a6a'; g.lineWidth = 1; g.strokeRect(x + 3.5, y + 3.5, S - 7, S - 7);
+        const MID = { right: [S / 2 - 9, 0], left: [9 - S / 2, 0], up: [0, 9 - S / 2], down: [0, S / 2 - 9] };
+        const cs = circuitConns(c);
+        const [ax, ay] = MID[cs[0]], [bx2, by2] = MID[cs[1]];
+        const cpx = c.type === 'I' ? (ax + bx2) / 2 : ax + bx2, cpy = c.type === 'I' ? (ay + by2) / 2 : ay + by2;
+        for (const [col, lw] of [['#c8874a', 7], ['#e8a86a', 2]]) {
+          g.strokeStyle = col; g.lineWidth = lw; g.lineCap = 'round';
+          g.beginPath(); g.moveTo(x + S / 2 + ax, y + S / 2 + ay);
+          g.quadraticCurveTo(x + S / 2 + cpx, y + S / 2 + cpy, x + S / 2 + bx2, y + S / 2 + by2);
+          g.stroke();
+        }
+        if (!c.wire) { g.fillStyle = 'rgba(120,120,150,.25)'; g.beginPath(); g.arc(x + S / 2, y + S / 2, 5, 0, Math.PI * 2); g.fill(); }
+      }
+      // 光标
+      g.strokeStyle = '#ffd94c'; g.lineWidth = 3;
+      g.strokeRect(gx + act.cx * S + 1.5, gy + act.cy * S + 1.5, S - 3, S - 3);
+      text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
+      text(g, '← ↑ ↓ → 选格 · Z 顺时针旋转 · 电池 → 灯泡 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+    } else if (act.kind === 'arcade') {
+      const f = drawFrame(g, '🕹 单词街机 Lv.' + act.lv);
+      // 目标词：打字机式逐字母点亮
+      const w = act.words[act.wi], cw = 48, x0 = W / 2 - (w.length - 1) * cw / 2;
+      for (let i = 0; i < w.length; i++) {
+        const got = i < act.ci;
+        text(g, got ? w[i].toUpperCase() : '_', x0 + i * cw, f.y + 72, 36, got ? '#4ae86c' : '#aab4d4');
+      }
+      // 时间条
+      const bw = 500, bx0 = W / 2 - bw / 2, by0 = f.y + 126;
+      g.fillStyle = '#22243a'; g.fillRect(bx0, by0, bw, 14);
+      g.fillStyle = act.t < 10 ? '#e85a5a' : '#4a9ae8';
+      g.fillRect(bx0, by0, bw * Math.max(0, act.t) / 40, 14);
+      text(g, '⏱ ' + Math.max(0, Math.ceil(act.t)) + 's', bx0 + bw + 16, by0 - 4, 16, '#fff');
+      // 地鼠洞 3×2
+      const holeX0 = W / 2 - 300, holeY0 = f.y + 200;
+      for (let i = 0; i < 6; i++) {
+        const hx = holeX0 + (i % 3) * 300, hy = holeY0 + ((i / 3) | 0) * 118;
+        g.fillStyle = '#15151f';
+        g.beginPath(); g.ellipse(hx, hy + 40, 82, 22, 0, 0, Math.PI * 2); g.fill();
+        const m = act.moles[i];
+        if (m) {
+          const rise = m.up * 58;
+          g.save(); g.beginPath(); g.rect(hx - 84, hy - 92, 168, 128); g.clip();
+          g.fillStyle = '#a8722f';
+          g.beginPath(); g.ellipse(hx, hy + 40 - rise, 46, 54, 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#f0c8a0';
+          g.beginPath(); g.ellipse(hx, hy + 56 - rise, 30, 22, 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#5a2a10';
+          g.beginPath(); g.arc(hx - 14, hy + 16 - rise, 4, 0, Math.PI * 2); g.fill();
+          g.beginPath(); g.arc(hx + 14, hy + 16 - rise, 4, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#ffe9a8';
+          g.fillRect(hx - 26, hy - 24 - rise, 52, 36);
+          text(g, m.ch.toUpperCase(), hx, hy - 22 - rise, 30, '#5a2a10');
+          g.restore();
+        }
+        if (i === act.cur) {
+          g.strokeStyle = '#ffd94c'; g.lineWidth = 3;
+          g.strokeRect(hx - 90, hy - 34, 180, 88);
+        }
+      }
+      text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
+      text(g, '← ↑ ↓ → 瞄准 · Z 敲 · 按顺序拼词 · 敲错 −4 秒 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
     }
   }
 

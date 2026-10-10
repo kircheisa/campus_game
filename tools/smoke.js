@@ -152,6 +152,7 @@ function settle(maxTicks) {
 }
 async function pump(promise, maxSteps) {
   maxSteps = maxSteps || 4000;
+  promise.catch(e => console.error('pump 内脚本抛错:', e));   // 侧挂：避免拒绝被吞成超时
   let steps = 0;
   while (true) {
     const done = await Promise.race([promise.then(() => true), new Promise(r => setImmediate(() => r(false)))]);
@@ -5432,6 +5433,106 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     } finally {
       pressQueue = qKeep;
       for (let i = 0; i < 300 && (A.UI.busy || A.Game.busy); i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  console.log('\n[5.79] 体验批次十：四师签名挑战（速算天平 / 飞花令 / 电路连通 / 单词街机 · 真机通关 + 三关递进 + 每日复健）');
+  {
+    // —— A. 真机四款：脚本化通关（RealMini 逐帧驱动） ——
+    ok(miniRun('balance', d => {
+      if (d.tiltT > 0) return {};                           // 结算动画期间不出手
+      const i = d.cur.pool.indexOf(d.cur.ans);
+      if (d.sel === i) return { ok: true };
+      return { [i > d.sel ? 'right' : 'left']: true };
+    }, 1200), '签名挑战·速算天平：追着正确砝码放，三题配平两题判胜');
+    ok(miniRun('flower', d => {
+      const p = d.petals.find(pt => !pt.dead && pt.ch === d.need);
+      if (!p) return {};
+      const dx = p.x - d.bx;
+      return dx > 6 ? { right: true } : dx < -6 ? { left: true } : {};
+    }, 3600), '签名挑战·飞花令：竹篮蹲点「对字」花瓣，三句全接不落一瓣');
+    ok(miniRun('circuit', d => {
+      const c = d.grid[d.cy * 4 + d.cx];
+      if (c.wire && c.rot !== c.sol) return { ok: true };   // 接线格就位前先拧到解位
+      let j = -1;                                           // 找下一块未就位的接线格
+      for (let k = 0; k < 12; k++) {
+        const g2 = d.grid[k];
+        if (g2.wire && g2.rot !== g2.sol) { j = k; break; }
+      }
+      if (j < 0) return {};
+      const tx = j % 4, ty = (j / 4) | 0;
+      if (tx > d.cx) return { right: true };
+      if (tx < d.cx) return { left: true };
+      return { [ty > d.cy ? 'down' : 'up']: true };
+    }, 3600), '签名挑战·电路连通：逐格拧到解位，接口步数内点亮灯泡');
+    ok(miniRun('arcade', d => {
+      const need = d.words[d.wi][d.ci];
+      const i = d.moles.findIndex(m => m && m.ch === need);
+      if (i < 0) return {};
+      if (i === d.cur) return { ok: true };
+      const tx = i % 3, ty = (i / 3) | 0;
+      if (tx > d.cur % 3) return { right: true };
+      if (tx < d.cur % 3) return { left: true };
+      return { [ty > (d.cur / 3 | 0) ? 'down' : 'up']: true };
+    }, 3600), '签名挑战·单词街机：按序敲中举字母的地鼠，两个单词拼完');
+
+    // —— B. 流程面：三关递进 → 大师毕业 → 每日复健局（Mini stub 自动判胜） ——
+    const KMAIN = 'campus_adventure_save_v1', KA = KMAIN + '_a', KB = KMAIN + '_b';
+    const keepLS = {};
+    for (const k of [KMAIN, KA, KB]) keepLS[k] = localStorage.getItem(k);
+    const realIntro79 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};   // 隔离 ngStart 遗留的 80ms 序章定时器：newGame 会把
+    try {                               // introDone 重置回 false，定时器若此刻才触发会与本段
+      A.Game.newGame('hero_boy', false);// 流程在单例 say 窗上互相顶掉（say 后到覆盖先到）→ 挂死
+      A.Cal.load({ day: 3, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      const g0 = A.Game.flags.gold;
+      await pump(A.Game.S.tgameMath({}));
+      await pump(A.Game.S.tgameMath({}));
+      ok(A.Game.flags.tgame.math.lv === 3 && A.Game.flags.gold === g0 + 10,
+        '签名挑战·王老师：连过两关 → 进度 Lv.3、零花 +10');
+      await pump(A.Game.S.tgameMath({}));
+      ok(A.Game.flags.tgame.math.lv === 4 && A.Game.flags.gold === g0 + 25,
+        '签名挑战·第三关通关：大师毕业（Lv.4）、奖章关 +15 金');
+      ok(!!A.Game.flags.tkind.math.mini, '签名挑战：通关即玩法打卡（tkind.math.mini）');
+      let ach79 = A.Game.achievements().find(a => a.name === '文理四通');
+      ok(ach79 && !ach79.done, '成就「文理四通」已上架：单科未集齐四玩法时不点亮');
+      await pump(A.Game.S.tgameMath({}));                   // 毕业首日：复健局（+6）
+      ok(A.Game.flags.gold === g0 + 31 && A.Game.flags.tgameDay.math === true,
+        '签名挑战·每日复健：毕业当天再打一局 +6 金并登记当日');
+      await pump(A.Game.S.tgameMath({}));                   // 同日第二局：婉拒
+      ok(A.Game.flags.gold === g0 + 31, '签名挑战·每日复健：同日二刷不再发奖（daySlot 去重）');
+      // —— C. 成就闭环：四科 × 四玩法全打卡 → 点亮 ——
+      const f79 = A.Game.flags;
+      f79.tkind = {};
+      ['math', 'chinese', 'science', 'english'].forEach(s => {
+        f79.tkind[s] = {};
+        ['trial', 'hw', 'olymp', 'mini'].forEach(k => { f79.tkind[s][k] = true; });
+      });
+      ach79 = A.Game.achievements().find(a => a.name === '文理四通');
+      ok(ach79 && ach79.done, '成就「文理四通」：四科 × 四玩法集齐即点亮');
+      // —— D. 接线面：四入口 + 三处打卡钩子 + 四块场地招牌（源码口径） ——
+      const s79 = String(A.Game.S.tgameMath) + String(A.Game.S.tgameCn) + String(A.Game.S.tgameSci) + String(A.Game.S.tgameEn);
+      ok(s79.includes("tgameFlow('math')") && s79.includes("tgameFlow('chinese')")
+        && s79.includes("tgameFlow('science')") && s79.includes("tgameFlow('english')"),
+        '接线：四师 S 入口（tgameMath/Cn/Sci/En）全部指向 tgameFlow');
+      const maps79 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      ok(maps79.includes("s: 'tgameMath'") && maps79.includes("s: 'tgameCn'")
+        && maps79.includes("s: 'tgameSci'") && maps79.includes("s: 'tgameEn'"),
+        '接线：四块场地招牌（⚖ 教室 / 🎋 图书馆 / ⚡ 实验室 / 🕹 英语教室）已挂签名挑战');
+      const game79 = fs.readFileSync(path.join(ROOT, 'js', 'game.js'), 'utf8');
+      ok(game79.includes("markTkind(subject, 'trial')") && game79.includes("markTkind(subject, 'hw')")
+        && game79.includes("markTkind(cfg.en, 'olymp')"),
+        '接线：试炼 / 今日作业 / 学科奥赛三处玩法打卡钩子已埋');
+    } finally {
+      A.Game.S._intro = realIntro79;
+      for (const k of [KMAIN, KA, KB]) {
+        if (keepLS[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS[k]);
+      }
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
     }
   }
 

@@ -302,6 +302,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'coatHook', x: 12, y: 2, w: 1, h: 1, solidTiles: [] });    // 衣帽钩
     m.objects.push({ kind: 'sign', x: 16, y: 2, w: 1, h: 1, text: '🗓', solidTiles: [], s: 'boardCountdown' });
     m.objects.push({ kind: 'sign', x: 25, y: 2, w: 1, h: 1, text: '🏆', solidTiles: [], s: 'olympBoard' });  // 学科奥赛公告栏（每季报名/开赛）
+    m.objects.push({ kind: 'sign', x: 21, y: 2, w: 1, h: 1, text: '⚖', solidTiles: [], s: 'tgameMath' });    // 王老师的速算天平（签名挑战）
     m.objects.push({ kind: 'sign', x: 15, y: 18, w: 1, h: 1, text: '🌸', solidTiles: [], s: 'seasonDeco' });
     m.objects.push({ kind: 'sign', x: 13, y: 9, w: 1, h: 1, text: '🖼', solidTiles: [], s: 'posterWall' });
     return m;
@@ -320,6 +321,7 @@ ADV.Maps = (function () {
     // —— A组·英语教室激活 ——
     m.objects.push({ kind: 'sign', x: 21, y: 2, w: 1, h: 1, text: '🔤', solidTiles: [], s: 'wordCard' });
     m.objects.push({ kind: 'sign', x: 25, y: 2, w: 1, h: 1, text: '📻', solidTiles: [], s: 'radioListen' });
+    m.objects.push({ kind: 'sign', x: 23, y: 2, w: 1, h: 1, text: '🕹', solidTiles: [], s: 'tgameEn' });     // 吴老师的单词街机（签名挑战）
     m.objects.push({ kind: 'sign', x: 9, y: 7, w: 1, h: 1, text: '💌', solidTiles: [], s: 'loveLetter' });
     m.npcs.push({ id: 'student_en', x: 18, y: 7, dir: 'left', pal: 'studentA', name: '同学', s: 'studentEn', acts: ['read', 'doubt'] });
     return m;
@@ -343,6 +345,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'bookStack', x: 12, y: 3, w: 1, h: 1, solidTiles: [] });   // 书堆塔
     m.objects.push({ kind: 'chair2', x: 26, y: 9, w: 1, h: 1, solidTiles: [[0, 0]] }); // 藤椅
     m.objects.push({ kind: 'wallClock', x: 24, y: 2, w: 1, h: 1, solidTiles: [] });    // 挂钟
+    m.objects.push({ kind: 'sign', x: 8, y: 2, w: 1, h: 1, text: '🎋', solidTiles: [], s: 'tgameCn' }); // 李老师的飞花令签筒（签名挑战）
     m.objects.push({ kind: 'catBed', x: 10, y: 15, w: 1, h: 1, s: 'libCatBed', solidTiles: [[0, 0]] }); // 猫窝
     m.objects.push({ kind: 'sign', x: 23, y: 6, w: 1, h: 1, text: '窗边', solidTiles: [], s: 'windowSeat' }); // 放学后的小窗边
     m.objects.push({ kind: 'mysterySpot', x: 8, y: 5, w: 1, h: 1, solidTiles: [], s: 'rumor', rid: 5 });  // 怪谈5：书架低语
@@ -376,6 +379,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'shelfOld', x: 20, y: 6, w: 1, h: 2, s: 'reagentRack', solidTiles: [[0, 1]] });
     m.objects.push({ kind: 'telescope', x: 24, y: 10, w: 1, h: 1, s: 'microscope', solidTiles: [[0, 0]] });
     m.objects.push({ kind: 'sign', x: 3, y: 13, w: 1, h: 1, text: '💨', solidTiles: [], s: 'fumeHood' });
+    m.objects.push({ kind: 'sign', x: 27, y: 12, w: 1, h: 1, text: '⚡', solidTiles: [], s: 'tgameSci' });  // 陈老师的电路工作台（签名挑战）
     return m;
   }
 
