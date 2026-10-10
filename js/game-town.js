@@ -994,7 +994,10 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     if (ADV.Mistake) ADV.Mistake.answer(SUBJ_CN[subject] || subject, q, i);   // 学习闭环：统计+错题入本
     if (hit) {
       ADV.Audio.sfx('correct');
-      if (ADV.Growth) { ADV.Growth.addXP(diff === 'hard' ? 6 : diff === 'normal' ? 4 : 2, '答题'); ADV.Growth.addDim('knowledge', 1); }
+      const C = ADV.Cal, f = F();
+      let xp = diff === 'hard' ? 6 : diff === 'normal' ? 4 : 2;
+      if (f.nightStudyDay === C.day) xp = Math.ceil(xp * 1.5);   // 晚自习 buff：当晚刷题经验 +50%
+      if (ADV.Growth) { ADV.Growth.addXP(xp, '答题'); ADV.Growth.addDim('knowledge', f.morningReadDay === C.day ? 2 : 1); }  // 晨读 buff：当日知识点 +1
       return true;
     }
     ADV.Audio.sfx('wrong');

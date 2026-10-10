@@ -104,7 +104,9 @@ window.ADV = window.ADV || {};
     // —— 六挚友隐藏线（批次十一）——
     htale: {},                                         // 各挚友隐藏剧情已看段数 { id: 0-3 }
     htaleDay: {},                                      // 各挚友上一段隐藏剧情的游戏日（段间隔 2 天）
-    capsuleDone: false                                 // 时光胶囊终章是否已播放
+    capsuleDone: false,                                // 时光胶囊终章是否已播放
+    // —— 时段自习（批次十四）——
+    morningReadDay: 0, nightStudyDay: 0                // 晨读 / 晚自习：上次完成的游戏日（当日 buff 判定）
   });
 
   const state = {

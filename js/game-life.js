@@ -542,6 +542,51 @@
     if (i >= 0 && i < list.length) await readBook(list[i].id);
   };
 
+  /* —— 晨读角：清晨早到教室读一局书，达成后当天答题知识点 +1（game-town.js examOnce 消费） —— */
+  S.morningRead = async () => {
+    const f = F(), C = ADV.Cal;
+    if (C.period !== 0) { await say({ text: '（墙上贴着「晨读时间 · 清晨」的告示。\n现在不是清晨——晨读角安安静静的。）' }); return; }
+    if (f.morningReadDay === C.day) { await say({ text: '（今天已经大声晨读过啦，嗓子清亮亮的。\n明天清晨再来吧！）' }); return; }
+    const subject = ['chinese', 'math', 'english'][C.day % 3];
+    const cn = { chinese: '语文', math: '数学', english: '英语' }[subject];
+    await say({ text: `清晨的教室真安静——\n你摊开${cn}课本，大声读了起来！\n（读完一局小练习：今日答题知识点 +1、精力 +10）` });
+    let hit = 0;
+    for (let k = 0; k < 3; k++) if (await examAsk(`晨读 · ${cn}小练习`, subject, 'easy', C.day * 3 + k)) hit++;
+    f.morningReadDay = C.day;                            // 先落 buff：今天剩下的题都算晨读加成
+    C.gainEnergy(10);
+    f.gold = (f.gold || 0) + 8;
+    addCup(1);
+    logEvent(`完成了清晨晨读（${cn}，答对 ${hit}/3）`);
+    ADV.Audio.sfx('save');
+    await say({ text: `读完合上书，脑子清醒极了！（答对 ${hit}/3）\n精力 +10 · 金币 +8 · 学院分 +1\n今天答题的知识点都会额外 +1！` });
+    save();
+  };
+
+  /* —— 晚自习座位：夜晚留馆刷题，当晚答题经验 +50%（examOnce 消费）；代价是夜里过不去别处了 —— */
+  S.nightStudy = async () => {
+    const f = F(), C = ADV.Cal;
+    if (!C.isNight()) { await say({ text: '（座位上摆着一盏台灯和一沓习题纸。\n牌子上写：「晚自习 · 天黑开灯」。\n白天就先去上课吧～）' }); return; }
+    if (f.nightStudyDay !== C.day) {
+      const go = await choose(['留下来刷题', '先回去'], { caption: { name: '晚自习', text: `天黑了（${C.periodName()}），图书馆还亮着一盏灯。\n留下来刷题：今晚答题经验 +50%。\n（但整晚都耗在书桌前——夜里别的事就赶不上了）` } });
+      if (go !== 0) return;
+      f.nightStudyDay = C.day;
+      C.costEnergy(5);
+      C.advance(1);                                      // 留馆刷题消耗时段（夜晚则原地不动）
+      await say({ text: '你坐进台灯的光圈里，摊开习题纸。\n笔尖沙沙——今晚刷题经验 +50%！（精力 -5）' });
+    } else {
+      await say({ text: '（台灯还亮着，习题纸摊在桌上。\n今晚的 +50% 经验还在生效，继续刷！）' });
+    }
+    const subject = ['math', 'chinese', 'science', 'english'][C.day % 4];
+    const cn = { math: '数学', chinese: '语文', science: '科学', english: '英语' }[subject];
+    let hit = 0;
+    for (let k = 0; k < 3; k++) if (await examOnce(`晚自习 · ${cn}刷题`, subject, 'normal', C.day * 10 + k)) hit++;
+    logEvent(`在图书馆上晚自习（${cn}，答对 ${hit}/3）`);
+    if (hit === 3) { addCup(1); UI().toast(' ✨ 刷题全对 · 学院分 +1 '); }
+    ADV.Audio.sfx('save');
+    await say({ text: `夜更深了，你合上习题册。（答对 ${hit}/3）\n今晚在台灯下做的题，经验都算 +50%。` });
+    save();
+  };
+
   // 教室讲台：课本
   /* —— 上课：每日一课（白天 · 校历有课 · 当天未上）。主科 = 抢答小游戏 + 两道随堂题，
         副科（体育/音乐/美术/阅读/社团）= 动手环节 + 一道综合题；答对自动得知识点 —— */

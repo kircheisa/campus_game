@@ -303,6 +303,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'sign', x: 16, y: 2, w: 1, h: 1, text: '🗓', solidTiles: [], s: 'boardCountdown' });
     m.objects.push({ kind: 'sign', x: 25, y: 2, w: 1, h: 1, text: '🏆', solidTiles: [], s: 'olympBoard' });  // 学科奥赛公告栏（每季报名/开赛）
     m.objects.push({ kind: 'sign', x: 21, y: 2, w: 1, h: 1, text: '⚖', solidTiles: [], s: 'tgameMath' });    // 王老师的速算天平（签名挑战）
+    m.objects.push({ kind: 'sign', x: 13, y: 2, w: 1, h: 1, text: '📖', solidTiles: [], s: 'morningRead' }); // 晨读角（清晨限定 · 当日增益）
     m.objects.push({ kind: 'sign', x: 15, y: 18, w: 1, h: 1, text: '🌸', solidTiles: [], s: 'seasonDeco' });
     m.objects.push({ kind: 'sign', x: 13, y: 9, w: 1, h: 1, text: '🖼', solidTiles: [], s: 'posterWall' });
     return m;
@@ -348,6 +349,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'sign', x: 8, y: 2, w: 1, h: 1, text: '🎋', solidTiles: [], s: 'tgameCn' }); // 李老师的飞花令签筒（签名挑战）
     m.objects.push({ kind: 'catBed', x: 10, y: 15, w: 1, h: 1, s: 'libCatBed', solidTiles: [[0, 0]] }); // 猫窝
     m.objects.push({ kind: 'sign', x: 23, y: 6, w: 1, h: 1, text: '窗边', solidTiles: [], s: 'windowSeat' }); // 放学后的小窗边
+    m.objects.push({ kind: 'sign', x: 24, y: 12, w: 1, h: 1, text: '✍', solidTiles: [], s: 'nightStudy' }); // 晚自习座位（夜晚限定 · 刷题经验 +50%）
     m.objects.push({ kind: 'mysterySpot', x: 8, y: 5, w: 1, h: 1, solidTiles: [], s: 'rumor', rid: 5 });  // 怪谈5：书架低语
     m.inters.push({ x: 3, y: 5, s: 'shelfPeek' });
     // 书架可读书 + 管理员 + 书友会同学

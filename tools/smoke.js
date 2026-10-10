@@ -5663,6 +5663,83 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     ok(HT82 && Object.keys(HT82).length === 6, '隐藏线角标：HIDDEN_TALES 六挚友表已导出（供好友页判定开线对象）');
   }
 
+  console.log('\n[5.83] 体验批次十四：晨读角（清晨教室 · 当日知识点 +1）+ 晚自习（夜晚图书馆 · 刷题经验 +50%）');
+  {
+    const KMAIN = 'campus_adventure_save_v1', KA = KMAIN + '_a', KB = KMAIN + '_b';
+    const keepLS = {};
+    for (const k of [KMAIN, KA, KB]) keepLS[k] = localStorage.getItem(k);
+    const realIntro83 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};   // 同 [5.79]/[5.80]：隔离 ngStart 遗留的 80ms 序章定时器
+    try {
+      A.Game.newGame('hero_boy', false);
+      const CAL83 = { period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 80 };
+      const kn = () => A.Growth.dump().dim.knowledge;      // 原始五维（aggregate 有 500ms TTL 缓存，测不得）
+      A.Cal.load(Object.assign({}, CAL83, { day: 6 }));    // 第 6 天 · 清晨
+      const F83 = A.Game.flags;
+      // —— A. 无 buff 基线：答题知识点 +1 ——
+      const kn0 = kn();
+      await pump(A.Game.S._examAsk('晨读探针A · 无buff', 'math', 'easy'));
+      ok(kn() - kn0 === 1, '晨读基线：未晨读时答对一题知识点 +1');
+      // —— B. 晨读流程：小局 3 题 → 落当日 buff + 精力/金币/学院分 ——
+      const gold0 = F83.gold, cup0 = F83.cup, en0 = A.Cal.energy;
+      await pump(A.Game.S.morningRead());
+      ok(F83.morningReadDay === 6, '晨读：完成后落当日旗标（morningReadDay = 6）');
+      ok(A.Cal.energy === Math.min(en0 + 10, A.Cal.energyMax) && F83.gold === gold0 + 8 && F83.cup === cup0 + 1,
+        '晨读奖励：精力 +10 · 金币 +8 · 学院分 +1');
+      // —— C. 晨读 buff：当日答题知识点 +2 ——
+      const kn1 = kn();
+      await pump(A.Game.S._examAsk('晨读探针B · 有buff', 'science', 'easy'));
+      ok(kn() - kn1 === 2, '晨读 buff：当日答对一题知识点 +2（晨读角说明口径兑现）');
+      // —— D. 同日重复晨读被拦 ——
+      const en1 = A.Cal.energy, gold1 = F83.gold;
+      await pump(A.Game.S.morningRead());
+      ok(F83.morningReadDay === 6 && A.Cal.energy === en1 && F83.gold === gold1,
+        '晨读：同日只读一次（重复触发只给提示，不再发奖）');
+      // —— E. 晚自习：夜晚留馆刷题，经验 ×1.5 ——
+      A.Cal.load(Object.assign({}, CAL83, { day: 6, period: 5 }));   // 当晚 · 夜晚
+      const xp0 = A.Growth.xp;
+      await pump(A.Game.S.nightStudy());
+      ok(F83.nightStudyDay === 6 && A.Growth.xp - xp0 === 18,
+        '晚自习：夜晚留馆落旗标，3 题普通难度经验 4→6（×1.5）共 +18');
+      ok(A.Cal.period === 5, '晚自习：夜晚已是末段，时段原地不动');
+      // —— F. 傍晚留馆 → 推进时段；次日 buff 不残留 ——
+      A.Cal.load(Object.assign({}, CAL83, { day: 7, period: 4 }));   // 次日 · 傍晚
+      const xp1 = A.Growth.xp, kn2 = kn();
+      await pump(A.Game.S.nightStudy());
+      ok(A.Cal.period === 5 && F83.nightStudyDay === 7,
+        '晚自习：傍晚留馆把时段推进到夜晚（留馆的时间代价）');
+      ok(A.Growth.xp - xp1 === 18 && kn() - kn2 === 3,
+        '晚自习：次日经验 buff 仍生效（+18），晨读知识点 buff 不跨日（每题回落 +1）');
+      // —— G. 时段门：白天进不了晚自习 / 非清晨进不了晨读 ——
+      A.Cal.load(Object.assign({}, CAL83, { day: 8, period: 2 }));   // 第 8 天 · 午休
+      const gold2 = F83.gold;
+      await pump(A.Game.S.nightStudy());
+      await pump(A.Game.S.morningRead());
+      ok(F83.nightStudyDay === 7 && F83.morningReadDay === 6 && F83.gold === gold2,
+        '时段门：午休触发晚自习 / 晨读都只给告示，状态与奖励分毫不动');
+      // —— H. 接线与存档兼容（源断言） ——
+      const maps83 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      ok(maps83.includes("s: 'morningRead'") && maps83.includes("s: 'nightStudy'"),
+        '点位接线：教室晨读角 📖 / 图书馆晚自习座位 ✍ 两处 sign 已挂');
+      const src83 = gameSrc();
+      ok(src83.includes('S.morningRead = async') && src83.includes('S.nightStudy = async')
+        && src83.includes('f.morningReadDay === C.day ? 2 : 1') && src83.includes('Math.ceil(xp * 1.5)'),
+        '逻辑接线： handlers 在位，examOnce 消费晨读 / 晚自习双 buff');
+      ok(src83.includes('morningReadDay: 0, nightStudyDay: 0'),
+        '存档兼容：blankFlags 只增不改补两个日锁键（旧档合并自动补 0）');
+    } finally {
+      A.Game.S._intro = realIntro83;
+      for (const k of [KMAIN, KA, KB]) {
+        if (keepLS[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS[k]);
+      }
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
