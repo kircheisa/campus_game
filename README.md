@@ -374,7 +374,7 @@
 campus-adventure/
 ├─ index.html        入口
 ├─ css/style.css     页面样式（含触屏按键 / 工具条 / 竖屏提示）
-├─ tools/smoke.js    Node 冒烟测试（node tools/smoke.js，1209 项断言）
+├─ tools/smoke.js    Node 冒烟测试（node tools/smoke.js，1213 项断言）
 └─ js/
    ├─ audio.js       16 首程序化 BGM + 音效
    ├─ sprites.js     程序化像素美术（60+ 图块、37+ 物件、32+ 角色、天气图标、像素头像）
@@ -407,7 +407,7 @@ campus-adventure/
 ## ✅ 冒烟测试
 
 ```bash
-node tools/smoke.js    # 1209 项断言：覆盖地图、美术、三章剧情、日常循环、学习闭环、成长系统、
+node tools/smoke.js    # 1213 项断言：覆盖地图、美术、三章剧情、日常循环、学习闭环、成长系统、
                        # 精灵小筑交易流程、战斗公式边界、宠物对战捕捉闭环、驯兽知识与知识树反哺、
                        # 学业考试精灵奖励、亲密度对战加成、周末系统（票根/片单/集市/成就）、
                        # 系统开张导览、晨曦祭坛、微剧情三连线、NG+ 重逢、极限连战、

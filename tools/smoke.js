@@ -5649,6 +5649,20 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.82] 体验批次十三：签名挑战打磨（电路废管 ✕ 标记 / 飞花令接错反馈）+ 隐藏线进度角标');
+  {
+    const mini82 = fs.readFileSync(path.join(ROOT, 'js', 'minigame.js'), 'utf8');
+    ok(mini82.includes('带 ✕ 的是废管') && mini82.includes("'#4c5164'") && !mini82.includes('rgba(120,120,150,.25)'),
+      '签名挑战·电路：干扰管降饱和 + 管面画 ✕（替代角点），提示行注明口径');
+    ok(mini82.includes('act.wrongT = 1.1') && mini82.includes('不是要找的字') && mini82.includes('接错不扣心'),
+      '签名挑战·飞花令：接错时篮口浮起灰字渐隐反馈，说明行注明「接错不扣心」');
+    const ui82 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+    ok(ui82.includes('✦ 隐藏剧情·待续') && ui82.includes('信已入胶囊') && ui82.includes('ADV.Game.HIDDEN_TALES'),
+      '隐藏线角标：手册好友页按阶段显示 待续 / n/3 / 信已入胶囊 n/6（终章后收口不显示）');
+    const HT82 = A.Game.HIDDEN_TALES;
+    ok(HT82 && Object.keys(HT82).length === 6, '隐藏线角标：HIDDEN_TALES 六挚友表已导出（供好友页判定开线对象）');
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

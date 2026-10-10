@@ -244,7 +244,7 @@ ADV.Mini = (function () {
       const lv = (opt && opt.lv) || 1;
       act = {
         kind, onDone, lv, round: 1, hearts: 3,
-        bx: W / 2, petals: [], disp: [], need: '', seen: 0, spawnT: 0, shakeT: 0,
+        bx: W / 2, petals: [], disp: [], need: '', seen: 0, spawnT: 0, shakeT: 0, wrongT: 0,
         msg: lv >= 3 ? '主题字「月」——接住它，补全诗句！' : '接住正确的字，补全诗句！'
       };
       flowerRound(act);
@@ -828,6 +828,7 @@ ADV.Mini = (function () {
       if (p.left) act.bx = Math.max(160, act.bx - 360 * dt);
       if (p.right) act.bx = Math.min(800, act.bx + 360 * dt);
       if (act.shakeT > 0) act.shakeT -= dt;
+      if (act.wrongT > 0) act.wrongT -= dt;
       act.spawnT -= dt;
       const needUp = act.petals.some(pt => !pt.dead && pt.ch === act.need);
       if (act.spawnT <= 0 && act.seen < 5) {            // 每句 5 片花瓣，第 2 片必是对字（保底）
@@ -848,6 +849,7 @@ ADV.Mini = (function () {
             flowerRound(act);
           } else {
             ADV.Audio.sfx('cursor');
+            act.wrongT = 1.1; act.wrongCh = pt.ch;          // 接错：篮口浮起灰字提示（不扣心，口径见说明行）
             act.msg = '「' + pt.ch + '」不是这个字……接着等！';
           }
         } else if (pt.y > 470) {                                            // 落地：对字漏接才扣心
@@ -1515,7 +1517,11 @@ ADV.Mini = (function () {
       g.beginPath(); g.arc(act.bx, 412, 48, Math.PI, 0); g.stroke();
       for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(act.bx + i * 22, 414); g.lineTo(act.bx + i * 16, 452); g.stroke(); }
       text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
-      text(g, '← → 移动竹篮 · 接住缺字 · 对字落地扣一颗心 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+      if (act.wrongT > 0) {                                     // 接错灰字：从篮口浮起、渐隐
+        const a = Math.max(0, Math.min(1, act.wrongT));
+        text(g, '✗ 「' + act.wrongCh + '」不是要找的字', act.bx, 470 - (1.1 - act.wrongT) * 30, 16, 'rgba(178,188,208,' + a + ')');
+      }
+      text(g, '← → 移动竹篮 · 接住缺字 · 接错不扣心 · 对字落地扣一颗心 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
     } else if (act.kind === 'circuit') {
       const f = drawFrame(g, '⚡ 电路连通（剩余接口 ' + act.moves + '）');
       const S = 64, gx = W / 2 - 2 * S, gy = f.y + 92;
@@ -1541,19 +1547,26 @@ ADV.Mini = (function () {
         const cs = circuitConns(c);
         const [ax, ay] = MID[cs[0]], [bx2, by2] = MID[cs[1]];
         const cpx = c.type === 'I' ? (ax + bx2) / 2 : ax + bx2, cpy = c.type === 'I' ? (ay + by2) / 2 : ay + by2;
-        for (const [col, lw] of [['#c8874a', 7], ['#e8a86a', 2]]) {
+        // 干扰管整体降饱和（灰管），导线管保持铜色——色彩 + ✕ 双重冗余区分
+        for (const [col, lw] of c.wire ? [['#c8874a', 7], ['#e8a86a', 2]] : [['#4c5164', 7], ['#6a7084', 2]]) {
           g.strokeStyle = col; g.lineWidth = lw; g.lineCap = 'round';
           g.beginPath(); g.moveTo(x + S / 2 + ax, y + S / 2 + ay);
           g.quadraticCurveTo(x + S / 2 + cpx, y + S / 2 + cpy, x + S / 2 + bx2, y + S / 2 + by2);
           g.stroke();
         }
-        if (!c.wire) { g.fillStyle = 'rgba(120,120,150,.25)'; g.beginPath(); g.arc(x + S / 2, y + S / 2, 5, 0, Math.PI * 2); g.fill(); }
+        if (!c.wire) {                                           // 管面画 ✕：带 ✕ 的是废管（不接线）
+          g.strokeStyle = 'rgba(205,214,238,.55)'; g.lineWidth = 3; g.lineCap = 'round';
+          g.beginPath();
+          g.moveTo(x + S / 2 - 11, y + S / 2 - 11); g.lineTo(x + S / 2 + 11, y + S / 2 + 11);
+          g.moveTo(x + S / 2 + 11, y + S / 2 - 11); g.lineTo(x + S / 2 - 11, y + S / 2 + 11);
+          g.stroke();
+        }
       }
       // 光标
       g.strokeStyle = '#ffd94c'; g.lineWidth = 3;
       g.strokeRect(gx + act.cx * S + 1.5, gy + act.cy * S + 1.5, S - 3, S - 3);
       text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
-      text(g, '← ↑ ↓ → 选格 · Z 顺时针旋转 · 电池 → 灯泡 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+      text(g, '← ↑ ↓ → 选格 · Z 顺时针旋转 · 电池 → 灯泡 · 带 ✕ 的是废管 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
     } else if (act.kind === 'arcade') {
       const f = drawFrame(g, '🕹 单词街机 Lv.' + act.lv);
       // 目标词：打字机式逐字母点亮

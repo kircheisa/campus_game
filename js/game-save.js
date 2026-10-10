@@ -1099,7 +1099,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
   }
 
 ADV.Game = {
-    S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, save, load, hasSave, newGame, continueGame, gainBond, friend,
+    S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, HIDDEN_TALES, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
     playerName, HERO_NAMES,                              // 主角名（开局自定义；HUD/序章消费，供测试）
     goldenKey,                                           // 金钥匙彩蛋（口令 → +1000 金，游戏日限 3000）

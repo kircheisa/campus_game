@@ -781,6 +781,16 @@ ADV.UI = (function () {
       const bdayTag = meta ? ` · 生日第${meta.bday}天` : '';
       const stage = ['初识', '相识', '知己', '挚友'][Math.min(3, f.stage)] || '初识';
       text(g, `${stage} · 故事 ${f.stage}/${b.stages.length} · 好感 ${f.love}${bdayTag}`, cx, cy + 26, 12, '#8a94c0');
+      // 隐藏剧情角标（批次十三）：心里话之后按阶段显示进度——待续 / n/3 / 信已入胶囊 n/6
+      const HT = ADV.Game.HIDDEN_TALES, FJ = ADV.Game.flags;
+      if (HT && HT[id] && FJ.heartDone && FJ.heartDone[id] && !FJ.capsuleDone) {
+        const n = (FJ.htale || {})[id] | 0;
+        let hid;
+        if (!n) hid = '✦ 隐藏剧情·待续（改天再聊聊）';
+        else if (n < 3) hid = `✦ 隐藏剧情 ${n}/3`;
+        else hid = `✦ 信已入胶囊 ${Object.keys(FJ.htale).filter(k => (FJ.htale[k] | 0) >= 3).length}/6`;
+        text(g, hid, cx, cy + 44, 11, '#c9a5e8');
+      }
     });
     g.restore();
     if (rows > FRIEND_ROWS) {                              // 滚动指示 + 行号
