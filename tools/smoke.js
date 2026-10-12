@@ -3518,6 +3518,8 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
     A.Cal.load({ day: 40, period: 2, weather: '晴', checkedIn: true, streak: 1 });
     choosePick = () => 0;                                 // teachRecipe 若弹菜单 → 一路确认
     const ms45 = CO45.count('moonSeed'), sf45 = CO45.count('sevenFlower');
+    const ng45 = A.Game.flags.ngplus;                     // [6.5] 遗留 NG+ 状态不入扰：本块只测 bondify 礼物 + hwDone 快速返回
+    A.Game.flags.ngplus = false;
     A.Game.gainBond('teacherSci', 40);
     A.Game.flags.badges = A.Game.flags.badges || {};
     A.Game.flags.badges.science = true;
@@ -3529,7 +3531,7 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
     await pump(A.Game.S.yuejian({ id: 'yuejian' }), 4000);
     ok(CO45.count('sevenFlower') === sf45 + 2, '传说诱饵：月见校长传人故事 → 七色花 ×2');
     ok(said45.some(t => t.includes('山里那位会懂的')), '传说诱饵：月见校长有七色花谢礼桥段');
-    A.UI.say = realSay45; choosePick = realPick45;
+    A.UI.say = realSay45; choosePick = realPick45; A.Game.flags.ngplus = ng45;
   }
 
   console.log('\n[5.46] 捕捉经济：诱饵供给闭环');
@@ -5121,7 +5123,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     const cal73c = A.Cal.dump();
     const keep73c = {
       hw: JSON.stringify(F73.homeworkDay || null), badges: JSON.stringify(F73.badges || null),
-      final: F73.finalPassed,
+      final: F73.finalPassed, ngplus: F73.ngplus,
     };
     const realSay73 = A.UI.say, hadCP73b = choosePick;
     const said73 = [];
@@ -5130,13 +5132,14 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       choosePick = () => 1;                                      // 选「今天先告辞……」尽早退出
       A.Cal.load({ day: 8, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
       F73.homeworkDay = {}; F73.badges = { math: true }; F73.finalPassed = false;
+      F73.ngplus = false;                                        // 本块只测办公时间作业台词（NG+ 强化试炼入口不入扰）
       await pump(A.Game.S.teacherMath({}), 4000);
       ok(said73.indexOf(A.Game.OFFICE_LINES.math.hwOffice) >= 0,
         '办公时间台词：午休进办公室，王老师开口即 hwOffice 专属台词（数据表接线生效）');
     } finally {
       A.UI.say = realSay73; choosePick = hadCP73b;
       F73.homeworkDay = JSON.parse(keep73c.hw); F73.badges = JSON.parse(keep73c.badges);
-      F73.finalPassed = keep73c.final;
+      F73.finalPassed = keep73c.final; F73.ngplus = keep73c.ngplus;
       A.Cal.load(cal73c);
     }
     // —— C3 经典借阅 buff：classicReadTick 功能驱动 ——
@@ -6262,6 +6265,121 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         cur.ranchEgg = old.ranchEgg || null;
         cur.eggSteps = old.eggSteps || 0;
         cur.critMiles = old.critMiles || {};
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  console.log('\n[5.93] 体验批次二十四：NG+ 馆主再战·强化试炼（镀金徽章 / 宗师称号 / 全科宗师）');
+  {
+    const snap93 = JSON.stringify(A.Game.flags);          // 快照：收尾礼貌还原
+    const realIntro93 = A.Game.S._intro;
+    const realToast93 = A.UI.toast;
+    const toasts93 = [];
+    A.Game.S._intro = async () => {};
+    A.UI.toast = t => { toasts93.push(String(t || '')); };
+    // 答题拦截器：菜单按「强化试炼」定位；题目按题库定位正确项，可注入前 N 次故意答错
+    const pick93 = (opts, opt) => {
+      const labels = (Array.isArray(opts) ? opts : []).map(o => String(o));
+      const menu = labels.findIndex(o => o.includes('强化试炼'));
+      if (menu >= 0) return menu;
+      const cap = opt && opt.caption && opt.caption.text;
+      if (cap) {
+        const pools = [...Object.values(A.Game.QUIZ), ...Object.values(A.Game.OLYMP_QUIZ || {})];
+        for (const set of pools) for (const q of set) {
+          if (cap.startsWith(q.q) || q.q.startsWith(cap.replace(/\n[\s\S]*$/, ''))) {
+            const ans = q.opts && q.opts[q.a];
+            const k = ans != null ? opts.indexOf(ans) : -1;
+            if (wrong93 > 0 && k >= 0) { wrong93--; return (k + 1) % opts.length; }   // 故意错一次
+            return k >= 0 ? k : q.a;
+          }
+        }
+      }
+      return 0;
+    };
+    let wrong93 = 0;
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F93 = A.Game.flags;                           // newGame 换了 flags 对象，之后取新引用
+      A.Cal.load({ day: 80, period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const day93 = A.Cal.day;
+      // —— A. 源断言：blankFlags 只增字段 + 强化试炼五题口径 ——
+      const gc93 = fs.readFileSync(path.join(ROOT, 'js', 'game-core.js'), 'utf8');
+      ok(gc93.includes('badgeGold: {}') && gc93.includes('badgeGoldAll: false') && gc93.includes('rematchDay: {}'),
+        '存档只增：badgeGold / badgeGoldAll / rematchDay 三字段入 blankFlags（旧档自动补空）');
+      ok(gc93.includes('async function trialGold') && gc93.includes('OLYMP_QUIZ[subject]')
+         && gc93.includes('GOLD_TITLE'),
+        '强化试炼在位：五题 = 奥赛专项 3 + 主池 2（当日种子轮换），得胜授「X·宗师」');
+      // —— B. 惜败路径：错 2 题 → 不镀金、当日锁重试 ——
+      F93.ngplus = true;
+      F93.badges = { math: true, chinese: false, science: false, english: false };
+      F93.badgeEver = { math: true, chinese: false, science: false, english: false };
+      F93.badgeGold = {}; F93.rematchDay = {};
+      wrong93 = 2;
+      choosePick = pick93;
+      await pump(A.Game.S.teacherMath({}), 8000);
+      ok(!(F93.badgeGold || {}).math && (F93.rematchDay || {}).math === day93
+         && (F93.today || []).some(t => t.includes('惜败')),
+        '惜败路径：错 2 题 → 镀金未得、当日锁重试（rematchDay 登记），战书明天再接');
+      // —— C. 险胜路径：次日错 1 题 → 徽章镀金 + 称号 + 奖励 ——
+      F93.today = [];
+      A.Cal.load({ day: day93 + 1, period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      wrong93 = 1;
+      const g93 = F93.gold || 0, c93 = F93.cup || 0;
+      await pump(A.Game.S.teacherMath({}), 8000);
+      ok((F93.badgeGold || {}).math === true && (F93.gold || 0) === g93 + 15 && (F93.cup || 0) === c93 + 2
+         && (F93.today || []).some(t => t.includes('镀金数学徽章'))
+         && toasts93.some(t => t.includes('数学·宗师')),
+        '险胜路径：次日错 1 题 → 数学徽章镀金 · 称号「数学·宗师」· 金币 +15 学院分 +2');
+      // —— D. 入口收敛：已镀金 → 强化试炼不再出现，走日常作业 ——
+      wrong93 = 0;
+      await pump(A.Game.S.teacherMath({}), 6000);
+      ok((F93.homeworkDay || {}).math === day93 + 1 && (F93.badgeGold || {}).math === true,
+        '入口收敛：镀金到手后同日再访老师 → 直接是日常作业（强化试炼一次性，原流程不受扰）');
+      // —— E. 全科宗师：补齐三科 → 英语完胜触发大礼（每周目一次） ——
+      F93.badgeGold.chinese = true; F93.badgeGold.science = true;
+      F93.badges.english = true; F93.badgeEver.english = true;
+      A.Cal.load({ day: day93 + 2, period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      wrong93 = 0; choosePick = null;                     // 菜单无 caption 走默认 0 = 接受；题目全对 → 完胜
+      const gE93 = F93.gold || 0, cE93 = F93.cup || 0;
+      await pump(A.Game.S.teacherEn({}), 8000);
+      ok((F93.badgeGold || {}).english === true && F93.badgeGoldAll === true
+         && (F93.gold || 0) === gE93 + 80 && (F93.cup || 0) === cE93 + 7
+         && toasts93.some(t => t.includes('全科宗师')),
+        '全科宗师：英语完胜（+30/+3）→ 四科镀金集齐加冕「全科宗师」（+50/+4，每周目一次）');
+      // —— F. 镀金渲染 + 老师专属台词在位 ——
+      F93.badgeGold = { math: true, chinese: true, science: true, english: true };
+      A.UI.renderHUD(makeCtx(makeCanvas()), F93, '校园', false);
+      A.Sprites.drawGem(makeCtx(makeCanvas()), 20, 20, '#5a8aff', true, 9, true);
+      ok(true, 'HUD 镀金渲染不抛错：迷你条/完整面板金框宝石 + drawGem gold 参');
+      const sp93 = fs.readFileSync(path.join(ROOT, 'js', 'sprites.js'), 'utf8');
+      const eng93 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      const ui93 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      ok(sp93.includes('function drawGem(g, x, y, color, on, r, gold)') && eng93.includes('BG[key]')
+         && ui93.includes('golds.math'),
+        '镀金接线源断言：drawGem gold 参 / 石门宝石描金圈（badgeGold 消费） / HUD gems 金标在位');
+      const ev93 = fs.readFileSync(path.join(ROOT, 'js', 'game-event.js'), 'utf8');
+      ok((ev93.match(/rematch:/g) || []).length === 4 && (ev93.match(/goldGo:/g) || []).length === 4
+         && (ev93.match(/goldGreat:/g) || []).length === 4,
+        '专属赛前台词：四位老师 rematch / goldGo / goldGreat 各四份（王·数 / 李·语 / 陈·科 / 吴·英）');
+    } finally {
+      choosePick = null;
+      A.UI.toast = realToast93;
+      A.Game.S._intro = realIntro93;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap93);
+        const cur = A.Game.flags;
+        cur.ngplus = old.ngplus || false;
+        cur.badges = old.badges || { math: false, chinese: false, science: false, english: false };
+        cur.badgeEver = old.badgeEver || {};
+        cur.badgeGold = old.badgeGold || {};
+        cur.badgeGoldAll = !!old.badgeGoldAll;
+        cur.rematchDay = old.rematchDay || {};
+        cur.homeworkDay = old.homeworkDay || {};
+        cur.today = old.today || [];
+        cur.gold = old.gold || 0;
+        cur.cup = old.cup || 0;
       } catch (e) {}
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});

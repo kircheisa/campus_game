@@ -2193,7 +2193,7 @@ ADV.Sprites = (function () {
   }
 
   // 徽章宝石图标（HUD / 获得道具用）
-  function drawGem(g, x, y, color, on, r) {
+  function drawGem(g, x, y, color, on, r, gold) {
     r = r || 9;
     g.save();
     if (!on) g.globalAlpha = .35;
@@ -2205,6 +2205,14 @@ ADV.Sprites = (function () {
       g.fillStyle = 'rgba(255,255,255,.75)';
       g.beginPath(); g.moveTo(x, y - r + 3); g.lineTo(x + 3, y - r + 6); g.lineTo(x - 2, y - r + 7); g.closePath(); g.fill();
       g.strokeStyle = 'rgba(255,255,255,.5)'; g.stroke();
+      if (gold) {                                    // 镀金徽章：外圈金框 + 顶星
+        g.strokeStyle = '#ffd94c'; g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(x, y - r - 3); g.lineTo(x + r + 3, y); g.lineTo(x, y + r + 3); g.lineTo(x - r - 3, y); g.closePath();
+        g.stroke();
+        g.fillStyle = '#fff6c8';
+        g.fillRect(x - 1, y - r - 6, 2, 2);
+      }
     } else {
       g.strokeStyle = '#999'; g.stroke();
     }

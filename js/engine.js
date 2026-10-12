@@ -1056,18 +1056,23 @@ ADV.Engine = (function () {
     g.drawImage(c, o.x * T, o.y * T - (c.height - meta.h / T * T));
     if (o.id === 'stoneDoor' && !o.open) drawDoorGems(g, o);
   }
-  // 石门宝石（按收集进度点亮：数学/语文/科学/英语）
+  // 石门宝石（按收集进度点亮：数学/语文/科学/英语；NG+ 镀金徽章描金圈）
   function drawDoorGems(g, o) {
     const F = ADV.Game.flags;
-    const gems = [[24, 42, F.badges.math, '#5a8aff'], [40, 42, F.badges.chinese, '#ff6a7a'],
-                  [24, 60, F.badges.science, '#4ae86c'], [40, 60, F.badges.english, '#ffd94c']];
-    for (const [gx, gy, got, col] of gems) {
+    const BG = F.badgeGold || {};
+    const gems = [[24, 42, F.badges.math, '#5a8aff', 'math'], [40, 42, F.badges.chinese, '#ff6a7a', 'chinese'],
+                  [24, 60, F.badges.science, '#4ae86c', 'science'], [40, 60, F.badges.english, '#ffd94c', 'english']];
+    for (const [gx, gy, got, col, key] of gems) {
       if (!got) continue;
       const x = o.x * T + gx, y = o.y * T + gy;
       g.fillStyle = col;
       g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill();
       g.fillStyle = 'rgba(255,255,255,.8)';
       g.fillRect(x - 1, y - 3, 2, 2);
+      if (BG[key]) {
+        g.strokeStyle = '#ffd94c'; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(x, y, 6.5, 0, Math.PI * 2); g.stroke();
+      }
     }
   }
   // 角色：姿势图按实体 memo（避免每帧展开 palette 对象 + sprites 内 JSON.stringify 重建键）

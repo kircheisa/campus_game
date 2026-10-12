@@ -118,7 +118,11 @@ window.ADV = window.ADV || {};
     ranch: {},                                         // 牧场盒寄存的同系对 { a: 图鉴id, b: 图鉴id }
     ranchEgg: null,                                    // 盒中的蛋 { fam, shiny, day }（shiny=异色亲本遗传位）
     eggSteps: 0,                                       // 带蛋散步步数计数（走满 300 步破壳）
-    hatchedSpecies: {}                                 // 孵化过的物种（首次邀请随行发「亲人加成」，一种一次）
+    hatchedSpecies: {},                                // 孵化过的物种（首次邀请随行发「亲人加成」，一种一次）
+    // —— NG+ 馆主再战（批次二十四 · P5）——
+    badgeGold: {},                                     // 镀金徽章 { 科目: true }（强化试炼得胜；NG+ 每周目重收）
+    badgeGoldAll: false,                               // 四科镀金集齐「全科宗师」（每周目一次）
+    rematchDay: {}                                     // 各科强化试炼上次挑战的游戏日（败北当日锁重试）
   });
 
   const state = {
@@ -638,6 +642,16 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
        * 课外书 → 昆虫图册 → 小动物图册，另加金币与学院分。 —— */
       const day = ADV.Cal.day;
       F().homeworkDay = F().homeworkDay || {};
+      // —— NG+ 馆主再战（P5）：新学期重新拿到徽章、镀金徽章还没到手时，
+      //    老师会先递上强化试炼的战书（五题 = 奥赛专项 3 + 主池 2）。 ——
+      if (F().ngplus && !(F().badgeGold && F().badgeGold[subject]) && (F().rematchDay || {})[subject] !== day) {
+        E().playAction(npc, 'read', 1.6);
+        await say({ name: teacher, text: opts.rematch || '你身上有股老毕业生的气味……\n正好，我出了五道更难的题，敢不敢试试？' });
+        const c = await choose(['接受强化试炼！', '先做今日作业', '今天先告辞……'], { caption: { name: teacher, text: '强化试炼，来吗？' } });
+        if (c === 0) { await trialGold(opts, npc); return; }
+        if (c === 2) { await say({ name: teacher, text: '好吧，这份战书随时为你留着。' }); return; }
+        // 选「先做今日作业」→ 继续走下方日常作业流程
+      }
       if (F().homeworkDay[subject] === day) {
         await say({ name: teacher, text: opts.hwDone || '今天的作业已经完成得很漂亮，回去好好休息吧，明天再来！' });
         return;
@@ -726,6 +740,64 @@ return (f.stage === 0 ? 2 : 1) + (ADV.Skills ? ADV.Skills.chatBonus() : 0);   //
     logEvent(`通过了${teacher}的试炼，拿到${badge}徽章`);
     gainBadge();
     await chapterMid(1);
+  }
+
+  /* ==================== NG+ 馆主再战：强化试炼（批次二十四 · P5） ====================
+   * 新学期重新拿到徽章后，老师以「老对手」身份发起五题强化试炼：
+   * 题组 = 奥赛专项 3 + 主池 2（比奥赛主池3+专项2更狠），按当日种子轮换；
+   * 全对完胜（金币+30 学院分+3），错 1 题险胜（+15/+2），错 2+ 惜败（当日锁重试）。
+   * 得胜徽章镀金（HUD 宝石描金框 + 石门宝石金圈）+ 授「X·宗师」称号；
+   * 四科镀金集齐加冕「全科宗师」（金币+50 学院分+4，每周目一次）。 */
+  const GOLD_TITLE = { math: '数学·宗师', chinese: '语文·宗师', science: '科学·宗师', english: '英语·宗师' };
+  async function trialGold(opts, npc) {
+    const { teacher, subject, badge } = opts;
+    const f = F();
+    f.rematchDay = f.rematchDay || {};
+    f.rematchDay[subject] = ADV.Cal.day;
+    E().playAction(npc, 'read', 1.6);
+    await say({ name: teacher, text: opts.goldGo
+      || '【强化试炼】五题连答——\n全对是完胜，错一题算险胜，再多就回去再练一年。' });
+    const wrongs = { n: 0 };
+    const OQ = OLYMP_QUIZ[subject] || [];
+    const qs = OQ.length >= 3
+      ? seededShuffle(OQ, ADV.Cal.day * 13 + subject.charCodeAt(0)).slice(0, 3)
+          .concat(seededShuffle(QUIZ[subject], ADV.Cal.day * 7 + subject.length * 3).slice(0, 2))
+      : shuffle(QUIZ[subject]).slice(0, 5);            // 专项库缺科 → 主池降级
+    for (let i = 0; i < qs.length; i++) await ask(teacher, qs[i], wrongs, npc, subject);
+    if (wrongs.n > 1) {
+      E().playAction(npc, 'laugh', 1.4);
+      await say({ name: teacher, text: opts.goldLose
+        || `错了 ${wrongs.n} 次——这就是强化试炼的分量。\n回去再练练，明天再来找回场子。` });
+      logEvent(`再战${teacher}的强化试炼，惜败（错 ${wrongs.n} 题）`);
+      save();
+      return;
+    }
+    const perfect = wrongs.n === 0;
+    f.badgeGold = f.badgeGold || {};                   // 老档兜底（blankFlags 只增补空）
+    f.badgeGold[subject] = true;
+    ADV.Audio.sfx('fanfare');
+    E().playAction(E().player, 'raise', 1.4);          // 玩家高举镀金徽章
+    const title = GOLD_TITLE[subject] || badge + '·宗师';
+    f.gold = (f.gold || 0) + (perfect ? 30 : 15);
+    addCup(perfect ? 3 : 2);
+    await UI().itemGet(badge + '徽章 · 镀金', '#ffd94c');
+    await say({ name: teacher, text: perfect
+      ? (opts.goldGreat || '五题全对……完美无瑕！\n这枚镀金徽章，你受之无愧！')
+      : (opts.goldWin || '虽然手滑了一下，但这份实力做不了假。\n镀金徽章拿好——这就是我认可你的方式。') });
+    UI().toast(` 🏅 强化试炼得胜！获得称号「${title}」· ${badge}徽章镀金 `);
+    if (ADV.Growth) ADV.Growth.milestone(`🏅 再战${teacher}得胜，获得称号「${title}」`);
+    logEvent(`再战${teacher}的强化试炼，赢得镀金${badge}徽章${perfect ? '（完胜）' : ''}`);
+    // 四科镀金集齐 → 「全科宗师」大礼（每周目一次）
+    const bg = f.badgeGold;
+    if (bg.math && bg.chinese && bg.science && bg.english && !f.badgeGoldAll) {
+      f.badgeGoldAll = true;
+      f.gold = (f.gold || 0) + 50;
+      addCup(4);
+      UI().toast(' 👑 四科镀金徽章集齐！获得称号「全科宗师」· 金币 +50 · 学院分 +4 ');
+      if (ADV.Growth) ADV.Growth.milestone('👑 四科镀金徽章集齐，获得称号「全科宗师」');
+      logEvent('集齐四科镀金徽章，加冕「全科宗师」');
+    }
+    save();
   }
 
   function gainBadge() {

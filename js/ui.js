@@ -978,11 +978,12 @@ ADV.UI = (function () {
   }
   function renderHUD(g, flags, mapName, muted) {
     if (hudMode === 'hidden') return;     // 完全隐藏（Q 恢复）
+    const golds = flags.badgeGold || {};  // NG+ 馆主再战：镀金徽章描金框
     const gems = [
-      ['数学', flags.badges.math, '#5a8aff'],
-      ['语文', flags.badges.chinese, '#ff6a7a'],
-      ['科学', flags.badges.science, '#4ae86c'],
-      ['英语', flags.badges.english, '#ffd94c']
+      ['数学', flags.badges.math, '#5a8aff', golds.math],
+      ['语文', flags.badges.chinese, '#ff6a7a', golds.chinese],
+      ['科学', flags.badges.science, '#4ae86c', golds.science],
+      ['英语', flags.badges.english, '#ffd94c', golds.english]
     ];
 
     if (hudMode === 'mini') {
@@ -1001,10 +1002,10 @@ ADV.UI = (function () {
         + 18                                            // 内容 + 右侧 Q 提示
         + 44;
       drawWindow(g, 16, 14, w0, 30);
-      gems.forEach(([n, got, c], i) => {
+      gems.forEach(([n, got, c, gold], i) => {
         const gx = 30 + i * 18;
         g.globalAlpha = got ? 1 : .35;
-        ADV.Sprites.drawGem(g, gx, 29, c, got, 6);
+        ADV.Sprites.drawGem(g, gx, 29, c, got, 6, gold);
         g.globalAlpha = 1;
         text(g, n[0], gx, 30, 8, got ? '#101430' : '#c8cfec', 'center', 'normal');   // 首字冗余：不依赖颜色区分（P2-22）
       });
@@ -1022,9 +1023,9 @@ ADV.UI = (function () {
     // —— 完整面板（Q 展开） ——
     drawWindow(g, 16, 14, 322, 106);
     text(g, (ADV.Game && ADV.Game.playerName ? ADV.Game.playerName() : '') + ' · 智慧徽章', 32, 24, 16, '#ffe9a8');
-    gems.forEach(([n, got, c], i) => {
+    gems.forEach(([n, got, c, gold], i) => {
       const gx = 56 + i * 78;
-      ADV.Sprites.drawGem(g, gx, 60, c, got, 9);
+      ADV.Sprites.drawGem(g, gx, 60, c, got, 9, gold);
       text(g, n, gx, 66, 13, got ? '#fff' : '#8890b0', 'center', 'normal');
     });
     // 达人徽章行（体育/音乐/劳动/阅读，每日刷新）

@@ -121,6 +121,9 @@
             '三道题，答对才能获得徽章。\n深呼吸，我们开始吧！'],
     subject: 'math', badge: '数学', gemColor: '#5a8aff',
     again: '数学之美在于思考。徽章已是你的了，去帮助别的同学吧！',
+    rematch: '咦——这不是上一届那位吗？\n听说新学期你又回来重念了。\n正好，我备了五道硬题，专门等老对手。',
+    goldGo: '【数学·强化试炼】五题连答——三道奥赛专项打底。\n全对是完胜，错一题算险胜，再多就回去再练一年。',
+    goldGreat: '五题全对……不愧是我教过最稳的那一届！\n镀金徽章给你——这可是独一份的。',
     ...OFFICE_LINES.math
   });
 
@@ -130,6 +133,9 @@
             '答对三道语文题，徽章便归于你。\n请开始你的背诵与赏析。'],
     subject: 'chinese', badge: '语文', gemColor: '#ff6a7a',
     again: '腹有诗书气自华。徽章已是你的了，多来读书哦。',
+    rematch: '新学期还能见到你，真是缘分。\n去年你那篇作文，我至今留着当范文。\n这次换个考法——五道硬题，敢接吗？',
+    goldGo: '【语文·强化试炼】五题连答——三道奥赛专项打底。\n全对是完胜，错一题算险胜，再多就再读一年诗书。',
+    goldGreat: '字字珠玑，题题不落！\n这枚镀金徽章，配得上你笔下的文章。',
     ...OFFICE_LINES.chinese
   });
 
@@ -139,6 +145,9 @@
             '观察、思考、验证——\n三道科学题，开始！'],
     subject: 'science', badge: '科学', gemColor: '#4ae86c',
     again: '保持好奇心！科学徽章已是你的了。',
+    rematch: '是去年的实验搭档回来了！\n实验室的仪器都还记得你的手。\n来，加难版五连题，仪器已就位！',
+    goldGo: '【科学·强化试炼】五题连答——三道奥赛专项打底。\n全对是完胜，错一题算险胜，再多就回炉重学！',
+    goldGreat: '观察、假设、验证——全程无懈可击！\n镀金徽章颁给你，未来的科学家！',
     ...OFFICE_LINES.science
   });
 
@@ -148,6 +157,9 @@
             '答对三道英语题，英语徽章就是你的啦。\nReady? Go!'],
     subject: 'english', badge: '英语', gemColor: '#ffd94c',
     again: 'Wonderful! 英语徽章已是你的了，\nKeep going，保持热爱！',
+    rematch: 'Long time no see! 新学期还要挑战我？\n你的单词本我记得，比谁的都厚。\n这次是加难版五连题，Ready?',
+    goldGo: '【English·强化试炼】五题连答——三道奥赛专项打底。\n全对是完胜，错一题算险胜，再多就回去背单词！',
+    goldGreat: 'Perfect! Full marks!\n镀金徽章是你的了——Remarkable!',
     hw: 'Practice makes perfect!\n今日作业三道题，全对有惊喜哦！',
     hwDone: 'Well done! 今天的作业完成啦，See you tomorrow!',
     hwGreat: 'Perfect! 全对！这份奖励送给你，\nKeep it up!',
