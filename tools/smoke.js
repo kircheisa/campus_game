@@ -6824,6 +6824,81 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.100] 泳池节日场地 + 钓鱼大赛文案对齐（批次三十二） ==================== */
+  console.log('\n[5.100] 泳池节日场地（水上运动会）/ 钓鱼大赛文案对齐稀有度口径');
+  {
+    const snap100 = JSON.stringify(A.Game.flags);
+    const snapF100 = JSON.stringify(A.Game.friends);
+    try {
+      // —— A. 源断言：文案对齐 + 水上运动会接线 ——
+      const gq100 = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
+      const sc100 = fs.readFileSync(path.join(ROOT, 'js', 'game-scene.js'), 'utf8');
+      ok(!gq100.includes('市价折成磅数') && gq100.includes('鱼越稀罕'),
+        '钓鱼大赛文案：按市价折磅 → 鱼越稀罕磅数越足（与 FISH_SCORE 稀有度表对齐）');
+      ok(sc100.includes('水上运动会') && sc100.includes('poolFestDay') && sc100.includes('PROGRAMS[C.day % PROGRAMS.length]'),
+        '泳池节日场地：节日当天「水上运动会」+ poolFestDay 日锁 + 节目按日轮换在位');
+      // —— 行为准备 ——
+      A.Game.newGame('hero_boy', false);
+      const F100 = A.Game.flags;
+      // —— B. 行为（赢家路径）：纳凉晚会 day 53 报名水上运动会 → 金币 +15 · 学院分 +1 · 精力 -3 ——
+      A.Cal.load({ day: 53, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const gold0_100 = F100.gold || 0, cup0_100 = F100.cup || 0;
+      let festMenu100 = null, swimMenu100 = null, call100 = 0;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        call100++;
+        if (call100 === 1) festMenu100 = arr.slice();
+        if (call100 === 2) swimMenu100 = arr.slice();
+        const k = arr.findIndex(o => o.includes('水上运动会'));
+        if (k >= 0) return k;
+        return arr.length - 1;                            // 不了 / 岸上坐坐就好
+      };
+      await pump(A.Game.S.swimPool(), 4000);
+      await pump(A.Game.S.swimPool(), 4000);              // 同日再进：验证日锁（坐坐安全离场）
+      choosePick = null;
+      ok(!!festMenu100 && festMenu100.some(o => o.includes('水上运动会')) && F100.poolFestDay === 53
+         && F100.gold === gold0_100 + 15 && F100.cup === cup0_100 + 1 && A.Cal.energy === 47,
+        '水上运动会（赢家路径）：day53 种子必胜 → 金币 +15 · 学院分 +1 · 精力 -3 · poolFestDay 落档');
+      ok(!!swimMenu100 && !swimMenu100.some(o => o.includes('水上运动会')),
+        '运动会日锁：同日再进泳池，节日选项消失（日常畅游菜单照旧）');
+      // —— C. 行为（安慰奖路径）：读书日 day 8 → 金币 +5 ——
+      A.Cal.load({ day: 8, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const gold1_100 = F100.gold || 0;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        const k = arr.findIndex(o => o.includes('水上运动会'));
+        if (k >= 0) return k;
+        return arr.length - 1;
+      };
+      await pump(A.Game.S.swimPool(), 4000);
+      choosePick = null;
+      ok(F100.poolFestDay === 8 && F100.gold === gold1_100 + 5,
+        '水上运动会（安慰奖路径）：day8 种子惜败 → 金币 +5 · poolFestDay 照样落档');
+      // —— D. 非节日日：泳池日常菜单不受扰 ——
+      A.Cal.load({ day: 44, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      let plainMenu100 = null;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        if (plainMenu100 === null) plainMenu100 = arr.slice();
+        return arr.length - 1;                            // 岸上坐坐就好
+      };
+      await pump(A.Game.S.swimPool(), 4000);
+      choosePick = null;
+      ok(!!plainMenu100 && plainMenu100.length === 2 && !plainMenu100.some(o => o.includes('运动会')),
+        '非节日日：泳池菜单保持「畅游/坐坐」日常两选项，运动会不越日出现');
+    } finally {
+      try {                                               // 礼貌还原（字段清单 + friends 全量）
+        const old = JSON.parse(snap100);
+        const cur = A.Game.flags;
+        for (const k of ['poolFestDay', 'swimDay', 'gold', 'cup']) cur[k] = old[k];
+        const oldF = JSON.parse(snapF100);
+        for (const k of Object.keys(oldF)) A.Game.friends[k] = oldF[k];
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

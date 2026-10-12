@@ -1072,7 +1072,7 @@ const sp = ADV.Collect.info('fish', rollFish(bait, rainy));
     if (C.period < 1 || C.period > 3) { await say({ text: '（大赛只在白天举行——\n清晨练竿，傍晚颁奖，现在不开赛）' }); return; }
     if (f.contestDay === C.day) { await say({ text: '（你今天已经比过了。\n裁判冲你举了举茶缸：「下周日再来！」）' }); return; }
     if (!ADV.Collect.count('fishingRod')) { await say({ name: '裁判', text: '想参赛？先有鱼竿——\n礼品店有售，报名免费。' }); return; }
-    const i = await choose(['报名开赛！', '先看看热闹'], { caption: { name: '周日钓鱼大赛', text: '【每周日 · 河畔三竿赛】\n三竿之内，钓得的鱼按市价折成磅数——\n磅数 ≥60 夺冠，≥40 拿亚军！报名免费。' } });
+    const i = await choose(['报名开赛！', '先看看热闹'], { caption: { name: '周日钓鱼大赛', text: '【每周日 · 河畔三竿赛】\n三竿之内，鱼越稀罕，磅数越足——\n磅数 ≥60 夺冠，≥40 拿亚军！报名免费。' } });
     if (i !== 0) return;
     f.contestDay = C.day;
     let score = 0;

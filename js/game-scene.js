@@ -445,10 +445,42 @@
     logEvent('在天文角看了一晚星星');
     save();
   };
-  /* —— 校园 · 游泳池（S7 落成后）：白天游泳（精力 -5 · 体魄 +3，每日一次） —— */
+  /* —— 校园 · 游泳池（S7 落成后）：白天游泳（精力 -5 · 体魄 +3，每日一次）——
+     S7 余量收口：泳池 = 节日场地——节日当天池边办「水上运动会」（节目按日轮换，胜负日种子确定性） —— */
   S.swimPool = async () => {
     const f = F(), C = ADV.Cal;
     if (C.isNight()) { await say({ text: '夜里的泳池锁着门，水面一片黑。\n救生圈整整齐齐挂在栏杆上睡着了。' }); return; }
+    const fest = C.festival();
+    if (fest && f.poolFestDay !== C.day && C.energy >= 4) {
+      const go = await choose([`报名水上运动会（${fest}限定）`, '不了，自己游就好'],
+        { caption: { name: '游泳池', text: `池水蓝得晃眼——今天池边在办\n「${fest}」水上运动会！` } });
+      if (go === 0) {
+        f.poolFestDay = C.day;
+        const PROGRAMS = [
+          ['憋气比拼', '你憋红着脸沉到池底，数到四十七才冒头——\n池边掌声一片！'],
+          ['池底摸硬币', '你一个猛子扎下去，摸上来五枚亮闪闪的硬币——\n裁判当场验收：全是真的！'],
+          ['水上拔河', '两队在池里拉锯，你这边喊着号子——\n哗啦一声把对面全拽下了水！']
+        ];
+        const [pname, pline] = PROGRAMS[C.day % PROGRAMS.length];
+        C.costEnergy(3);
+        const win = (C.day * 7 + 3) % 10 < 6;
+        if (win) {
+          f.gold = (f.gold || 0) + 15;
+          addCup(1);
+          ADV.Audio.sfx('fanfare');
+          await say({ text: `【${pname}】\n${pline}\n（拿到「水中蛟龙」小奖状！金币 +15 · 学院分 +1 · 精力 -3）` });
+          logEvent(`在${fest}的水上运动会${pname}里夺魁`);
+        } else {
+          f.gold = (f.gold || 0) + 5;
+          ADV.Audio.sfx('emote');
+          await say({ text: `【${pname}】\n你使出了吃奶的劲儿，还是差了半口气——\n裁判塞给你 5 文安慰奖。（金币 +5 · 精力 -3）` });
+          logEvent(`参加了${fest}的水上运动会${pname}`);
+        }
+        UI().toast(` 🏊 水上运动会（${fest}）：金币 +${win ? 15 : 5} `);
+        save();
+        return;
+      }
+    }
     if (f.swimDay === C.day) { await say({ text: '今天已经游过啦——泳镜还在滴水。\n（明天再来）' }); return; }
     if (C.energy < 6) { await say({ text: '胳膊都抬不起来了，下水要抽筋的。\n（精力不足）' }); return; }
     const go = await choose(['扑通跳进去！', '岸上坐坐就好'],
