@@ -478,6 +478,7 @@ E().playAction(E().player, 'laugh', 1.6);
           } else {
             f.gold = (f.gold || 0) + les.cost;         // 答错退学费：焦点在知识，不罚钱
             await say({ name: '阿橘', text: '唔——要领还没抓住。学费先还你，\n想清楚了随时再来讨教！' });
+            save();                                    // 退费落盘：金币变动必须 save
           }
           continue;
         }
@@ -733,8 +734,8 @@ E().playAction(E().player, 'laugh', 1.6);
   S.radio = async () => {
     const f = F(), C = ADV.Cal;
     if (C.isNight()) { await say({ text: '（广播喇叭安静地立着。\n白天的大课间它才会响）' }); return; }
-    if (f.radioDay === C.day) { await say({ text: '（今天的广播体操已经做过了，\n喇叭里的老师嗓子都哑了）' }); return; }
-    f.radioDay = C.day;
+    if (f.exerciseDay === C.day) { await say({ text: '（今天的广播体操已经做过了，\n喇叭里的老师嗓子都哑了）' }); return; }
+    f.exerciseDay = C.day;                             // exerciseDay：体操专用日锁（radioDay 留给点歌）
     ADV.Audio.playBgm('tender');
     await say({ text: '♪～ 大课间广播准时响起：\n「第三套全国小学生广播体操，\n《时代在召唤》——现在开始！」' });
     const P = E().player;

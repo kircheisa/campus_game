@@ -700,7 +700,7 @@ async function pump(promise, maxSteps) {
   await pump(A.Game.S.challengeBoard({}), 6000);
   ok(A.Game.flags.senseiWin, '隐藏BOSS：保安大爷（扫帚剑圣认可）');
   await pump(A.Game.S.challengeBoard({}), 6000);
-  ok(A.Game.flags.arenaDay === A.Cal.day, '道场每日陪练：领取零花钱');
+  ok(A.Game.flags.sparDay === A.Cal.day, '道场每日陪练：领取零花钱（sparDay 日锁，与极限连战 arenaDay 分离）');
   // —— 模拟考（期中后每日）：先过 期中风波（第17天）再期中 ——
   A.Cal.load({ day: 17, period: 3, weather: '晴', checkedIn: true, streak: 3 });
   await pump(A.Game.S.boardCheck({}), 8000);
@@ -1536,7 +1536,7 @@ A.Skills.reset();   // 社交清零：闲聊给社交经验会升到 Lv1→chatB
 
   // —— 上课（每日一课：主科答题得知识点） ——
   A.Cal.load({ ...A.Cal.dump(), day: 3, period: 1, weather: '晴' });   // 周三：TABLE[3][2]=数学
-  delete A.Game.flags.classDay;
+  delete A.Game.flags.lessonDay;
   const kpCls0 = M21.kp('math');
   choosePick = (opts, opt) => {
     const i = opts.findIndex(o => String(o).startsWith('上课'));
@@ -1544,7 +1544,7 @@ A.Skills.reset();   // 社交清零：闲聊给社交经验会升到 Lv1→chatB
   };
   await pump(A.Game.S.classBooks());
   choosePick = null;
-  ok(A.Game.flags.classDay === 3, '上课：完成当日一课并记录 classDay');
+  ok(A.Game.flags.lessonDay === 3, '上课：完成当日一课并记录 lessonDay');
   ok(M21.kp('math') >= kpCls0 + 2, '上课：主科随堂两题答对得知识点');
   // 同日重上被拦（一天一课）
   choosePick = (opts, opt) => {
@@ -1553,10 +1553,10 @@ A.Skills.reset();   // 社交清零：闲聊给社交经验会升到 Lv1→chatB
   };
   await pump(A.Game.S.classBooks());
   choosePick = null;
-  ok(A.Game.flags.classDay === 3, '上课：一天一课（同日再来被礼貌拦下）');
+  ok(A.Game.flags.lessonDay === 3, '上课：一天一课（同日再来被礼貌拦下）');
   // 副科（周六社团）：动手环节 + 综合题
   A.Cal.load({ ...A.Cal.dump(), day: 6, period: 1 });
-  delete A.Game.flags.classDay;
+  delete A.Game.flags.lessonDay;
   const kpSub0 = M21.kp('final');
   choosePick = (opts, opt) => {
     const i = opts.findIndex(o => String(o).startsWith('上课'));
@@ -1564,14 +1564,14 @@ A.Skills.reset();   // 社交清零：闲聊给社交经验会升到 Lv1→chatB
   };
   await pump(A.Game.S.classBooks());
   choosePick = null;
-  ok(A.Game.flags.classDay === 6 && M21.kp('final') > kpSub0, '上课：副科（社团）动手环节 + 综合题得知识点');
+  ok(A.Game.flags.lessonDay === 6 && M21.kp('final') > kpSub0, '上课：副科（社团）动手环节 + 综合题得知识点');
   // 休息日无课
   A.Cal.load({ ...A.Cal.dump(), day: 7, period: 1 });
-  delete A.Game.flags.classDay;
+  delete A.Game.flags.lessonDay;
   choosePick = opts => opts.findIndex(o => String(o).startsWith('上课'));
   await pump(A.Game.S.classBooks());
   choosePick = null;
-  ok(A.Game.flags.classDay === undefined, '上课：休息日无课（被礼貌拦下，不崩溃）');
+  ok(A.Game.flags.lessonDay === undefined, '上课：休息日无课（被礼貌拦下，不崩溃）');
 
   // —— 雨天钓鱼判定放宽 ——
   const MiniKeep = A.Mini;
@@ -4640,14 +4640,14 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
   console.log('\n[5.62] P-B5：挑战榜极限连战（强度墙 · 玩4）');
   {
     const F62 = A.Game.flags, prevCal62 = A.Cal.dump();
-    const keep62 = { senseiWin: F62.senseiWin, rushBest: F62.rushBest, rushDay: F62.rushDay, arenaDay: F62.arenaDay,
+    const keep62 = { senseiWin: F62.senseiWin, rushBest: F62.rushBest, rushDay: F62.rushDay, arenaDay: F62.arenaDay, sparDay: F62.sparDay,
                      act: F62.act, wuyunB1: F62.wuyunB1, wuyunB2: F62.wuyunB2, wuyunB3: F62.wuyunB3, gangDuel: F62.gangDuel };
     const rnd62 = Math.random;
     const BattleStub62 = A.Battle;
     try {
       Math.random = () => .9;
       // NG+ 重置后的旗标环境自行定桩：道场开放 + 乌云帮三连战/金鹏文武战已完成
-      F62.senseiWin = true; F62.arenaDay = -1; F62.rushBest = 0; F62.rushDay = 0;
+      F62.senseiWin = true; F62.arenaDay = -1; F62.sparDay = -1; F62.rushBest = 0; F62.rushDay = 0;
       F62.act = 4; F62.wuyunB1 = true; F62.wuyunB2 = true; F62.wuyunB3 = true; F62.gangDuel = true;
       A.Cal.load({ day: 30, period: 3, weather: '晴', checkedIn: true, streak: 1 });
       choosePick = opts => { if (!Array.isArray(opts)) return 0; const i = opts.findIndex(o => String(o).includes('极限连战')); return i >= 0 ? i : opts.length - 1; };
@@ -6894,6 +6894,45 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         const oldF = JSON.parse(snapF100);
         for (const k of Object.keys(oldF)) A.Game.friends[k] = oldF[k];
       } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  /* ==================== [5.101] 巡检批次三十三：场景逻辑审计回归 ==================== */
+  console.log('\n[5.101] 场景审计回归：抽背拒绝不烧锁 / 驯兽退费落盘 / 三处日锁分离');
+  {
+    const realIntro101 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      // —— A. 行为：李老师抽背选「改天吧」→ 不写 walkQuizDay、不动金币；同日再访仍可接受 ——
+      A.Game.newGame('hero_boy', false);
+      A.Cal.load({ day: 7, period: 4, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      const gold101 = A.Game.flags.gold;
+      choosePick = () => 1;                                 // 选「改天吧」
+      await pump(A.Game.S.teacherCnWalk());
+      ok(A.Game.flags.walkQuizDay === undefined && A.Game.flags.gold === gold101,
+        '抽背拒绝不烧锁：改天吧 → walkQuizDay 未写 · 零花钱未动（拒绝不占每日名额）');
+      choosePick = null;                                    // 恢复默认拦截器（按题库自动答对）
+      await pump(A.Game.S.teacherCnWalk());
+      ok(A.Game.flags.walkQuizDay === 7 && A.Game.flags.gold === gold101 + 6,
+        '抽背拒绝不烧锁：同日再访仍可接受 → 答对零花钱 +6 · walkQuizDay 入档');
+      // —— B. 源断言：驯兽答错退学费分支立即 save（金币变动不留档缝隙） ——
+      const retro101 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const ref101 = retro101.indexOf('学费先还你');
+      ok(ref101 > 0 && retro101.slice(ref101, ref101 + 160).includes('save();'),
+        '驯兽讨教：答错退学费分支紧跟 save() 落盘（退到手的金币不因未存档蒸发）');
+      // —— C. 源断言：三处跨文件撞锁分离——陪练/上课/体操改专属锁，radioDay·classDay·arenaDay 各归其主 ——
+      const life101 = fs.readFileSync(path.join(ROOT, 'js', 'game-life.js'), 'utf8');
+      const town101 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(life101.includes('f.sparDay') && !life101.includes('f.arenaDay')
+        && life101.includes('f.lessonDay')
+        && retro101.includes('f.exerciseDay')
+        && town101.includes('f.radioDay') && town101.includes('f.classDay')
+        && town101.includes('if (go === 0) {\n        f.walkQuizDay = C.day;'),
+        '日锁分离：陪练 sparDay / 上课 lessonDay / 体操 exerciseDay 专属化；点歌·班会·连战原锁不动；抽背接受才烧锁');
+    } finally {
+      A.Game.S._intro = realIntro101;
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
     }

@@ -368,8 +368,8 @@
     if (f.walkQuizDay !== C.day) {
       await say({ name: '李老师', text: '「傍晚的风不读书可惜了。\n我沿喷泉走一圈，你陪背一句？」' });
       const go = await choose(['来一道！', '改天吧'], { caption: { name: '傍晚抽背', text: '每日一题 · 答对有零花钱' } });
-      f.walkQuizDay = C.day;
       if (go === 0) {
+        f.walkQuizDay = C.day;                           // 接受才烧日锁：拒绝不算“今日已抽背”
         if (await examOnce('李老师抽背', 'chinese', 'easy', C.day)) {
           f.gold = (f.gold || 0) + 6;
           ADV.Audio.sfx('save');

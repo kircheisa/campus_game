@@ -637,11 +637,11 @@
     const subs = C.today();
     if (!subs.length) { await say({ text: '（今天是休息日，教室空荡荡的。\n周日不上课——去外面冒险吧！）' }); return; }
     if (C.isNight()) { await say({ text: '（天色已晚，教室锁门了。\n上课要趁白天来～）' }); return; }
-    if (f.classDay === C.day) { await say({ text: '（今天的课已经上完啦。\n消化一下知识，明天再来！）' }); return; }
+    if (f.lessonDay === C.day) { await say({ text: '（今天的课已经上完啦。\n消化一下知识，明天再来！）' }); return; }   // lessonDay：上课专用（classDay 留给班会/大扫除）
     const MAJOR = { '数学': 'math', '语文': 'chinese', '英语': 'english', '科学': 'science' };
     const cn = subs[(C.day - 1) % subs.length];          // 按日子轮换今天重点节次
     const en = MAJOR[cn] || 'final';
-    f.classDay = C.day;
+    f.lessonDay = C.day;
     C.costEnergy(10);                                    // 上课消耗精力（只提示不拦截）
     if (C.energy < 30) UI().toast(' 😪 精力有点低，上课直打瞌睡…… ');
     await say({ text: `上课铃响——这节是${cn}课。\n（认真听讲 + 随堂练习，答对得知识点！）` });
@@ -1323,7 +1323,7 @@
       save();
     }
     // —— 每日陪练（拿零花钱） ——
-    if (f.arenaDay !== ADV.Cal.day) {
+    if (f.sparDay !== ADV.Cal.day) {                     // sparDay：陪练专用日锁（勿用 arenaDay，那是极限连战削峰锁）
       const rushOn = f.senseiWin || f.graduated;
       const opts = rushOn ? ['来场陪练（每日一次）', '发起极限连战！', '改天再说']
                           : ['来场陪练（每日一次）', '改天再说'];
@@ -1335,7 +1335,7 @@
       const foes = ['dazhuang', 'xiaoying', 'wuyun', 'rival'];
       const foe = foes[(ADV.Cal.day) % foes.length];
       const w = await new Promise(res => ADV.Battle.start(foe, {}, res));
-      f.arenaDay = ADV.Cal.day;
+      f.sparDay = ADV.Cal.day;
       if (w) {
         const gg = 15 + ((Math.random() * 15) | 0);
         F().gold = (F().gold || 0) + gg;
