@@ -276,18 +276,40 @@ ADV.Main = (function () {
     return state !== 'play' || journalOpen || ADV.Game.busy || ADV.UI.busy ||
       (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
   }
-  function manualSave() {
+  async function manualSave() {
     if (uiModalBlock()) return;
-    ADV.Game.save();
-    ADV.Audio.sfx('ok');
-    ADV.UI.toast(' 💾 已保存当前进度（影子槽同步留有上一代） ');
+    const CN = ['一', '二', '三'];
+    const pick = await ADV.UI.choose(['💾 存入主档（自动影子双写·推荐）', '📥 存入命名槽位…', '取消'], { cancelIndex: 2 });
+    if (pick === 2 || pick < 0 || uiModalBlock()) return;  // 确认期间状态可能已变，再守一道
+    if (pick === 0) {
+      ADV.Game.save();
+      ADV.Audio.sfx('ok');
+      ADV.UI.toast(' 💾 已保存当前进度（影子槽同步留有上一代） ');
+      return;
+    }
+    const opts = [0, 1, 2].map(i => {                      // 命名槽：显示已有摘要，覆盖写入
+      const s = ADV.Game.slotSummary(i);
+      return s.used ? `📥 槽位${CN[i]}（第${s.day}天 · ${s.name || '小勇'} · 💰${s.gold}）覆盖写入`
+                    : `📥 槽位${CN[i]}（空）存入`;
+    });
+    const si = await ADV.UI.choose([...opts, '取消'], { cancelIndex: 3 });
+    if (si === 3 || si < 0 || uiModalBlock()) return;
+    if (ADV.Game.saveToSlot(si)) { ADV.Audio.sfx('ok'); ADV.UI.toast(` 📥 已存入槽位${CN[si]} `); }
+    else ADV.UI.toast(' ⚠ 存入失败（浏览器存储不可用） ');
   }
   async function manualLoad() {
     if (uiModalBlock()) return;
-    if (!ADV.Game.hasSave()) { ADV.UI.toast(' ⚠ 还没有存档 '); return; }
-    const pick = await ADV.UI.choose(['📂 读取存档（进度回到上次保存）', '取消'], { cancelIndex: 1 });
-    if (pick !== 0 || uiModalBlock()) return;              // 确认期间状态可能已变，再守一道
-    if (ADV.Game.continueGame()) { ADV.Audio.sfx('start'); ADV.UI.toast(' 📂 已读取存档 '); }
+    const CN = ['一', '二', '三'];
+    const sums = [0, 1, 2].map(i => ADV.Game.slotSummary(i));
+    if (!ADV.Game.hasSave() && !sums.some(s => s.used)) { ADV.UI.toast(' ⚠ 还没有存档 '); return; }
+    const pick = await ADV.UI.choose(['📂 主档（上次保存·影子自动回退）',
+        ...sums.map((s, i) => s.used ? `📗 槽位${CN[i]}（第${s.day}天 · ${s.name || '小勇'} · 💰${s.gold}）`
+                                      : `📗 槽位${CN[i]}（空）`),
+        '取消'], { cancelIndex: 4 });
+    if (pick === 4 || pick < 0 || uiModalBlock()) return;  // 确认期间状态可能已变，再守一道
+    if (pick > 0 && !sums[pick - 1].used) { ADV.UI.toast(' ⚠ 这个槽位还是空的——先用 💾 存一份 '); return; }
+    const okLoad = pick === 0 ? ADV.Game.continueGame() : ADV.Game.loadFromSlot(pick - 1);
+    if (okLoad) { ADV.Audio.sfx('start'); ADV.UI.toast(pick === 0 ? ' 📂 已读取存档 ' : ` 📂 已读取槽位${CN[pick - 1]} `); }
     else ADV.UI.toast(' ⚠ 读取失败（存档损坏且无备用槽） ');
   }
 
@@ -472,7 +494,7 @@ ADV.Main = (function () {
       ['G', '面向 NPC 送礼（投其所好！）'],
       ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
       ['M', '静音开关'],
-      ['💾 / 📂 工具条', '手动保存 / 读取进度（平时也自动存）'],
+      ['💾 / 📂 工具条', '手动保存 / 读取进度（主档外可存三个命名槽位；平时也自动存）'],
       ['🔑 工具条', '金钥匙（输入正确口令才能转动）'],
       ['F', '手册（↑ ↓ 切组 · ← → 切页：关系/生活/收藏/学习/成长）'],
       ['', ''],

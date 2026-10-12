@@ -7020,6 +7020,66 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.103] 命名多槽位存档（批次三十五） ==================== */
+  console.log('\n[5.103] 命名多槽位：三个手动存点 摘要/写入/读取 · 主档影子链零扰动');
+  {
+    const KMAIN = 'campus_adventure_save_v1';
+    const KN = [KMAIN + '_m1', KMAIN + '_m2', KMAIN + '_m3'];
+    const keepLS103 = {};
+    for (const k of [KMAIN, KMAIN + '_a', KMAIN + '_b', ...KN]) keepLS103[k] = localStorage.getItem(k);
+    const realIntro103 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    try {
+      // —— A. 源断言：三槽定义 + build/apply 抽取 + 工具条菜单接线 ——
+      const save103 = fs.readFileSync(path.join(ROOT, 'js', 'game-save.js'), 'utf8');
+      const main103 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      ok(save103.includes("'_m1'") && save103.includes("'_m3'") && save103.includes('slotSummary')
+        && save103.includes('saveToSlot') && save103.includes('loadFromSlot')
+        && save103.includes('function buildSaveData') && save103.includes('function applySaveData'),
+        '命名多槽位：NAMED_SLOTS 三槽 + 摘要/写入/读取，buildSaveData/applySaveData 抽取（主档·影子·命名槽共用一份结构）');
+      ok(main103.includes('存入命名槽位') && main103.includes('slotSummary') && main103.includes('loadFromSlot')
+        && main103.includes('存入主档（自动影子双写·推荐）') && main103.includes('主档（上次保存·影子自动回退）'),
+        '接线：工具条 💾📂 菜单化——主档一键路径保留，命名槽带摘要展示（空槽/覆盖口径在列）');
+      // —— B. 行为：写入 → 摘要 → 改动 → 读回 → 状态整体还原 ——
+      A.Game.newGame('hero_boy', false, '档位侠');
+      A.Cal.load({ day: 23, period: 1, weather: '晴', checkedIn: true, streak: 2, energy: 70 });
+      A.Game.flags.gold = 88;
+      ok(A.Game.saveToSlot(0) === true, '命名槽写入：saveToSlot(0) 落盘成功');
+      const s0 = A.Game.slotSummary(0);
+      ok(s0.used === true && s0.day === 23 && s0.name === '档位侠' && s0.gold === 88,
+        '槽位摘要：used / 天数 / 自定义名 / 金币 一应俱全（读取菜单展示数据源）');
+      const mainRaw103 = localStorage.getItem(KMAIN);
+      A.Game.flags.gold = 999;
+      A.Game.flags.name = '改过名';
+      A.Cal.load({ day: 30, period: 3, weather: '雨', checkedIn: true, streak: 5, energy: 40 });
+      ok(A.Game.loadFromSlot(0) === true && A.Game.flags.gold === 88 && A.Game.flags.name === '档位侠'
+        && A.Cal.day === 23,
+        '命名槽读取：改动后读回 → 金币/名字/日历整体回档（与主档回档同一条 apply 路径）');
+      // —— C. 隔离性：命名槽读写全程不碰主档（自动存档链零扰动） ——
+      ok(localStorage.getItem(KMAIN) === mainRaw103,
+        '隔离性：saveToSlot / loadFromSlot 全程不写不删主档（影子交替与回退链照旧）');
+      // —— D. 空槽与坏档防御 ——
+      ok(A.Game.slotSummary(2).used === false && A.Game.loadFromSlot(2) === false,
+        '空槽：摘要 used=false · 读取被拒（不误回档，提示先存再读）');
+      localStorage.setItem(KN[1], '{corrupted!!');
+      ok(A.Game.slotSummary(1).used === false && A.Game.loadFromSlot(1) === false,
+        '坏档防御：槽位 JSON 损坏 → 摘要视为空槽、读取拒绝（语义校验把关）');
+      A.Game.saveToSlot(1);
+      ok(A.Game.slotSummary(1).used === true && A.Game.slotSummary(1).name === '档位侠',
+        '覆盖写入：同槽再存即覆盖，摘要同步刷新');
+    } finally {
+      for (const k of Object.keys(keepLS103)) {
+        if (keepLS103[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keepLS103[k]);
+      }
+      A.Game.S._intro = realIntro103;
+      A.Game.hero = 'hero_boy';
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

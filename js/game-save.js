@@ -11,6 +11,9 @@
   // 主档缺失或损坏时 load() 自动回退到影子槽，不再一坏就丢档
   const SAVE_SLOTS = [SAVE_KEY + '_a', SAVE_KEY + '_b'];
   let _slotFlip = false;             // 下一次影子写进哪个槽（false=a，true=b）
+  // 命名多槽位（README 规划项收口）：主档/影子槽之外玩家自选的三个手动存点；
+  // 只在工具条 💾/📂 菜单里显式读写，不参与自动存档与损坏回退链
+  const NAMED_SLOTS = [SAVE_KEY + '_m1', SAVE_KEY + '_m2', SAVE_KEY + '_m3'];
 
   function storageOk() {             // 隐私模式等场景 localStorage 会直接抛错
     if (_storageOk !== null) return _storageOk;
@@ -28,19 +31,25 @@
       && (!d.friends || typeof d.friends === 'object'));
   }
 
+  /* 组装存档数据：主档 / 影子槽 / 命名槽三处共用同一份结构（只增不改口径） */
+  function buildSaveData() {
+    const p = ADV.Engine.player;
+    return {
+      v: 1, hero: state.hero,
+      map: ADV.Engine.map ? ADV.Engine.map.id : 'campus',
+      x: p ? p.x : 22, y: p ? p.y : 30, dir: p ? p.dir : 'up',
+      flags: state.flags,
+      friends: state.friends,
+      cal: ADV.Cal ? ADV.Cal.dump() : null,
+growth: ADV.Growth ? ADV.Growth.dump() : null,
+skills: ADV.Skills ? ADV.Skills.dump() : null,
+      savedAt: Date.now()
+    };
+  }
+
   function save() {
     try {
-      const p = ADV.Engine.player;
-      const data = {
-        v: 1, hero: state.hero,
-        map: ADV.Engine.map ? ADV.Engine.map.id : 'campus',
-        x: p ? p.x : 22, y: p ? p.y : 30, dir: p ? p.dir : 'up',
-        flags: state.flags,
-        friends: state.friends,
-        cal: ADV.Cal ? ADV.Cal.dump() : null,
-growth: ADV.Growth ? ADV.Growth.dump() : null,
-skills: ADV.Skills ? ADV.Skills.dump() : null
-};
+      const data = buildSaveData();
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       try {                                                    // 影子槽写失败不影响主档（配额紧张时退化为单槽）
         localStorage.setItem(SAVE_SLOTS[_slotFlip ? 1 : 0], JSON.stringify(data));
@@ -82,6 +91,25 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
   function hasSave() {
     if (_hasSave === null) _hasSave = !!load();      // 标题页每帧都问，缓存避免反复解析大 JSON
     return _hasSave;
+  }
+
+  /* —— 命名槽位：摘要（菜单展示）+ 显式写入 / 读取（与主档链完全隔离） —— */
+  function slotSummary(i) {
+    const d = readSlot(NAMED_SLOTS[i]);
+    if (!d) return { used: false };
+    return { used: true, day: d.cal ? d.cal.day : '?',
+      name: (d.flags && d.flags.name) || '', gold: (d.flags && d.flags.gold) || 0,
+      savedAt: d.savedAt || 0 };
+  }
+  function saveToSlot(i) {
+    try {
+      localStorage.setItem(NAMED_SLOTS[i], JSON.stringify(buildSaveData()));
+      return true;
+    } catch (e) { return false; }
+  }
+  function loadFromSlot(i) {
+    const d = readSlot(NAMED_SLOTS[i]);
+    return d ? applySaveData(d) : false;
   }
 
   /* —— 存档导出 / 导入（Base64 文本，可粘贴备份 / 换设备） —— */
@@ -142,6 +170,10 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
   function continueGame() {
     const d = load();
     if (!d) return false;
+    return applySaveData(d);
+  }
+  /* 应用存档数据：主档回档 / 命名槽读取共用同一条 apply 路径 */
+  function applySaveData(d) {
     state.hero = d.hero || 'hero_boy';
     state.flags = d.flags;
     state.friends = d.friends || {};
@@ -1101,6 +1133,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null
 ADV.Game = {
     S, QUIZ, RIDDLES, MECHANISMS, BOND, BOND_META, STAGE_NAMES, SPELLS, HIDDEN_TALES, save, load, hasSave, newGame, continueGame, gainBond, friend,
     exportSave, importSave, storageOk, validSave,        // 存档备份 / 存储探测 / 语义校验（供测试）
+    NAMED_SLOTS, slotSummary, saveToSlot, loadFromSlot,  // 命名多槽位（工具条菜单消费 / 供测试）
     playerName, HERO_NAMES,                              // 主角名（开局自定义；HUD/序章消费，供测试）
     goldenKey,                                           // 金钥匙彩蛋（口令 → +1000 金，游戏日限 3000）
     nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
