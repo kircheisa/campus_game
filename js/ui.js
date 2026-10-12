@@ -1141,8 +1141,8 @@ ADV.UI = (function () {
       g.strokeStyle = sel ? '#ffd94c' : 'rgba(120,130,180,.45)';
       g.lineWidth = sel ? 2 : 1;
       g.strokeRect(sx - .5, sy - .5, S - 1, S - 1);
-      // 槽位号（手部画 ✋，其余 1-9 / 0 为切回手部的键）
-      text(g, i === 0 ? '✋' : (i === 9 ? '0' : String(i)), sx + 4, sy + 3, 10, sel ? '#ffd94c' : '#8a94c0', 'left', 'normal');
+      // 槽位号（手部画 ✋，1-9 对应 Digit1-9；Digit0 同样切回手部——0 号槽就是手部）
+      text(g, i === 0 ? '✋' : String(i), sx + 4, sy + 3, 10, sel ? '#ffd94c' : '#8a94c0', 'left', 'normal');
       const id = slots[i];
       if (!id) continue;
       const own = ADV.Collect && ADV.Collect.count ? ADV.Collect.count(id) > 0 : false;

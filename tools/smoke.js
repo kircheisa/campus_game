@@ -3674,6 +3674,9 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
       ok(slots.length === 10 && slots[0] === null, '热键栏：10 槽，0 号 = 手部');
       ok(slots.slice(1).every(id => A.Collect.itemInfo(id) && A.Collect.itemInfo(id).price > 0),
          '热键栏：9 件工具全部在物品表定义且有售价');
+      const ui48 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      ok(ui48.includes("i === 0 ? '✋' : String(i)") && !ui48.includes("i === 9 ? '0'"),
+         '热键栏：槽位角标与键位对齐（1-9 直标、0 号 = 手部 ✋；旧「槽 9 标 0」误标已除）');
 
       // —— 切换状态：选中 / 越界钳制 / 写入 flags 随存档持久化 ——
       A.Game.hotbarSelect(4);
@@ -3830,11 +3833,25 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       F50.badges.science = false;
 
       // —— 礼品店：三件新农资上架购买 ——
+      // 按名定位（抗货架增删——批次二十五插修枝剪曾把索引制 picks 撞成死循环狂买）：
+      // 货架主菜单以「数量子菜单含『买 1』」区分；找不到目标商品 → 离开兜底，绝不空转狂买。
       F50.gold = 500;
-      const picks50 = [24, 0, 25, 0, 26, 0, 27];        // 洒水器→买1 → 肥料→买1 → 工具包→买1 → 离开（新流程含数量子菜单；批次二十五货架补修枝剪后序号 +1）
-      choosePick = () => (picks50.length ? picks50.shift() : 27);
+      const wantNames50 = ['sprinkler', 'fertilizer', 'scarecrowKit']
+        .map(id => (A.Collect.itemInfo(id) || {}).name);
+      let wantIdx50 = 0;
+      choosePick = opts => {
+        const isQty = opts.some(o => String(o).startsWith('买 1'));
+        if (!isQty) {                                       // 货架主菜单
+          if (wantIdx50 >= wantNames50.length) return opts.length - 1;   // 三件买齐 → 离开
+          const i = opts.findIndex(o => String(o).startsWith(wantNames50[wantIdx50]));
+          if (i >= 0) { wantIdx50++; return i; }
+          return opts.length - 1;                            // 目标没上架 → 离开兜底
+        }
+        return 0;                                            // 数量子菜单 → 买 1
+      };
       await pump(A.Game.S.giftShop(), 5000);
       choosePick = null;
+      ok(wantIdx50 === wantNames50.length, '礼品店：三件农资按名定位全部买到位（抗货架变动）');
       ok(A.Collect.count('sprinkler') === 1 && A.Collect.count('fertilizer') === 1 && A.Collect.count('scarecrowKit') === 1, '礼品店：买到洒水器/肥料/稻草人工具包各一件');
       ok(F50.gold === 350, '礼品店：三件农资扣款正确（500 - 70 - 25 - 55 = 350）');
 
