@@ -299,6 +299,70 @@
     }
   };
 
+  /* —— 教室 · 班务角（C7 班委竞选）：凭帮助板声望竞聘委员，就任后每周一份职责小任务 —— */
+  const CLASS_ROLES = {
+    study: { name: '学习委员', duty: '辅导同学解题', line: '「我想让每次考试后，\n错题都能变成全班的台阶。」\n——掌声比粉笔灰落得还密。' },
+    pe:    { name: '体育委员', duty: '带全班领操',   line: '「运动会入场式，\n今年咱们班要走最齐的方阵！」\n——全班的手都拍红了。' },
+    arts:  { name: '文艺委员', duty: '出一期黑板报', line: '「黑板报不该只是通知栏——\n该是全班每个月的画展。」\n——连王老师都回头看了一眼。' }
+  };
+  S.classCommittee = async () => {
+    const f = F(), C = ADV.Cal;
+    if (!f.classRole) {
+      // 竞聘门槛：帮助板声望 ≥ 8（在镇上帮过忙，同学才投你的票）
+      if ((f.helpPts || 0) < 8) {
+        await say({ name: '王老师', text: `后黑板上贴着「班委竞聘」的红纸。\n「想为班里做事是好事。\n不过班委得先有口碑——去镇上帮助板帮帮忙，\n声望 ${f.helpPts || 0}/8，同学们才好把票投给你。」` });
+        return;
+      }
+      const go = await choose(['竞聘学习委员', '竞聘体育委员', '竞聘文艺委员', '这学期先算了'],
+        { caption: { name: '班务角', text: `班会时间，王老师把红纸抚平。\n「你的帮助板声望：${f.helpPts}——够格。\n说说吧，你想为班里做点什么？」\n（发表竞选演说 · 精力 -3 · 每学期一任）` } });
+      if (go < 0 || go > 2) { await say({ text: '「红纸一直贴到学期末，\n想好了随时来。」' }); return; }
+      const key = ['study', 'pe', 'arts'][go], r = CLASS_ROLES[key];
+      C.costEnergy(3);
+      f.classRole = key;
+      ADV.Audio.sfx('fanfare');
+      gainBond('studentClass', 2);
+      await say({ name: '王老师', text: `你站上讲台——\n${r.line}\n「好，这学期的${r.name}就是你了。\n每周来班务角领一份职责。」` });
+      UI().toast(` 📋 当选${r.name}！每周职责小任务 · 班务角领取 `);
+      logEvent(`当选${r.name}`);
+      save();
+      return;
+    }
+    // 已就任：每周职责小任务（weekIndex 周锁）
+    const r = CLASS_ROLES[f.classRole];
+    if (f.committeeWeek === C.weekIndex()) {
+      await say({ name: '班务角', text: `班务栏上钉着你的本周称职记录 ✓\n（${r.name} · 本周的「${r.duty}」已完成，\n下周再来领新差事）` });
+      return;
+    }
+    let done = true, note = '';
+    if (f.classRole === 'study') {
+      await say({ text: '午后的教室，几个同学抱着习题册围过来。\n你拿起粉笔转过身——当一回小老师！\n（讲对 2/3 题算称职，讲砸了随时可以重来）' });
+      let hit = 0;
+      for (let k = 0; k < 3; k++) if (await examOnce('班委职责 · 辅导同学', 'math', 'easy', C.day * 5 + k)) hit++;
+      done = hit >= 2;
+      note = `讲完最后一题，粉笔灰落满袖口。（答对 ${hit}/3）`;
+      if (!done) { await say({ text: `${note}\n同学们似懂非懂地「哦」了一声……\n（这周先算练手，班务角随时可以再讲）` }); return; }
+    } else if (f.classRole === 'pe') {
+      if (C.energy < 5) { await say({ name: '班务角', text: '「领操要喊得动口哨。\n先去歇会儿，攒够精神再来。」\n（精力不足）' }); return; }
+      C.costEnergy(4);
+      if (ADV.Growth) ADV.Growth.addDim('body', 3, '领操');
+      note = '口哨一响，全班的手臂抬得整整齐齐。\n太阳把队列的影子钉在操场上。（精力 -4 · 体魄 +3）';
+    } else {
+      if (C.energy < 4) { await say({ name: '班务角', text: '「画黑板报可是细活。\n先去歇会儿，攒够精神再来。」\n（精力不足）' }); return; }
+      C.costEnergy(3);
+      if (ADV.Growth) ADV.Growth.addDim('art', 2, '黑板报');
+      note = '彩色粉笔在黑板上一格格铺开——\n放学时连路过的别班都停下看。（精力 -3 · 技艺 +2）';
+    }
+    f.committeeWeek = C.weekIndex();
+    f.gold = (f.gold || 0) + 15;
+    addCup(1);
+    gainBond('studentClass', 1);
+    ADV.Audio.sfx('save');
+    await say({ text: `${note}\n班费给你报销了一瓶汽水。\n（委员津贴 💰+15 · 学院分 +1 · 同学好感 +1）` });
+    UI().toast(` 📋 ${r.name}称职 ✓ 津贴 💰+15 · 学院分 +1 `);
+    logEvent(`完成本周班委职责（${r.duty}）`);
+    save();
+  };
+
   /* ==================== s7 四季 × 节日联动 ====================
    * cal.js 的节日不再只是横幅——当天到校务板「打卡处」可以参加节日小活动，
    * 每个节日一段小场景 + 应景奖励，参与登记在 f.fest[day] */

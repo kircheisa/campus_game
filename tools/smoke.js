@@ -6484,6 +6484,82 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.95] 玩法批次二十七：C7 班委竞选（声望竞聘三职 / 每周职责小任务 / 值日以身作则）');
+  {
+    const snap95 = JSON.stringify(A.Game.flags);
+    const snapG95 = A.Growth.dump();                      // 体魄/技艺维度会被职责加成，一并快照
+    const realToast95 = A.UI.toast;
+    const toasts95 = [];
+    A.UI.toast = t => { toasts95.push(String(t || '')); };
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F95 = A.Game.flags;
+      A.Cal.load({ day: 80, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      // —— A. 源断言：blankFlags / 班务角 / 三职脚本 ——
+      const gc95 = fs.readFileSync(path.join(ROOT, 'js', 'game-core.js'), 'utf8');
+      const mp95 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      const sc95 = fs.readFileSync(path.join(ROOT, 'js', 'game-scene.js'), 'utf8');
+      const rt95 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      ok(gc95.includes("classRole: ''") && gc95.includes('committeeWeek: -1'),
+        '班委入档：classRole / committeeWeek 入 blankFlags（旧档自动补空，NG+ 每周目重选）');
+      ok(mp95.includes("s: 'classCommittee'") && sc95.includes('S.classCommittee = async')
+         && sc95.includes('CLASS_ROLES'),
+        '班务角：教室 📋 签到点 → S.classCommittee（三职表 + 每周职责小任务）');
+      ok(rt95.includes('以身作则'),
+        '值日联动：班委值日以身作则额外 +1 学院分');
+      // —— B. 门槛：声望不足婉拒 ——
+      await pump(A.Game.S.classCommittee(), 2000);
+      ok(F95.classRole === '' && !toasts95.some(t => t.includes('当选')),
+        '竞聘门槛：帮助板声望 0/8 → 王老师婉拒（先攒口碑）');
+      // —— C. 竞聘体育委员 ——
+      F95.helpPts = 8;
+      choosePick = opts => { const i = opts.findIndex(o => String(o).includes('体育委员')); return i < 0 ? opts.length - 1 : i; };
+      await pump(A.Game.S.classCommittee(), 2000);
+      choosePick = null;
+      ok(F95.classRole === 'pe' && A.Cal.energy === 47 && toasts95.some(t => t.includes('当选体育委员')),
+        '竞聘：声望 8 够格 → 竞选演说（精力 -3）当选体育委员');
+      // —— D. 周职责：领操 ——
+      const gold95 = F95.gold, cup95 = F95.cup;
+      await pump(A.Game.S.classCommittee(), 2000);
+      ok(F95.committeeWeek === A.Cal.weekIndex() && F95.gold === gold95 + 15 && F95.cup === cup95 + 1
+         && A.Cal.energy === 43,
+        '周职责：领操（精力 -4 · 体魄 +3）→ 称职记录 + 委员津贴 💰15 + 学院分 +1');
+      // —— E. 周锁：同周再访不重领 ——
+      await pump(A.Game.S.classCommittee(), 2000);
+      ok(F95.gold === gold95 + 15 && F95.cup === cup95 + 1,
+        '周锁：本周职责已完成 → 班务角只晒称职记录，不重复领津贴');
+      // —— F. 学习委员：辅导同学讲题（自动答题 3/3 ≥ 2 称职） ——
+      F95.classRole = 'study'; F95.committeeWeek = -1;
+      await pump(A.Game.S.classCommittee(), 5000);
+      ok(F95.committeeWeek === A.Cal.weekIndex() && F95.classRole === 'study',
+        '学习委员：讲题小局（2/3 及格线）称职 → 周记录 + 津贴照发');
+      // —— G. 文艺委员：黑板报 ——
+      F95.classRole = 'arts'; F95.committeeWeek = -1;
+      await pump(A.Game.S.classCommittee(), 2000);
+      ok(F95.committeeWeek === A.Cal.weekIndex() && F95.classRole === 'arts',
+        '文艺委员：出黑板报（精力 -3 · 技艺 +2）→ 周记录 + 津贴照发');
+      // —— H. 值日以身作则：班委值日额外 +1 学院分 ——
+      F95.classRole = 'pe';
+      const cupH = F95.cup;
+      A.Cal.load({ day: 80, period: 3, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Engine.loadMap('classroom', 27, 16, 'up');
+      await pump(A.Game.S.cleanDuty(), 2000);
+      ok(F95.cleanDay === A.Cal.day && F95.cup === cupH + 1 && toasts95.some(t => t.includes('以身作则')),
+        '值日以身作则：体育委员留下值日 → 劳务奖励照旧 + 学院分额外 +1');
+    } finally {
+      A.UI.toast = realToast95;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap95);
+        const cur = A.Game.flags;
+        for (const k of ['classRole', 'committeeWeek', 'helpPts', 'cleanDay', 'gold', 'cup'])
+          cur[k] = old[k];
+        A.Growth.load(snapG95);
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

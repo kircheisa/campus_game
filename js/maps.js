@@ -306,6 +306,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'sign', x: 24, y: 2, w: 1, h: 1, text: '📊', solidTiles: [], s: 'academicBoard' }); // 学业光荣榜（每周刷新的虚拟榜）
     m.objects.push({ kind: 'sign', x: 21, y: 2, w: 1, h: 1, text: '⚖', solidTiles: [], s: 'tgameMath' });    // 王老师的速算天平（签名挑战）
     m.objects.push({ kind: 'sign', x: 13, y: 2, w: 1, h: 1, text: '📖', solidTiles: [], s: 'morningRead' }); // 晨读角（清晨限定 · 当日增益）
+    m.objects.push({ kind: 'sign', x: 20, y: 2, w: 1, h: 1, text: '📋', solidTiles: [], s: 'classCommittee' }); // 班务角（C7 班委竞选 · 每周职责）
     m.objects.push({ kind: 'sign', x: 15, y: 18, w: 1, h: 1, text: '🌸', solidTiles: [], s: 'seasonDeco' });
     m.objects.push({ kind: 'sign', x: 13, y: 9, w: 1, h: 1, text: '🖼', solidTiles: [], s: 'posterWall' });
     return m;

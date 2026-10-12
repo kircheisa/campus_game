@@ -916,6 +916,10 @@ E().playAction(E().player, 'laugh', 1.6);
     grantTalent('labor');
     gainBond('studentClass', 2);
     await say({ text: '扫地、擦黑板、给绿萝浇水……\n夕阳从窗户斜进来，灰尘在光里跳舞。\n王老师路过，冲你点了点头。\n（零花钱 +8，劳务达人 +1）' });
+    if (f.classRole) {                                     // 班委以身作则（C7）：值日额外 +1 学院分
+      addCup(1);
+      UI().toast(` 📋 ${ { study: '学习委员', pe: '体育委员', arts: '文艺委员' }[f.classRole] || '班委' }以身作则 · 学院分 +1 `);
+    }
     logEvent('放学后留下来值日');
     save();
   };

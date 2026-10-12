@@ -124,7 +124,10 @@ window.ADV = window.ADV || {};
     badgeGoldAll: false,                               // 四科镀金集齐「全科宗师」（每周目一次）
     rematchDay: {},                                    // 各科强化试炼上次挑战的游戏日（败北当日锁重试）
     // —— 秘传技开近路（批次二十五 · P6）——
-    hedgeCut: false                                    // 院墙灌木已剪开（修枝剪；小镇东北近路永久开通）
+    hedgeCut: false,                                   // 院墙灌木已剪开（修枝剪；小镇东北近路永久开通）
+    // —— 班委竞选（批次二十七 · C7）——
+    classRole: '',                                     // 就任的班委职务 '' | 'study' | 'pe' | 'arts'（每周目重选）
+    committeeWeek: -1                                  // 本周班委职责小任务完成到的周（weekIndex）
   });
 
   const state = {
