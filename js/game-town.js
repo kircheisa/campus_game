@@ -1620,11 +1620,32 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     const f = F(), C = ADV.Cal;
     const known = RECIPES.filter(r => f.recipes && f.recipes[r.id]);
     const opts = ['帮忙家务'];
+    if (C.day % 7 === 0 && f.strollDay !== C.day) opts.push('陪爸妈出门走走（周日）');
     if (known.length) opts.push('自己做顿饭');
     if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0)) opts.push('吃点自己做的小菜');
     if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0) && f.familyDishDay !== C.day) opts.push('给家人尝尝手艺');
     if (C.period >= 4 && f.dinnerDay !== C.day) opts.push('吃妈妈做的晚饭');
     const i = await choose(opts, { caption: { name: '饭桌', text: known.length ? '妈妈留了字条：想做就自己做哦～' : '饭桌收拾得干干净净。' } });
+    if (opts[i] === '陪爸妈出门走走（周日）') {
+      // 周日活动再扩展：全家晨游——地点按周数轮换（day/7 做种子，确定性）
+      if (C.period >= 4) { await say({ text: '天都快黑啦，\n要逛就赶早——下个周日再来吧。' }); return; }
+      f.strollDay = C.day;
+      const SPOTS = [
+        ['果园', '枇杷树下妈妈帮你够高枝，\n爸爸在旁边一个劲儿念叨「慢点爬」。'],
+        ['河边鸭塘', '妈妈掰着面包屑喂鸭，\n爸爸偷偷拍下了你和鸭群的合影。'],
+        ['风车田', '风车吱呀呀地转，\n爸爸给你扎了一只歪歪扭扭的风筝。'],
+        ['老街', '一家三口慢慢走过石板路，\n妈妈在旧摊前给你挑了一颗水果糖。']
+      ];
+      const [spot, line] = SPOTS[Math.floor(C.day / 7) % SPOTS.length];
+      ADV.Audio.sfx('emote');
+      await say({ name: '全家出游', text: `【${spot}】\n${line}` });
+      if (ADV.Growth) ADV.Growth.addDim('mind', 2, '周日的散步');
+      gainBond('mom', 2);
+      await say({ name: '妈妈', text: '下个周日，还一起出来走走呀。' });
+      logEvent(`周日全家去${spot}散步`);
+      save();
+      return;
+    }
     if (opts[i] === '自己做顿饭') {
       await cookAtHome();
       return;

@@ -6747,6 +6747,83 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.99] 周日活动再扩展：全家晨游 / 周日故事会（批次三十一） ==================== */
+  console.log('\n[5.99] 周日活动再扩展：饭桌全家晨游 / 旧书摊周日故事会');
+  {
+    const snap99 = JSON.stringify(A.Game.flags);
+    const snapF99 = JSON.stringify(A.Game.friends);
+    let snapG99 = null;
+    try {
+      // —— A. 源断言：晨游 + 故事会接线 ——
+      const gt99 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      const gl99 = fs.readFileSync(path.join(ROOT, 'js', 'game-life.js'), 'utf8');
+      ok(gt99.includes('陪爸妈出门走走') && gt99.includes('strollDay') && gt99.includes('day / 7'),
+        '全家晨游：饭桌周日选项「陪爸妈出门走走」+ strollDay 日锁 + 周数轮换在位');
+      ok(gl99.includes('听段故事会') && gl99.includes('storyDay') && gl99.includes('石桥的来历') && gl99.includes('ADV.Cal.day / 7'),
+        '周日故事会：旧书摊「听段故事会」+ storyDay 日锁 + 四篇轮换故事库在位');
+      // —— 行为准备：day 7（7 % 7 === 0）——
+      A.Game.newGame('hero_boy', false);
+      const F99 = A.Game.flags;
+      snapG99 = A.Growth.dump();
+      A.Cal.load({ day: 7, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const mom0_99 = A.Game.friends.mom ? A.Game.friends.mom.love : 0;
+      // —— B. 行为：饭桌「陪爸妈出门走走」→ 心性+2 · 妈妈好感+2 · 日锁 ——
+      let sawMenu99 = null, secondMenu99 = null, call99 = 0;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        call99++;
+        if (call99 === 1) sawMenu99 = arr.slice();
+        if (call99 === 2) secondMenu99 = arr.slice();
+        const k = arr.findIndex(o => o.includes('出门走走'));
+        if (k >= 0) return k;
+        if (arr.some(o => o.includes('赚零花钱'))) return arr.length - 1;   // 家务子菜单 →「今天先算了」婉拒
+        return 0;
+      };
+      await pump(A.Game.S.dinnerTable(), 4000);
+      await pump(A.Game.S.dinnerTable(), 4000);           // 同日再进：验证日锁（顺手婉拒家务）
+      choosePick = null;
+      const mom1_99 = A.Game.friends.mom ? A.Game.friends.mom.love : 0;
+      ok(!!sawMenu99 && sawMenu99.some(o => o.includes('出门走走')) && F99.strollDay === 7
+         && A.Growth.dump().dim.mind === snapG99.dim.mind + 2 && mom1_99 === mom0_99 + 2,
+        '全家晨游：周日饭桌出门走走 → 心性 +2 · 妈妈好感 +2 · strollDay 落档');
+      ok(!!secondMenu99 && !secondMenu99.some(o => o.includes('出门走走')),
+        '晨游日锁：同日再进饭桌，「陪爸妈出门走走」不再出现');
+      // —— C. 行为：旧书摊「听段故事会」→ 心性+2 · 日锁 ——
+      F99.stallQuest = true; F99.stallDone = true;        // 跳过收任务/赠言分支
+      const snapG99b = A.Growth.dump();
+      let bookMenu99 = null, secondBook99 = null, ccall99 = 0;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        ccall99++;
+        if (ccall99 === 1) bookMenu99 = arr.slice();
+        if (ccall99 === 2) secondBook99 = arr.slice();
+        const k = arr.findIndex(o => o.includes('故事会'));
+        if (k >= 0) return k;
+        return arr.length - 1;                            // 就这样吧
+      };
+      await pump(A.Game.S.oldbook({}), 4000);
+      await pump(A.Game.S.oldbook({}), 4000);             // 同日再进：验证日锁 → 就这样吧退出
+      choosePick = null;
+      ok(!!bookMenu99 && bookMenu99.some(o => o.includes('故事会')) && F99.storyDay === 7
+         && A.Growth.dump().dim.mind === snapG99b.dim.mind + 2,
+        '周日故事会：旧书摊听故事 → 心性 +2 · storyDay 落档');
+      ok(!!secondBook99 && !secondBook99.some(o => o.includes('故事会')),
+        '故事会日锁：同日再进旧书摊，故事会选项消失（下周日轮换新故事）');
+    } finally {
+      try {                                               // 礼貌还原（字段清单 + friends 全量 + 成长维度）
+        const old = JSON.parse(snap99);
+        const cur = A.Game.flags;
+        for (const k of ['strollDay', 'storyDay', 'stallQuest', 'stallDone', 'gold', 'houseworkDay', 'buff', 'excerpts'])
+          cur[k] = old[k];
+        const oldF = JSON.parse(snapF99);
+        for (const k of Object.keys(oldF)) A.Game.friends[k] = oldF[k];
+        if (snapG99) A.Growth.load(snapG99);
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

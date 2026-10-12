@@ -857,12 +857,31 @@
       save();
       return;
     }
-    // 半价旧书摊
+    // 半价旧书摊 + 周日故事会（day%7===0 限定；故事按周数轮换，确定性）
     const list = ADV.Books.byWhere('shop');
+    const isSunday = ADV.Cal.day % 7 === 0 && f.storyDay !== ADV.Cal.day;
+    const STORIES = [
+      ['石桥的来历', '「镇口那座石桥，比你爷爷年纪还大。\n当年没有桥，娃娃们上学要蹚水——\n是全镇人你一块我一块，把桥背过了河。」'],
+      ['老校钟', '「校门口那口钟，原是老祠堂的。\n敲了六十年敲哑了嗓子，也没换新的——\n挂在那儿，提醒娃娃们别迟到。」'],
+      ['第一辆自行车', '「全镇头一辆自行车是邮递员骑来的。\n那时候娃娃们追着车跑二里地，\n就为了听那一串叮铃铃。」'],
+      ['露天放映队', '「早年间放映队一年来一回。\n幕布往晒谷场一挂，全镇自带板凳——\n演什么都好看，因为一年就这一场。」']
+    ];
     const opts = list.map(b => `${b.name} 💰${Math.ceil(b.price / 2)}${ADV.Collect.has('books', b.id) ? '（已有）' : ''}`);
+    if (isSunday) opts.push('听段故事会（周日限定）');
     opts.push('就这样吧');
-    const i = await choose(opts, { caption: { name: '旧书摊', text: `💰${f.gold}　摘抄 ${ex}/10 句\n旧书半价，随便翻。` } });
-    if (i < 0 || i >= list.length) return;
+    const i = await choose(opts, { caption: { name: '旧书摊', text: `💰${f.gold}　摘抄 ${ex}/10 句\n旧书半价，随便翻。${isSunday ? '\n（今天书摊前有故事会）' : ''}` } });
+    if (i < 0 || i === opts.length - 1) return;
+    if (isSunday && i === list.length) {
+      const [title, line] = STORIES[Math.floor(ADV.Cal.day / 7) % STORIES.length];
+      f.storyDay = ADV.Cal.day;
+      E().playAction(ent, 'think', 1.8);
+      await say({ name: '旧书翁', text: `【${title}】\n${line}` });
+      if (ADV.Growth) ADV.Growth.addDim('mind', 2, '旧书翁的故事会');
+      UI().toast(' 📖 故事会：心性 +2（下周日还有新故事） ');
+      logEvent(`在旧书摊听了《${title}》的故事`);
+      save();
+      return;
+    }
     const bk = list[i], price = Math.ceil(bk.price / 2);
     if (ADV.Collect.has('books', bk.id)) { await say({ name: '旧书翁', text: '这本你已经有了。\n书不怕重，可家里也得放得下。' }); return; }
     if (f.gold < price) { ADV.Audio.sfx('wrong'); await say({ name: '旧书翁', text: '钱不够？先记着，书我不卖给别人。' }); return; }
