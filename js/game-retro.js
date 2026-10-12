@@ -881,6 +881,8 @@ E().playAction(E().player, 'laugh', 1.6);
       `【生物图鉴速报】有人在后山高草听见虫鸣，\n还在河湾灌木看见发亮的小眼睛。\n（捉虫网和草编笼，礼品店都有售）`,
       `【温馨提示】后山石门附近请勿逗留。\n——教务处（字迹有些犹豫）`
     ];
+    // S7 全校众筹：还有工程没收尾时，公告栏帮施工队吆喝一嗓子
+    if (!f.buildAstro || !f.buildPool) notices.push('【全校众筹】施工队进了校门——\n东北角天文角、池塘东岸游泳池，\n矿石作物金币都收（去 🚧 围挡处捐款）。');
     // 按天数做种子轮换，每天固定抽 3 条，像真的有人每天来换告示
     const pick = [0, 1, 2].map(i => notices[(C.day * 3 + i * 2 + (f.graduated ? 1 : 0)) % notices.length]);
     await say({ name: '校园公告栏', text: pick.join('\n────────\n') });

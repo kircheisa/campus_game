@@ -138,6 +138,19 @@ ADV.Maps = (function () {
     m.inters.push({ x: 39, y: 16, s: 'pond' });
     set(m, 37, 14, 'grass2'); set(m, 42, 16, 'grass2'); set(m, 42, 19, 'grass2');
 
+    // —— S7 全校众筹建设：天文角（东北）与游泳池（池塘东岸）——
+    // 未修好时是 🚧 围挡（s:buildSite 带.site 标签，围挡处捐款）；修好后条件建造换成互动点（greenhouse/hedge 同款）
+    if (ADV.Game.flags.buildAstro) {
+      m.objects.push({ kind: 'sign', x: 49, y: 12, w: 1, h: 1, text: '🔭', solidTiles: [[0, 0]], s: 'astroCorner' });
+    } else {
+      m.objects.push({ kind: 'sign', x: 49, y: 12, w: 1, h: 1, text: '🚧', solidTiles: [[0, 0]], s: 'buildSite', site: 'astro' });
+    }
+    if (ADV.Game.flags.buildPool) {
+      m.objects.push({ kind: 'sign', x: 44, y: 18, w: 1, h: 1, text: '🏊', solidTiles: [[0, 0]], s: 'swimPool' });
+    } else {
+      m.objects.push({ kind: 'sign', x: 44, y: 18, w: 1, h: 1, text: '🚧', solidTiles: [[0, 0]], s: 'buildSite', site: 'pool' });
+    }
+
     // —— 校门（南侧） ——
     set(m, 19, 33, 'gateWall'); set(m, 26, 33, 'gateWall');
     for (let x = 20; x <= 25; x++) set(m, x, 33, 'gateBar');

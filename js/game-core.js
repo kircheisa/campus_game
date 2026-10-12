@@ -127,7 +127,11 @@ window.ADV = window.ADV || {};
     hedgeCut: false,                                   // 院墙灌木已剪开（修枝剪；小镇东北近路永久开通）
     // —— 班委竞选（批次二十七 · C7）——
     classRole: '',                                     // 就任的班委职务 '' | 'study' | 'pe' | 'arts'（每周目重选）
-    committeeWeek: -1                                  // 本周班委职责小任务完成到的周（weekIndex）
+    committeeWeek: -1,                                 // 本周班委职责小任务完成到的周（weekIndex）
+    // —— 全校众筹建设（批次二十八 · S7）——
+    buildAstro: false,                                 // 天文角修缮完成（校园东北观星台开放）
+    buildPool: false,                                  // 游泳池清淤完成（池塘东岸泳池开放）
+    buildFund: {}                                      // 众筹进度 { astro: { copperOre, ironOre, gold }, pool: { wheat, strawberry, gold } }
   });
 
   const state = {

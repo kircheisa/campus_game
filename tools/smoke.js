@@ -6560,6 +6560,101 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.96] 玩法批次二十八：S7 全校众筹建设（围挡捐赠 / 天文角观星 / 游泳池畅游）');
+  {
+    const snap96 = JSON.stringify(A.Game.flags);
+    const snapG96 = A.Growth.dump();
+    const realToast96 = A.UI.toast;
+    const toasts96 = [];
+    A.UI.toast = t => { toasts96.push(String(t || '')); };
+    // 众筹捐赠通用选单：按「捐 X（a/b）」进度挑第一个没凑齐的，凑齐全部 → 离开
+    const pickDonor96 = () => opts => {
+      for (const o of opts) {
+        if (!String(o).startsWith('捐 ')) continue;
+        const m = String(o).match(/（(\d+)\/(\d+)）/);      // 全角括号（与游戏内选项文案同款）
+        if (m && +m[1] < +m[2]) return opts.indexOf(o);
+      }
+      return opts.length - 1;
+    };
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F96 = A.Game.flags;
+      A.Cal.load({ day: 80, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      // —— A. 源断言：blankFlags / 围挡条件建造 / 三脚本接线 ——
+      const gc96 = fs.readFileSync(path.join(ROOT, 'js', 'game-core.js'), 'utf8');
+      const mp96 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      const sc96 = fs.readFileSync(path.join(ROOT, 'js', 'game-scene.js'), 'utf8');
+      ok(gc96.includes('buildAstro: false') && gc96.includes('buildPool: false') && gc96.includes('buildFund: {}'),
+        '建设入档：buildAstro / buildPool / buildFund 入 blankFlags（旧档自动补空）');
+      ok((mp96.match(/s: 'buildSite', site: '/g) || []).length === 2
+         && mp96.includes("flags.buildAstro") && mp96.includes("flags.buildPool"),
+        '围挡条件建造：天文角/游泳池两处 🚧（修好后条件建造换互动点，greenhouse/hedge 同款）');
+      ok(sc96.includes('S.buildSite = async') && sc96.includes('S.astroCorner = async')
+         && sc96.includes('S.swimPool = async') && sc96.includes('BUILD_JOBS'),
+        '脚本接线：围挡捐赠 + 夜晚观星 + 白天畅游三脚本在位');
+      // —— B. 天文角众筹：矿石 ×7 + 金币 150 分笔捐到落成 ——
+      F96.gold = 300;
+      A.Collect.addItem('copperOre', 4); A.Collect.addItem('ironOre', 3);
+      const cup96 = F96.cup;
+      choosePick = pickDonor96();
+      await pump(A.Game.S.buildSite({ site: 'astro' }), 8000);
+      choosePick = null;
+      ok(F96.buildAstro === true && A.Collect.count('copperOre') === 0 && A.Collect.count('ironOre') === 0
+         && F96.gold === 150 && F96.cup === cup96 + 2 && toasts96.some(t => t.includes('落成')),
+        '天文角落成：铜×4 + 铁×3 + 金币 150 分笔捐齐 → buildAstro 落档 + 学院分 +2');
+      // —— C. 条件建造 + 当场换牌：围挡退场、互动点上岗 ——
+      A.Engine.loadMap('campus', 30, 18, 'down');
+      ok(A.Engine.map.objects.some(o => o.s === 'astroCorner' && o.x === 49)
+         && !A.Engine.map.objects.some(o => o.s === 'buildSite' && o.site === 'astro')
+         && A.Engine.map.objects.some(o => o.s === 'buildSite' && o.site === 'pool'),
+        '校园重建：天文角 🔭 上岗、astro 围挡退场、pool 围挡仍在（未完工）');
+      // —— D. 夜晚观星：心性 +2 学院分 +1，日锁 ——
+      A.Cal.load({ day: 15, period: 5, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const cupD = F96.cup;
+      await pump(A.Game.S.astroCorner(), 2000);
+      ok(F96.astroDay === 15 && F96.cup === cupD + 1 && toasts96.some(t => t.includes('观星')),
+        '天文角观星：夏夜凑上目镜 → 心性 +2 学院分 +1（astroDay 日锁）');
+      await pump(A.Game.S.astroCorner(), 2000);
+      ok(F96.cup === cupD + 1, '观星日锁：同晚再看只有星光不重发奖励');
+      // —— E. 游泳池众筹：作物 ×8 + 金币 100 ——
+      A.Cal.load({ day: 80, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      F96.gold = 200;
+      A.Collect.addItem('wheat', 4); A.Collect.addItem('strawberry', 4);
+      choosePick = pickDonor96();
+      await pump(A.Game.S.buildSite({ site: 'pool' }), 8000);
+      choosePick = null;
+      ok(F96.buildPool === true && F96.gold === 100
+         && A.Collect.count('wheat') === 0 && A.Collect.count('strawberry') === 0,
+        '游泳池落成：小麦×4 + 草莓×4 + 金币 100 → buildPool 落档');
+      // —— F. 夜里锁门 → 白天畅游：精力 -5 体魄 +3，日锁 ——
+      A.Cal.load({ day: 15, period: 5, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      await pump(A.Game.S.swimPool(), 2000);
+      ok(F96.swimDay !== 15, '泳池夜禁：夜里锁门不下水');
+      A.Cal.load({ day: 44, period: 1, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      choosePick = () => 0;                               // 扑通跳进去
+      await pump(A.Game.S.swimPool(), 2000);
+      choosePick = null;
+      ok(F96.swimDay === 44 && A.Cal.energy === 45 && toasts96.some(t => t.includes('畅游')),
+        '白天畅游：精力 50 → 45 · 体魄 +3（swimDay 日锁）');
+      // —— G. 竞聘守卫补测：精力不足婉拒（批次二十八 P2） ——
+      F96.classRole = ''; F96.helpPts = 8;
+      A.Cal.load({ day: 80, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 1 });
+      await pump(A.Game.S.classCommittee(), 2000);
+      ok(F96.classRole === '', '竞聘守卫：精力 <3 王老师婉拒「演说是体力活」（不静默扣光精力）');
+    } finally {
+      A.UI.toast = realToast96;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap96);
+        const cur = A.Game.flags;
+        for (const k of ['buildAstro', 'buildPool', 'buildFund', 'astroDay', 'swimDay', 'gold', 'cup', 'classRole', 'helpPts'])
+          cur[k] = old[k];
+        A.Growth.load(snapG96);
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

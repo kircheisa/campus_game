@@ -313,6 +313,10 @@
         await say({ name: '王老师', text: `后黑板上贴着「班委竞聘」的红纸。\n「想为班里做事是好事。\n不过班委得先有口碑——去镇上帮助板帮帮忙，\n声望 ${f.helpPts || 0}/8，同学们才好把票投给你。」` });
         return;
       }
+      if (C.energy < 3) {                              // 竞选演说也是体力活（批次二十八补守卫）
+        await say({ name: '王老师', text: '「竞选演说可是体力活。\n先回去歇会儿，精神饱满再来——\n红纸一直贴到学期末，不急。」\n（精力不足）' });
+        return;
+      }
       const go = await choose(['竞聘学习委员', '竞聘体育委员', '竞聘文艺委员', '这学期先算了'],
         { caption: { name: '班务角', text: `班会时间，王老师把红纸抚平。\n「你的帮助板声望：${f.helpPts}——够格。\n说说吧，你想为班里做点什么？」\n（发表竞选演说 · 精力 -3 · 每学期一任）` } });
       if (go < 0 || go > 2) { await say({ text: '「红纸一直贴到学期末，\n想好了随时来。」' }); return; }
@@ -360,6 +364,103 @@
     await say({ text: `${note}\n班费给你报销了一瓶汽水。\n（委员津贴 💰+15 · 学院分 +1 · 同学好感 +1）` });
     UI().toast(` 📋 ${r.name}称职 ✓ 津贴 💰+15 · 学院分 +1 `);
     logEvent(`完成本周班委职责（${r.duty}）`);
+    save();
+  };
+
+  /* —— 校园 · 全校众筹建设（S7）：🚧 围挡处捐矿石/作物/金币，修好天文角与游泳池 —— */
+  const BUILD_JOBS = {
+    astro: {
+      key: 'astro', name: '天文角', flag: 'buildAstro', spot: { kind: 'sign', x: 49, y: 12, w: 1, h: 1, text: '🔭', solidTiles: [[0, 0]], s: 'astroCorner' },
+      needs: [['copperOre', 4], ['ironOre', 3], ['GOLD', 150]],
+      done: '旧天文角擦亮了——\n望远镜擦到能数清月亮的环形山，\n支架重新校准，正对着傍晚的金星。'
+    },
+    pool: {
+      key: 'pool', name: '游泳池', flag: 'buildPool', spot: { kind: 'sign', x: 44, y: 18, w: 1, h: 1, text: '🏊', solidTiles: [[0, 0]], s: 'swimPool' },
+      needs: [['wheat', 4], ['strawberry', 4], ['GOLD', 100]],
+      done: '淤泥清走，池壁重新刷了蓝漆——\n水管开闸，泳池注满了清水，\n水面晃着一整片天。'
+    }
+  };
+  S.buildSite = async (ent) => {
+    const f = F(), C = ADV.Cal, CO = ADV.Collect;
+    const job = BUILD_JOBS[(ent && ent.site) || 'astro'];
+    if (!job || f[job.flag]) { await say({ text: '（工棚已经拆了——这里修好啦。）' }); return; }
+    const fund = f.buildFund[job.key] = f.buildFund[job.key] || {};
+    const got = id => id === 'GOLD' ? (fund.gold || 0) : (fund[id] || 0);
+    for (;;) {
+      const opts = job.needs.map(([id, n]) => {
+        const nm = id === 'GOLD' ? '金币（💰50 一笔）' : `${CO.itemInfo(id).name}`;
+        return `捐 ${nm}（${got(id)}/${n}）`;
+      }).concat(['先去凑凑材料']);
+      const i = await choose(opts, { caption: { name: `修缮 · ${job.name}`, text: `围挡上钉着施工单：\n「全校众筹，量力捐助——\n矿石作物照价折算，金币当场点清。」\n（身上 💰${f.gold}）` } });
+      if (i < 0 || i >= job.needs.length) { await say({ text: '「材料不齐不开工，\n攒够了随时回来。」' }); return; }
+      const [id, n] = job.needs[i];
+      if (id === 'GOLD') {
+        if ((f.gold || 0) < 50) { await say({ text: '（口袋翻了翻——不够 50 文。\n先把矿石作物凑一凑？）' }); continue; }
+        f.gold -= 50; fund.gold = (fund.gold || 0) + 50;
+        UI().toast(` 💰 捐了 50 文（${job.name}众筹 ${fund.gold}/${n}） `);
+      } else {
+        if (CO.count(id) < 1) { await say({ text: `（身上没有${CO.itemInfo(id).name}。\n矿石去矿道敲，作物去田里收。）` }); continue; }
+        CO.useItem(id, 1); fund[id] = (fund[id] || 0) + 1;
+        UI().toast(` 📦 捐了${CO.itemInfo(id).name}（${job.name}众筹 ${fund[id]}/${n}） `);
+      }
+      ADV.Audio.sfx('save');
+      // 全部凑齐 → 落成（当场换牌，回访地图条件建造同口径）
+      if (job.needs.every(([id2, n2]) => got(id2) >= n2)) {
+        f[job.flag] = true;
+        ADV.Audio.sfx('fanfare');
+        addCup(2);
+        try {                                           // 当前正好在校园：围挡当场换新（hedge 同款 splice）
+          const mp = ADV.Engine && ADV.Engine.map;
+          if (mp && mp.id === 'campus') {
+            mp.objects = mp.objects.filter(o => !(o.s === 'buildSite' && o.site === job.key));
+            mp.objects.push(Object.assign({}, job.spot));
+          }
+        } catch (e) {}
+        await say({ name: '施工队', text: `最后一车材料卸下——${job.name}，修好了！\n${job.done}\n（全校筹办 · 你的名字写上了红纸：学院分 +2）` });
+        UI().toast(` 🏗 ${job.name}落成！校园新互动点开放 `);
+        logEvent(`为全校众筹修好了${job.name}`);
+        save();
+        return;
+      }
+      save();
+    }
+  };
+  /* —— 校园 · 天文角（S7 落成后）：夜晚观星（心性 +2 · 学院分 +1，每日一次） —— */
+  const STAR_NOTES = [
+    '「那是天鹅座——\n翅膀尖上那颗叫辇道增七，一颗星，两副脸色。」',
+    '「仙后座像个歪掉的 W，\n秋天整夜挂在北天，比北斗还好认。」',
+    '「金星最亮的时候白天都找得到——\n古人叫它长庚，也叫启明，其实是一颗。」',
+    '「月亮今天缺了一角，\n缺口那边其实也在——只是太阳没照到。」'
+  ];
+  S.astroCorner = async () => {
+    const f = F(), C = ADV.Cal;
+    if (!C.isNight()) { await say({ text: '白天的望远镜罩着镜罩。\n铭牌上刻着：「日落后来观星。」' }); return; }
+    if (f.astroDay === C.day) { await say({ text: '你眯眼看了很久，星群在镜筒里轻轻晃。\n（今晚看得够多了，明天再来）' }); return; }
+    f.astroDay = C.day;
+    if (ADV.Growth) ADV.Growth.addDim('mind', 2, '观星');
+    addCup(1);
+    ADV.Audio.sfx('save');
+    await say({ text: `你凑上目镜——夜空哗地铺开。\n${STAR_NOTES[C.day % STAR_NOTES.length]}\n（心性 +2 · 学院分 +1）` });
+    UI().toast(' 🔭 天文角观星：心性 +2 · 学院分 +1 ');
+    logEvent('在天文角看了一晚星星');
+    save();
+  };
+  /* —— 校园 · 游泳池（S7 落成后）：白天游泳（精力 -5 · 体魄 +3，每日一次） —— */
+  S.swimPool = async () => {
+    const f = F(), C = ADV.Cal;
+    if (C.isNight()) { await say({ text: '夜里的泳池锁着门，水面一片黑。\n救生圈整整齐齐挂在栏杆上睡着了。' }); return; }
+    if (f.swimDay === C.day) { await say({ text: '今天已经游过啦——泳镜还在滴水。\n（明天再来）' }); return; }
+    if (C.energy < 6) { await say({ text: '胳膊都抬不起来了，下水要抽筋的。\n（精力不足）' }); return; }
+    const go = await choose(['扑通跳进去！', '岸上坐坐就好'],
+      { caption: { name: '游泳池', text: '池水蓝得晃眼，浅水区冒着泡。\n（畅游一趟：精力 -5 · 体魄 +3）' } });
+    if (go !== 0) { await say({ text: '你把脚丫晃了晃池水，凉丝丝的。\n（下次带泳镜来）' }); return; }
+    f.swimDay = C.day;
+    C.costEnergy(5);
+    if (ADV.Growth) ADV.Growth.addDim('body', 3, '游泳');
+    ADV.Audio.sfx('emote');
+    await say({ text: '扑通——！水花溅了半池。\n你从这头游到那头，又折回来，\n爬上岸时手指肚都起了皱。（精力 -5 · 体魄 +3）' });
+    UI().toast(' 🏊 畅游一趟：体魄 +3 · 精力 -5 ');
+    logEvent('在游泳池畅游了一趟');
     save();
   };
 
