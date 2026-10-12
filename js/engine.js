@@ -397,6 +397,7 @@ ADV.Engine = (function () {
     // 牧场盒孵蛋：揣着蛋走路，每一步都在暖它（走满 300 步破壳——步数口径与牧场盒进度提示一致）
     if (B && B.ranchEgg && ADV.Game.S && ADV.Game.S.eggHatch) {
       B.eggSteps = (B.eggSteps || 0) + 1;
+      if (B.eggSteps === 270) ADV.UI.toast(' 🥚 怀里的蛋微微发烫——里面好像有什么在动！ ');   // 临破壳一报：步数恰好跨过才触发（零额外状态，读档/连续孵蛋天然复位）
       if (B.eggSteps >= 300) {
         B.eggSteps = 0;
         runScript('eggHatch', {});

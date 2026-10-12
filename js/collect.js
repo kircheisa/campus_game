@@ -539,6 +539,8 @@ ADV.Collect = (function () {
     DB.critters.forEach(cr => {
       const ev = cr.evolve;
       if (!ev) return;
+      if (ev.to === cr.id) return;                       // 成体自环（蝴蝶/望月犬/绒耳大兽——to 指自己只是图鉴说明）：
+                                                         // 野生捉到的成体、进化产物都不重演「自己进化成自己」
       const e = k[cr.id];
       if (!e || typeof e !== 'object' || !e.d || e.gone || day - e.d < ev.days) return;   // 旧档无日期不追溯
       const shinyInherit = !!e.s;
@@ -553,11 +555,11 @@ ADV.Collect = (function () {
     });
     return out;
   }
-  /* 饲养中剩余天数（未饲养 / 非 evolve / 已放归或住盒（进化暂停）返回 -1），图鉴页倒计时用 */
+  /* 饲养中剩余天数（未饲养 / 非 evolve / 成体自环（不会真变化）/ 已放归或住盒（进化暂停）返回 -1），图鉴页倒计时用 */
   function critterRearing(id, day) {
     const e = (col()['insects'] || {})[id];
     const cr = critter(id);
-    if (!cr || !cr.evolve || !e || typeof e !== 'object' || !e.d || e.gone || !day) return -1;
+    if (!cr || !cr.evolve || cr.evolve.to === cr.id || !e || typeof e !== 'object' || !e.d || e.gone || !day) return -1;
     return Math.max(0, cr.evolve.days - (day - e.d));
   }
 

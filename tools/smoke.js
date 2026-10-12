@@ -6205,6 +6205,69 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  console.log('\n[5.92] 打磨批次二十三：成体自环进化修复（幻影 toast）+ 临破壳提示');
+  {
+    const snap92 = JSON.stringify(A.Game.flags);          // 快照：收尾礼貌还原
+    const realIntro92 = A.Game.S._intro;
+    const realToast92 = A.UI.toast;
+    A.Game.S._intro = async () => {};
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F92 = A.Game.flags, CO92 = A.Collect;         // newGame 换了 flags 对象，之后取新引用
+      A.Cal.load({ day: 60, period: 3, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const day92 = A.Cal.day;
+      F92.col.insects = F92.col.insects || {};
+      // —— A. 成体自环：野生捉到的蝴蝶带 d，到期不再幻影「自己进化成自己」 ——
+      CO92.gainCritter('i2');
+      const outA92 = CO92.applyEvolve(day92 + 5);
+      ok(outA92.length === 0 && F92.col.insects.i2.d === day92 && CO92.critterRearing('i2', day92 + 5) === -1,
+        '自环修复：野生蝴蝶养 5 天不再幻影「蝴蝶入手」（applyEvolve 跳过 to===id，图鉴页也不再显示成体倒计时）');
+      // —— B. 幼体链照常 + 进化产物不重演 ——
+      F92.col.insects.m13 = { s: 0, d: day92 - 6 };
+      const outB92 = CO92.applyEvolve(day92);
+      ok(outB92.some(t => t.includes('望月犬')) && CO92.has('critters', 'm14'),
+        '饲养链照常：奶狗 6 天 → 望月犬入册（自环守卫不误伤真进化）');
+      const outB292 = CO92.applyEvolve(day92 + 6);
+      ok(outB292.length === 0 && F92.col.insects.m14.d === day92,
+        '产物不重演：望月犬 6 天后不再幻影「望月犬入手」（修复前每 6 天重复一次 + 反复落盘）');
+      // —— C. m15 → m16 同类覆盖 ——
+      F92.col.insects.m15 = { s: 1, d: day92 - 7 };
+      const outC92 = CO92.applyEvolve(day92 + 7);
+      ok(outC92.some(t => t.includes('绒耳大兽')) && CO92.has('critters', 'm16') && CO92.isShiny('critters', 'm16'),
+        '绒耳链照常：金色绒耳小兽 7 天 → 金色绒耳大兽（异色继承不受守卫影响）');
+      const outC292 = CO92.applyEvolve(day92 + 14);
+      ok(outC292.length === 0,
+        '产物不重演：绒耳大兽/望月犬此后换日均无幻影 toast（自环三成体 i2/m14/m16 全覆盖）');
+      // —— D. 临破壳提示：步数恰好跨过 270 才触发（零额外状态） ——
+      const toasts92 = [];
+      A.UI.toast = t => { toasts92.push(String(t)); };
+      F92.ranchEgg = { fam: '虫', shiny: false, day: day92 };
+      F92.eggSteps = 269;
+      A.Engine.loadMap('homeYard', 5, 8, 'down');
+      for (let i = 0; i < 40 && !toasts92.some(t => t.includes('发烫')); i++) A.Engine.update(1 / 60, { held: { down: true } });
+      ok(toasts92.some(t => t.includes('发烫')) && F92.eggSteps === 270 && !!F92.ranchEgg,
+        '临破壳提示：带蛋走到第 270 步 toast「蛋微微发烫」恰一次（未到 300 不破壳）');
+      // —— E. 源断言：engine 临破壳行在位 ——
+      const eng92 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      ok(eng92.includes('B.eggSteps === 270'), '临破壳源断言：engine onArrive 270 步提示行在位');
+    } finally {
+      choosePick = null;
+      A.UI.toast = realToast92;
+      A.Game.S._intro = realIntro92;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap92);
+        const cur = A.Game.flags;
+        cur.col = old.col || {};
+        cur.gold = old.gold || 0;
+        cur.ranchEgg = old.ranchEgg || null;
+        cur.eggSteps = old.eggSteps || 0;
+        cur.critMiles = old.critMiles || {};
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
