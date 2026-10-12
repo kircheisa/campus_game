@@ -726,7 +726,11 @@
     const first = !f.hatchedSpecies[id];
     f.hatchedSpecies[id] = true;
     f.ranchEgg = null;                                    // 蛋已破壳，干草窝重新空出来
-    f.ranch = {};                                         // 爸爸妈妈功成身退（想再孵就再寄存一对）
+    [f.ranch.a, f.ranch.b].forEach(pid => {               // 爸爸妈妈功成身退：清寄存标记、回到你手上
+      const e = pid && CO.critterEntry(pid);              // （批次二十二修正——之前 gone=1 挂着，
+      if (e) e.gone = 0;                                  //   亲本既不能卖也不能再寄存，卡死在图鉴里）
+    });
+    f.ranch = {};                                         // 想再孵就再寄存一对
     logEvent(`牧场盒的蛋孵出了${cr.name}${egg.shiny ? '（金色异色！）' : ''}`);
     if (!f.buddy) {
       const inv = await choose([`让${cr.name}跟着你走`, '让它在盒里先睡一觉'],

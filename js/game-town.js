@@ -824,9 +824,11 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       if (f.woolTick === 0) f.woolReady = 1;
     }
     // —— P3 牧场盒：住着一对同系伙伴 → 感情好了清晨产下一枚蛋（异色亲本把金色传给蛋） ——
+    // 寄存本身打 gone=1（防误卖标记，批次二十二修正：别拿它当「被卖掉」判据——
+    // 盒中个体被收购/交换列表过滤，f.ranch 引用的条目不可能被卖，查存在即可）
     if (f.ranch && f.ranch.a && f.ranch.b && !f.ranchEgg) {
       const ea = ADV.Collect.critterEntry(f.ranch.a), eb = ADV.Collect.critterEntry(f.ranch.b);
-      if (ea && eb && !ea.gone && !eb.gone) {
+      if (ea && eb) {
         f.ranchEgg = { fam: ADV.Collect.critter(f.ranch.a).fam, shiny: !!(ea.s || eb.s), day: C.day };
       }
     }

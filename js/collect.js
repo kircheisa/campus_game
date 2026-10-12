@@ -55,7 +55,7 @@ ADV.Collect = (function () {
       { id: 'l7', name: '榆树叶', desc: '锯齿边的小椭圆。' },
       { id: 'l8', name: '竹叶', desc: '风一吹就沙沙响。' }
     ],
-    /* —— 生物图鉴：宝可梦式收集（47 种 = 虫 19 + 水 13 + 走兽 15；m14 望月犬 only 饲养进化可得，
+    /* —— 生物图鉴：宝可梦式收集（48 种 = 虫 19 + 水 13 + 走兽 16；m14 望月犬 / m16 绒耳大兽 only 饲养进化可得，
      *    i19/c13/m15 三只混血新种 only 牧场盒孵蛋可得）
      *   fam=系别（虫/水/兽，斗虫擂台循环克制） rar=稀有度1-3 hp/pow/spd=对战三维
      *   bait=诱饵偏好（背包物品 id） where=主要出没地图 hint=图鉴出没线索
@@ -112,7 +112,8 @@ ADV.Collect = (function () {
       // —— 混血新种（P3 牧场盒孵蛋限定：同系两只能量交汇的奇迹，野外永不见） ——
       { id: 'i19', name: '斑纹光蝶', desc: '虎纹与月光在翅膀上交汇，飞过之处留下细碎光尘。', fam: '虫', rar: 2, pow: 5, spd: 7, hp: 12, bait: ['peach', 'moonGrass'], where: 'none', when: {}, hint: '牧场盒里住着一对虫系伙伴，某天清晨会多出一枚蛋。' },
       { id: 'c13', name: '珠鳞小鲤', desc: '鳞片像一粒粒小珍珠，游动时整条溪都亮了。', fam: '水', rar: 2, pow: 4, spd: 6, hp: 12, bait: ['bread', 'pea'], where: 'none', when: {}, hint: '牧场盒里住着一对水系伙伴，蛋宝宝会在干草窝里等风来。' },
-      { id: 'm15', name: '绒耳小兽', desc: '耳朵软软垂着，走路时一颠一颠像团会跑的棉花糖。', fam: '兽', rar: 2, pow: 6, spd: 6, hp: 12, bait: ['strawberry', 'bread'], where: 'none', when: {}, hint: '牧场盒里住着一对兽系伙伴，感情好了就会有新生命。' }
+      { id: 'm15', name: '绒耳小兽', desc: '耳朵软软垂着，走路时一颠一颠像团会跑的棉花糖。', fam: '兽', rar: 2, pow: 6, spd: 6, hp: 12, bait: ['strawberry', 'bread'], where: 'none', when: {}, hint: '牧场盒孵出的小家伙——养足七天，垂耳会竖起来。', evolve: { to: 'm16', days: 7 } },
+      { id: 'm16', name: '绒耳大兽', desc: '垂耳一竖，奔跑起来像一朵掠过草坡的云。', fam: '兽', rar: 3, pow: 8, spd: 7, hp: 15, bait: ['strawberry', 'bread'], where: 'none', when: {}, hint: '绒耳小兽在院子里养足七天，某天清晨耳朵支棱起来。', evolve: { to: 'm16', from: 'm15', days: 7 } }
     ],
     /* —— 百果园：果园四季果树（season=成熟季节，item=摘下进背包的物品） —— */
     fruits: [
@@ -478,6 +479,7 @@ ADV.Collect = (function () {
       k[id] = { s: shiny ? 1 : 0, d: ADV.Cal ? ADV.Cal.day : 0 };
       fresh = true;
       ADV.UI.toast(shiny ? ` ✨ 金色异色个体！${cr.name} 破壳而出！ ` : ` 收藏入手：${cr.name}（破壳而出）🐣 `);
+      if (cr.evolve) ADV.UI.toast(` （把它放进院子水缸养着，${cr.evolve.days} 天后也许会有变化……） `);
       checkCritterMiles();
       checkFull('critters');
     } else {
@@ -528,8 +530,9 @@ ADV.Collect = (function () {
     }
   }
 
-  /* —— 饲养进化：换日检查（毛毛虫→蝴蝶 5 天 / 蝌蚪→青蛙 7 天，异色继承） ——
-   * 返回变化描述数组（Cal.newDay 转成事件 toast）。成体未收则新入册，已收则仅继承异色位。 */
+  /* —— 饲养进化：换日检查（毛毛虫→蝴蝶 5 天 / 蝌蚪→青蛙 7 天 / 奶狗→望月犬 6 天 / 绒耳小兽→绒耳大兽 7 天，异色继承） ——
+   * 返回变化描述数组（Cal.newDay 转成事件 toast）。成体未收则新入册，已收则仅继承异色位。
+   * gone（已放归 / 住牧场盒）期间暂停进化——卖掉的虫不该在你图鉴里羽化，盒里的孩子接回再继续长大。 */
   function applyEvolve(day) {
     const out = [];
     const k = col()['insects'] || (col()['insects'] = {});
@@ -537,7 +540,7 @@ ADV.Collect = (function () {
       const ev = cr.evolve;
       if (!ev) return;
       const e = k[cr.id];
-      if (!e || typeof e !== 'object' || !e.d || day - e.d < ev.days) return;   // 旧档无日期不追溯
+      if (!e || typeof e !== 'object' || !e.d || e.gone || day - e.d < ev.days) return;   // 旧档无日期不追溯
       const shinyInherit = !!e.s;
       const to = k[ev.to];
       const wasShiny = !!(to && typeof to === 'object' && to.s);
@@ -550,11 +553,11 @@ ADV.Collect = (function () {
     });
     return out;
   }
-  /* 饲养中剩余天数（未饲养 / 非 evolve 个体返回 -1），图鉴页倒计时用 */
+  /* 饲养中剩余天数（未饲养 / 非 evolve / 已放归或住盒（进化暂停）返回 -1），图鉴页倒计时用 */
   function critterRearing(id, day) {
     const e = (col()['insects'] || {})[id];
     const cr = critter(id);
-    if (!cr || !cr.evolve || !e || typeof e !== 'object' || !e.d || !day) return -1;
+    if (!cr || !cr.evolve || !e || typeof e !== 'object' || !e.d || e.gone || !day) return -1;
     return Math.max(0, cr.evolve.days - (day - e.d));
   }
 
