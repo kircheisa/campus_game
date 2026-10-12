@@ -232,7 +232,7 @@ ADV.Collect = (function () {
     sketch: { name: '画画本', gift: true, battle: false, price: 22, desc: '小影看了会两眼放光。' },
     coffee: { name: '热咖啡', gift: true, battle: false, price: 16, desc: '给熬夜的大人。' },
     bait:   { name: '蚯蚓', gift: false, battle: false, price: 3, desc: '挖来的鱼饵，钓鱼时挂上它更容易上钩。' },
-    fish:   { name: '鲜鱼', gift: true, battle: false, price: 0, desc: '刚钓上来的。可以卖钱、喂猫，或交给食堂阿姨。' },
+    fish:   { name: '鲜鱼', gift: true, battle: false, price: 8, desc: '刚钓上来的。可以卖钱、喂猫，或交给食堂阿姨。' },
     grilledFish: { name: '红烧鱼', gift: true, battle: true, heal: 40, price: 0, desc: '食堂阿姨的手艺，香气扑鼻。' },
     shovel: { name: '小铲子', gift: false, battle: false, price: 50, desc: '挖宝必备。' },
     bugNet: { name: '捉虫网', gift: false, battle: false, price: 45, desc: '竹柄纱网。对虫鸣的草丛挥网，捕虫又快又稳。' },

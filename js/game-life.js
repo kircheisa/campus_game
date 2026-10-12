@@ -1093,7 +1093,7 @@
     const hi = fair + 6 + ((Math.random() * 6) | 0), lo = fair - 6 - ((Math.random() * 6) | 0);
     const prices = [fair, hi, lo].sort((x, y) => y - x);   // 三档价，位置不打表
     const i = await choose(prices.map(p => `出价 💰${Math.max(1, p)}`).concat(['放弃竞拍']),
-      { caption: { name: '跳蚤市场 · 拍卖', text: `${gd.name}\n行价自己算：${a} × ${b} = ?\n（谁出得准归谁——多付的可不退！）` } });
+      { caption: { name: '跳蚤市场 · 拍卖', text: `${gd.name}\n行价自己算：${a} × ${b} = ?\n（礼品店参考 💰${gd.price}——多付的可不退！）` } });
     if (i < 0 || i === prices.length) { await say({ name: '摊主爷爷', text: '不举牌也行，看看热闹。' }); return; }
     const bid = prices[i];
     if (f.gold < bid) { await say({ name: '摊主爷爷', text: '口袋里的钱不够呀。\n（先去挣点零花钱再来）' }); return; }

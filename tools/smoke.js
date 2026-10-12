@@ -6655,6 +6655,27 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.97] 经济曲线观察：鲜鱼可变现 / 拍卖知情决策（批次二十九） ==================== */
+  console.log('\n[5.97] 经济曲线观察：鲜鱼参考价可变现 / 拍卖会 caption 补参考价');
+  {
+    // —— A. 鲜鱼 price 0 → 8：sellable() 谓词（price>0）放行，「可以卖钱」名实相符 ——
+    ok(A.Collect.itemInfo('fish').price === 8, '经济观察：鲜鱼参考价 0 → 8（进跳蚤市场可卖池；帮助板 20 仍占优）');
+    const hadFish97 = A.Collect.count('fish') > 0;
+    A.Collect.addItem('fish', 1);
+    const bagFish97 = A.Collect.bagList().find(x => x.id === 'fish');
+    ok(!!bagFish97 && bagFish97.n >= 1 && bagFish97.price > 0,
+      '经济观察：鲜鱼满足 sellable() 谓词（price>0 && n>0）——摆摊/以物易物池可见');
+    if (!hadFish97) A.Collect.useItem('fish', 1);        // 袋原本没有鱼 → 礼貌还原
+    // —— B. 拍卖会 caption 展示礼品店参考价（行价 a×b 与参考价脱钩 → 知情决策） ——
+    const gl97 = fs.readFileSync(path.join(ROOT, 'js', 'game-life.js'), 'utf8');
+    ok(gl97.includes('礼品店参考 💰${gd.price}'), '经济观察：拍卖 caption 展示礼品店参考价（准价拍下虚高行价不再隐性亏）');
+    ok(/出价 💰\$\{Math\.max\(1, p\)\}/.test(gl97), '经济观察：拍卖出价三档结构不动（fair/hi/lo 打乱呈现 + 放弃选项）');
+    // —— C. 钓鱼大赛独立 FISH_SCORE 稀有度表，不吃 item price（改鱼价零扰动的口径守护） ——
+    const qq97 = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
+    ok(qq97.includes('FISH_SCORE = { f1: 10') && qq97.includes('f10: 70'),
+      '经济观察：钓鱼大赛按稀有度 FISH_SCORE 计磅（与鱼价解耦，f7/f10 即时奖金亦不受扰）');
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
