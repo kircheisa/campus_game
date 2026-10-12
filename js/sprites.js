@@ -2069,6 +2069,18 @@ ADV.Sprites = (function () {
     q(g, 20, 10, 4, 3, '#6e5236'); q(g, 10, 18, 3, 2, '#6e5236');
     return c;
   }
+  function makeHedge() {                          // 灌木丛（修枝剪可剪开，P6 近路）
+    const c = cnv(32, 32), g = c.getContext('2d');
+    g.fillStyle = '#2e7a46'; g.beginPath(); g.ellipse(11, 20, 10, 9, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#3a9657'; g.beginPath(); g.ellipse(21, 17, 9, 10, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#57b870'; g.beginPath(); g.ellipse(13, 12, 9, 8, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#6fce85';                      // 顶面受光叶簇
+    g.beginPath(); g.ellipse(11, 9, 5, 3.5, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(21, 12, 4, 3, 0, 0, Math.PI * 2); g.fill();
+    q(g, 8, 15, 3, 2, '#2a6e40'); q(g, 18, 20, 3, 2, '#2a6e40');   // 暗部枝隙
+    q(g, 23, 7, 2, 2, '#e86a8a'); q(g, 9, 6, 2, 2, '#ffd94c');     // 零星小花/果
+    return c;
+  }
   function makeShelf2() {                         // 家/书店书柜
     const c = cnv(32, 40), g = c.getContext('2d');
     q(g, 2, 2, 28, 36, '#7a4a26'); q(g, 4, 4, 24, 32, '#a06c3a');
@@ -2142,6 +2154,7 @@ ADV.Sprites = (function () {
       case 'bed': c = makeBed(); break;
       case 'desk2': c = makeDesk2(); break;
       case 'dig': c = makeDig(); break;
+      case 'hedge': c = makeHedge(); break;                // 灌木丛（P6 修枝剪近路）
       case 'ore': c = makeOre(opt | 0); break;              // 矿石：opt=档次
       case 'crack': c = makeCrack(); break;                 // 下行裂缝
       case 'rope': c = makeRope(); break;                   // 出口绳索
@@ -2337,6 +2350,12 @@ ADV.Sprites = (function () {
           q(x, 5, 7, 1, 7, TDk); q(x, 8, 7, 1, 7, TDk); q(x, 11, 7, 1, 7, TDk);
           q(x, 3, 9, 10, 1, TDk); q(x, 3, 11, 10, 1, TDk);
           q(x, 5, 4, 6, 1, W2); q(x, 4, 5, 1, 2, W2); q(x, 11, 5, 1, 2, W2);
+          break;
+        case 'shears':                                  // 修枝剪：双柄 + 交叉刃
+          q(x, 3, 10, 4, 2, '#d9534f'); q(x, 9, 10, 4, 2, '#d9534f');
+          q(x, 5, 8, 2, 2, M2); q(x, 9, 8, 2, 2, M2);
+          q(x, 6, 3, 2, 6, M1); q(x, 8, 3, 2, 6, M1);
+          q(x, 7, 2, 2, 2, M2);
           break;
         default: q(x, 4, 4, 8, 8, '#c8c8c8');
       }

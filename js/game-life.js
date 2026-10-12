@@ -999,7 +999,7 @@
       save();
     }
   }
-  S.giftShop = () => shop(['bait', 'bugNet', 'fineNet', 'goldNet', 'basket', 'bigCage', 'colorCage', 'wheat', 'flower', 'poem', 'ballcard', 'ribbon', 'pencil', 'sketch', 'coffee', 'hoe', 'wateringCan', 'scythe', 'pickaxe', 'axe', 'shovel', 'fishingRod', 'camera', 'sprinkler', 'fertilizer', 'scarecrowKit'], '礼品店');
+  S.giftShop = () => shop(['bait', 'bugNet', 'fineNet', 'goldNet', 'basket', 'bigCage', 'colorCage', 'wheat', 'flower', 'poem', 'ballcard', 'ribbon', 'pencil', 'sketch', 'coffee', 'hoe', 'wateringCan', 'scythe', 'pickaxe', 'axe', 'shovel', 'fishingRod', 'shears', 'camera', 'sprinkler', 'fertilizer', 'scarecrowKit'], '礼品店');
   S.foodShop = () => shop(['bread', 'juice', 'snack'], '小吃摊');
 
   /* ==================== 跳蚤市场（交易 + 算术 + 记账） ==================== */

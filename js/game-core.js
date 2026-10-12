@@ -122,7 +122,9 @@ window.ADV = window.ADV || {};
     // —— NG+ 馆主再战（批次二十四 · P5）——
     badgeGold: {},                                     // 镀金徽章 { 科目: true }（强化试炼得胜；NG+ 每周目重收）
     badgeGoldAll: false,                               // 四科镀金集齐「全科宗师」（每周目一次）
-    rematchDay: {}                                     // 各科强化试炼上次挑战的游戏日（败北当日锁重试）
+    rematchDay: {},                                    // 各科强化试炼上次挑战的游戏日（败北当日锁重试）
+    // —— 秘传技开近路（批次二十五 · P6）——
+    hedgeCut: false                                    // 院墙灌木已剪开（修枝剪；小镇东北近路永久开通）
   });
 
   const state = {

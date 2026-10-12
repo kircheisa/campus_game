@@ -3831,8 +3831,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
 
       // —— 礼品店：三件新农资上架购买 ——
       F50.gold = 500;
-      const picks50 = [23, 0, 24, 0, 25, 0, 26];        // 洒水器→买1 → 肥料→买1 → 工具包→买1 → 离开（新流程含数量子菜单）
-      choosePick = () => (picks50.length ? picks50.shift() : 26);
+      const picks50 = [24, 0, 25, 0, 26, 0, 27];        // 洒水器→买1 → 肥料→买1 → 工具包→买1 → 离开（新流程含数量子菜单；批次二十五货架补修枝剪后序号 +1）
+      choosePick = () => (picks50.length ? picks50.shift() : 27);
       await pump(A.Game.S.giftShop(), 5000);
       choosePick = null;
       ok(A.Collect.count('sprinkler') === 1 && A.Collect.count('fertilizer') === 1 && A.Collect.count('scarecrowKit') === 1, '礼品店：买到洒水器/肥料/稻草人工具包各一件');
@@ -6380,6 +6380,87 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         cur.today = old.today || [];
         cur.gold = old.gold || 0;
         cur.cup = old.cup || 0;
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  console.log('\n[5.94] 体验批次二十五：P6 秘传技开近路（修枝剪灌木近道 / 手电筒深层省精力）');
+  {
+    const snap94 = JSON.stringify(A.Game.flags);          // 快照：收尾礼貌还原
+    const realIntro94 = A.Game.S._intro;
+    const realToast94 = A.UI.toast;
+    const toasts94 = [];
+    A.Game.S._intro = async () => {};
+    A.UI.toast = t => { toasts94.push(String(t || '')); };
+    try {
+      A.Game.newGame('hero_boy', false);
+      const F94 = A.Game.flags;                           // newGame 换了 flags 对象，之后取新引用
+      A.Cal.load({ day: 80, period: 0, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      // —— A. 源断言：道具 / 热键 / 地图 / 脚本接线 ——
+      const col94 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      const life94 = fs.readFileSync(path.join(ROOT, 'js', 'game-life.js'), 'utf8');
+      const gc94 = fs.readFileSync(path.join(ROOT, 'js', 'game-core.js'), 'utf8');
+      const mp94 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      const tw94 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(col94.includes('shears:') && col94.includes('torch:')
+         && life94.includes("'fishingRod', 'shears', 'camera'"),
+        '道具在位：修枝剪（礼品店有售）+ 手电筒（老矿工馈赠）入 ITEMS；giftShop 货架补修枝剪');
+      ok(col94.includes('对着挡路的灌木丛按 Z') && gc94.includes('hedgeCut: false'),
+        '秘传技口径：修枝剪免装备——持有时对灌木按 Z 走 S.hedge；hedgeCut 入 blankFlags（旧档自动补空）');
+      ok(mp94.includes("kind: 'hedge'") && (mp94.match(/need: 'hedgeCut'/g) || []).length === 2
+         && tw94.includes('S.hedge'),
+        '世界接线：家园院墙 / 小镇东北两处灌木 + need:hedgeCut 门对 + S.hedge 剪枝脚本');
+      // —— B. 修枝剪行为：剪开 → 永久近道 ——
+      A.Engine.loadMap('homeYard', 11, 9, 'up');
+      const hedge0 = A.Engine.map.objects.filter(o => o.kind === 'hedge');
+      ok(hedge0.length === 7, '剪枝前：院墙边灌木 7 株挡路（东墙一排六株 + 缺口加厚一格）');
+      await pump(A.Game.S.hedge(hedge0[0]));
+      ok(F94.hedgeCut !== true, '未持修枝剪：剪不动（提示礼品店有售），灌木未消失');
+      A.Collect.addItem('shears', 1);
+      await pump(A.Game.S.hedge(hedge0[0]));
+      ok(F94.hedgeCut === true && A.Engine.map.objects.every(o => o.kind !== 'hedge')
+         && toasts94.some(t => t.includes('近路开通')),
+        '咔嚓：修枝剪剪开灌木 → hedgeCut 落盘、当前地图灌木当场消失、近道开通');
+      A.Engine.loadMap('homeYard', 11, 9, 'up');
+      ok(A.Engine.map.objects.every(o => o.kind !== 'hedge')
+         && A.Engine.map.doors.some(d => d.need === 'hedgeCut' && d.to[0] === 'town'),
+        '重建口径：hedgeCut 后灌木不再生成（greenhouse 同款条件建造），篱笆缺口门亮起');
+      A.Engine.loadMap('town', 30, 18, 'down');
+      const dtown94 = A.Engine.map.doors.find(d => d.need === 'hedgeCut');
+      ok(!!dtown94 && dtown94.to[0] === 'homeYard',
+        '小镇侧：东北角公寓墙根门与家园门互为对端（双向近路）');
+      // —— C. 手电筒：深层照明省精力（纯函数钩子） ——
+      A.Skills.reset();
+      ok(A.Skills.oreEnergy() === 2 && A.Skills.crackEnergy() === 2, '手电筒基线：无灯时敲矿/探缝精力 2/2');
+      A.Collect.addItem('torch', 1); F94.mineDepth = 6;
+      ok(A.Skills.oreEnergy() === 1 && A.Skills.crackEnergy() === 1, '第 6 层持灯：敲矿/探缝各省 1（2/2 → 1/1）');
+      F94.mineDepth = 4;
+      ok(A.Skills.oreEnergy() === 2, '浅层不受益：第 4 层灯光照不透（仍 2）');
+      F94.mineDepth = 6; A.Skills.reset(); A.Skills.add('mine', 240, 'smoke');   // lv4：轻步已把探缝降到 1
+      ok(A.Skills.crackEnergy() === 1, '保底 1：轻步 + 手电筒叠加不穿底（探缝仍为 1）');
+      A.Skills.reset();
+      // —— D. 老矿工馈赠：mineRecord ≥ 5 一次性 ——
+      A.Engine.loadMap('campus', 51, 16, 'up');
+      const bell94 = F94.bell, fp94 = F94.finalPassed, cfd94 = F94.clubFlagDone;
+      const gmp94 = F94.gotMinerPiece, rec94 = F94.mineRecord;
+      F94.bell = false; F94.finalPassed = false; F94.clubFlagDone = true;
+      F94.gotMinerPiece = true; F94.mineRecord = 5;
+      A.Collect.useItem('torch', A.Collect.count('torch'));
+      await pump(A.Game.S.miner({ id: 'miner' }));
+      ok(A.Collect.count('torch') === 1 && toasts94.some(t => t.includes('手电筒')),
+        '老矿工：下过第五层 → 半生旧手电筒相赠（一次性，mineRecord 门槛）');
+      F94.bell = bell94; F94.finalPassed = fp94; F94.clubFlagDone = cfd94;
+      F94.gotMinerPiece = gmp94; F94.mineRecord = rec94;
+    } finally {
+      A.UI.toast = realToast94;
+      A.Game.S._intro = realIntro94;
+      try {                                               // 礼貌还原（快照 → 现行 flags 上的纯数据字段）
+        const old = JSON.parse(snap94);
+        const cur = A.Game.flags;
+        for (const k of ['hedgeCut', 'bell', 'finalPassed', 'clubFlagDone', 'gotMinerPiece', 'mineRecord', 'mineDepth'])
+          cur[k] = old[k];
       } catch (e) {}
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});

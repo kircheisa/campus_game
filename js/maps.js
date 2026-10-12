@@ -1187,6 +1187,12 @@ ADV.Maps = (function () {
     // 西门 → 西郊田野
     set(m, 1, 16, 'path'); set(m, 1, 17, 'path'); set(m, 1, 18, 'path');
     m.doors.push({ x: 1, y: 17, to: ['fields', 42, 15, 'left'] });
+    // —— P6 秘传技：东北角公寓墙根的灌木对（家园近路的另一头；剪开后门才亮） ——
+    if (!ADV.Game.flags.hedgeCut) {
+      m.objects.push({ kind: 'hedge', x: 57, y: 12, w: 1, h: 1, s: 'hedge', solidTiles: [[0, 0]] });
+      m.objects.push({ kind: 'hedge', x: 58, y: 12, w: 1, h: 1, s: 'hedge', solidTiles: [[0, 0]] });
+    }
+    m.doors.push({ x: 58, y: 12, to: ['homeYard', 20, 7, 'left'], need: 'hedgeCut' });
     // 旧书摊（半价旧书 + 旧书翁）
     m.objects.push({ kind: 'sign', x: 33, y: 12, w: 1, h: 2, text: '旧书摊', solidTiles: [[0, 1]], s: 'bookstall' });
     m.npcs.push({ id: 'oldbook', x: 33, y: 14, dir: 'down', pal: 'oldbook', name: '旧书翁', s: 'oldbook', acts: ['read', 'think'] });
@@ -1328,6 +1334,13 @@ ADV.Maps = (function () {
     m.doors.push({ x: 10, y: 13, to: ['town', 29, 2, 'down'] });
     m.doors.push({ x: 11, y: 13, to: ['town', 30, 2, 'down'] });
     tree(m, 4, 9); tree(m, 17, 8);
+    // —— P6 秘传技：东侧院墙边一排茂密灌木（修枝剪剪开 → 直插小镇东北角的近路；剪开后不再生成） ——
+    if (!ADV.Game.flags.hedgeCut) {
+      for (let hy = 4; hy <= 9; hy++)
+        m.objects.push({ kind: 'hedge', x: 21, y: hy, w: 1, h: 1, s: 'hedge', solidTiles: [[0, 0]] });
+      m.objects.push({ kind: 'hedge', x: 20, y: 7, w: 1, h: 1, s: 'hedge', solidTiles: [[0, 0]] });
+    }
+    m.doors.push({ x: 21, y: 7, to: ['town', 56, 12, 'down'], need: 'hedgeCut' });   // 灌木后的篱笆缺口
     m.objects.push({ kind: 'stump', x: 6, y: 6, w: 1, h: 1, s: 'pot', pot: 'yard', solidTiles: [[0, 0]] });   // 院子花盆
     m.objects.push({ kind: 'sign', x: 18, y: 6, w: 1, h: 1, text: '🥬', solidTiles: [], s: 'vegPlot' });        // 花坛菜圃（种菜）
     m.objects.push({ kind: 'photoSpot', x: 8, y: 8, w: 1, h: 1, solidTiles: [], s: 'photoSpot', cid: 's11' });   // 院子的花机位

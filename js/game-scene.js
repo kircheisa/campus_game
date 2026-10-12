@@ -774,6 +774,15 @@
       gainBond('miner', 15);
       addCup(6);
       save();
+    } else if ((F().mineRecord || 0) >= 5 && !ADV.Collect.count('torch')) {
+      // —— P6 秘传技：下过第五层的娃，才配得上这把旧手电筒（深层照明省精力） ——
+      ADV.Collect.addItem('torch', 1);
+      ADV.Audio.sfx('item');
+      E().playAction(ent, 'wave', 2);
+      await say({ name: '老矿工', text: '听说你下到过第五层？好样的。\n这把手电筒跟了我半辈子——\n深层的矿光看得真，脚下也省劲。' });
+      UI().toast(' 🔦 取得：手电筒（第 5 层以下 · 敲矿/探缝精力 -1） ');
+      logEvent('老矿工把手电筒托付给了你');
+      save();
     } else {
       // 矿石捐献：矿石此前只能卖钱，这里给一条更有叙事感的出口——给矿小的孩子们做标本
       const ores = ['copperOre', 'ironOre', 'goldOre', 'gemStone'];

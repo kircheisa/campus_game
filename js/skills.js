@@ -57,6 +57,14 @@ ADV.Skills = (function () {
   const xp = k => st.xp[k] | 0;
   const need = k => (st.lv[k] >= 5) ? 0 : LV_NEED[st.lv[k]];
 
+  // P6 秘传技：手电筒照亮深层——矿道第 5 层以下且持有时，敲矿/探缝精力消耗 -1（与技能折扣叠加，保底 1）
+  function torchCut() {
+    try {
+      const f = ADV.Game.flags;
+      return (f && (f.mineDepth || 0) >= 5 && ADV.Collect && ADV.Collect.count('torch')) ? 1 : 0;
+    } catch (e) { return 0; }
+  }
+
   /* ---------- 各系加成钩子（纯函数，便于测试） ---------- */
   const H = {
     // 农艺
@@ -67,9 +75,9 @@ ADV.Skills = (function () {
     waterBoost: () => lv('farm') >= 4 ? .25 : 0,
     // 采矿
     oreDbl: tier => (tier >= 2 ? .3 : .15) + (lv('mine') >= 1 ? .1 : 0) + (lv('mine') >= 5 ? .1 : 0),
-    oreEnergy: () => lv('mine') >= 2 ? 1 : 2,
+    oreEnergy: () => Math.max(1, (lv('mine') >= 2 ? 1 : 2) - torchCut()),
     oreShard: () => lv('mine') >= 3 && Math.random() < .15,
-    crackEnergy: () => lv('mine') >= 4 ? 1 : 2,
+    crackEnergy: () => Math.max(1, (lv('mine') >= 4 ? 1 : 2) - torchCut()),
     // 钓鱼
     fishRods: () => 3 + (lv('fish') >= 2 ? 1 : 0),
     fishBoost: () => (lv('fish') >= 1 ? 1 : 0) + (lv('fish') >= 4 ? 1 : 0),

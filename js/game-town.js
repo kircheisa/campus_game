@@ -1037,6 +1037,24 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     save();
   };
 
+  // —— P6 秘传技：灌木丛（修枝剪剪开 → 家园院墙 ⇄ 小镇东北近路永久开通） ——
+  S.hedge = async (o) => {
+    const f = F();
+    if (f.hedgeCut) { await say({ text: '（剪过的灌木修剪得整整齐齐，\n正好给近道让了路）' }); return; }
+    if (!ADV.Collect.count('shears')) {
+      await say({ text: '（灌木丛长得又密又高，\n枝条扎手，徒手拨不开。\n——园艺用的修枝剪应该能行，\n小镇礼品店有卖）' });
+      return;
+    }
+    ADV.Audio.sfx('dig');
+    await say({ text: '咔嚓、咔嚓——\n修枝剪利落地开路，\n枝叶后面果然藏着一条能过人的缝！' });
+    f.hedgeCut = true;
+    const objs = E().map.objects;
+    for (let i = objs.length - 1; i >= 0; i--) if (objs[i].kind === 'hedge') objs.splice(i, 1);
+    logEvent('用修枝剪剪开了院墙边的灌木近道');
+    UI().toast(' ✂ 灌木丛剪开了——家园 ⇄ 小镇近路开通！ ');
+    save();
+  };
+
   /* ---------- 考试系统（校务打卡板） ---------- */
   const SUBJ_CN = { math: '数学', chinese: '语文', science: '科学', english: '英语' };
   /* 单题一问：只答一遍，返回是否答对；传入 wrongBag 时把做错的题收进去（打卡错题重做用） */

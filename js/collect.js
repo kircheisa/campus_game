@@ -243,6 +243,8 @@ ADV.Collect = (function () {
     scythe:      { name: '镰刀', gift: false, battle: false, price: 45, desc: '刃口锋利的小镰刀。（农具，更多用途敬请期待）' },
     pickaxe:     { name: '镐头', gift: false, battle: false, price: 60, desc: '敲矿脉更趁手。装备后对着矿脉按 Z，直接开采。' },
     axe:         { name: '斧头', gift: false, battle: false, price: 70, desc: '沉甸甸的短柄斧。（农具，更多用途敬请期待）' },
+    shears:      { name: '修枝剪', gift: false, battle: false, price: 55, desc: '园艺师傅的爱物。对着挡路的灌木丛按 Z，咔嚓两下剪出一条近路。' },
+    torch:       { name: '手电筒', gift: false, battle: false, price: 0, desc: '老矿工的旧伙计。矿道第 5 层以下照明充裕，敲矿与探缝各省 1 点精力。' },
     sprinkler:   { name: '洒水器', gift: false, battle: false, price: 70, desc: '架在田头的自动喷水装置。放在土垄上，每天清晨替你浇水。' },
     fertilizer:  { name: '肥料', gift: false, battle: false, price: 25, desc: '油乎乎的好肥料。撒在土垄上，收获时可能多结一颗果实。' },
     scarecrowKit:{ name: '稻草人工具包', gift: false, battle: false, price: 55, desc: '新草帽和结实的草绳。走近旧稻草人按 Z，把它翻新得威风凛凛。' },
