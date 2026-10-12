@@ -1622,6 +1622,7 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     const opts = ['帮忙家务'];
     if (known.length) opts.push('自己做顿饭');
     if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0)) opts.push('吃点自己做的小菜');
+    if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0) && f.familyDishDay !== C.day) opts.push('给家人尝尝手艺');
     if (C.period >= 4 && f.dinnerDay !== C.day) opts.push('吃妈妈做的晚饭');
     const i = await choose(opts, { caption: { name: '饭桌', text: known.length ? '妈妈留了字条：想做就自己做哦～' : '饭桌收拾得干干净净。' } });
     if (opts[i] === '自己做顿饭') {
@@ -1630,6 +1631,23 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     }
     if (opts[i] === '吃点自己做的小菜') {
       await eatAtHome();
+      return;
+    }
+    if (opts[i] === '给家人尝尝手艺') {
+      // 料理社交深化：把亲手做的菜端上家里饭桌——家人共食（每天一顿，妈妈好感 +3）
+      const owned = Object.keys(DISH_BUFF).filter(id => ADV.Collect.count(id) > 0);
+      const j = await choose(owned.map(id => `${ADV.Collect.itemInfo(id).name} ×${ADV.Collect.count(id)}`).concat('还是算了'),
+        { caption: { name: '饭桌', text: '端一道拿手菜上桌——\n今天这顿，吃你做的！（每天一顿）' } });
+      if (j < 0 || j >= owned.length) return;
+      const dishName = ADV.Collect.itemInfo(owned[j]).name;
+      ADV.Collect.useItem(owned[j], 1);
+      f.familyDishDay = C.day;
+      ADV.Audio.sfx('item');
+      await say({ name: '妈妈', text: `哟——这是你做的《${dishName}》？\n有模有样的嘛，妈妈尝尝……\n嗯！不比食堂阿姨差！（妈妈好感 +3）` });
+      if (f.metDad) await say({ name: '爸爸', text: '（爸爸默默夹了第二筷）\n行啊——家里出了个小厨子。' });
+      gainBond('mom', 3);
+      logEvent(`把亲手做的${dishName}端上了家里的饭桌`);
+      save();
       return;
     }
     if (opts[i] === '吃妈妈做的晚饭') {

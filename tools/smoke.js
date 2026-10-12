@@ -1943,8 +1943,11 @@ A.Skills.reset();   // 社交清零：闲聊给社交经验会升到 Lv1→chatB
       ok(r.delta === 16 && A.Game.friends.aunt.love === love0 + 16,
          `料理送礼：偏好料理家常加成 +16（实得 ${r.delta}，好感 ${love0}→${A.Game.friends.aunt.love}）`);
       A.Collect.addItem('r1', 1);
-      const r2 = A.Collect.give('cardman', 'r1');       // 无偏好角色 → 普通 5
-      ok(r2.delta === 5, `料理送礼：无偏好角色普通回礼 +5（实得 ${r2.delta}）`);
+      const r2 = A.Collect.give('cardman', 'r1');       // 无偏好角色 + 自制菜 → 家常心意 8（批次三十：5→8）
+      ok(r2.delta === 8, `料理送礼：无偏好角色家常心意档 +8（实得 ${r2.delta}）`);
+      A.Collect.addItem('poem', 1);
+      const r3 = A.Collect.give('cardman', 'poem');     // 无偏好 + 非料理 → 普通 5（原档位不动）
+      ok(r3.delta === 5, `送礼：无偏好非料理仍是普通档 +5（实得 ${r3.delta}）`);
       ok(A.Collect.count('r1') === 0, '料理送礼：赠送后背包扣除');
       const sum = Object.values(A.Game.BOND_META).filter(m => (m.likes || []).some(x => x[0] === 'r' && x >= 'r1')).length;
       ok(sum >= 9, `料理送礼：至少 9 位 NPC 有料理偏好（当前 ${sum} 位）`);
@@ -6674,6 +6677,74 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     const qq97 = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
     ok(qq97.includes('FISH_SCORE = { f1: 10') && qq97.includes('f10: 70'),
       '经济观察：钓鱼大赛按稀有度 FISH_SCORE 计磅（与鱼价解耦，f7/f10 即时奖金亦不受扰）');
+  }
+
+  /* ==================== [5.98] 料理社交深化：家常心意档 / 家人共食（批次三十） ==================== */
+  console.log('\n[5.98] 料理社交深化：自制菜送礼心意档 / 饭桌家人共食');
+  {
+    const snap98 = JSON.stringify(A.Game.flags);
+    const snapF98 = JSON.stringify(A.Game.friends);
+    const realToast98 = A.UI.toast;
+    try {
+      // —— A. 源断言：心意档 + 饭桌家人共食接线 ——
+      const co98 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      const gt98 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(co98.includes('DISHES.includes(itemId)') && co98.includes('那我可不客气啦'),
+        '家常心意档：自制菜未命中偏好 5 → 8（生日 14），台词「亲手做的……」');
+      ok(gt98.includes('给家人尝尝手艺') && gt98.includes('familyDishDay'),
+        '家人共食：饭桌新选项「给家人尝尝手艺」+ familyDishDay 日锁在位');
+      // —— B. 行为：自制菜送无偏好 NPC → 家常心意 8（非生日） ——
+      A.Game.newGame('hero_boy', false);
+      const F98 = A.Game.flags;
+      const npcId98 = Object.keys(A.Game.BOND_META).find(k => !(A.Game.BOND_META[k].likes || []).includes('r1'));
+      const bday98 = A.Game.BOND_META[npcId98].bday;
+      A.Cal.load({ day: bday98 === 3 ? 4 : 3, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Collect.addItem('r1', 1);
+      const r98 = A.Collect.give(npcId98, 'r1');
+      ok(r98 && r98.delta === 8 && /亲手做的/.test(r98.line),
+        `送礼心意档：自制菜未命中偏好 → 好感 +8（${A.Game.BOND[npcId98].name}，非生日非讨厌）`);
+      // —— C. 行为：饭桌「给家人尝尝手艺」——妈妈好感 +3 · 菜 -1 · 日锁 ——
+      A.Cal.load({ day: 9, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Collect.addItem('r3', 2);
+      const mom0 = A.Game.friends.mom ? A.Game.friends.mom.love : 0;
+      let sawMenu98 = null, secondMenu98 = null;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        if (sawMenu98 === null) sawMenu98 = arr.slice();
+        const k = arr.findIndex(o => o.includes('家人'));
+        if (k >= 0) return k;
+        const d = arr.findIndex(o => o.includes('星星曲奇'));
+        if (d >= 0) return d;
+        return arr.length - 1;
+      };
+      await pump(A.Game.S.dinnerTable(), 4000);
+      choosePick = opts => {                              // 第二次进饭桌：验证日锁（家人选项消失）
+        const arr = opts.map(String);
+        secondMenu98 = arr.slice();
+        if (arr.some(o => o.includes('赚零花钱'))) return arr.length - 1;   // 家务子菜单 →「今天先算了」婉拒
+        return 0;                                         // 饭桌主菜单 →「帮忙家务」（安全项，不碰小菜）
+      };
+      await pump(A.Game.S.dinnerTable(), 4000);
+      choosePick = null;
+      const mom1 = A.Game.friends.mom ? A.Game.friends.mom.love : 0;
+      ok(!!sawMenu98 && sawMenu98.some(o => o.includes('家人')) && F98.familyDishDay === 9
+         && A.Collect.count('r3') === 1 && mom1 === mom0 + 3,
+        '家人共食：端一道拿手菜上桌 → 妈妈好感 +3 · 菜 -1 · familyDishDay 落档');
+      ok(!!secondMenu98 && !secondMenu98.some(o => o.includes('家人')),
+        '家人共食日锁：同日再进饭桌，「给家人尝尝手艺」不再出现');
+    } finally {
+      A.UI.toast = realToast98;
+      try {                                               // 礼貌还原（字段清单 + friends 全量）
+        const old = JSON.parse(snap98);
+        const cur = A.Game.flags;
+        for (const k of ['familyDishDay', 'houseworkDay', 'dinnerDay', 'gold', 'buff', 'metDad', 'recipes'])
+          cur[k] = old[k];
+        const oldF = JSON.parse(snapF98);
+        for (const k of Object.keys(oldF)) A.Game.friends[k] = oldF[k];
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
   }
 
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);

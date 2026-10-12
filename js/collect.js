@@ -392,6 +392,10 @@ ADV.Collect = (function () {
     } else if ((meta.hate || []).includes(itemId)) {
       delta = -8;
       line = `「……${it.name}？你对我有什么误会吗。」`;
+    } else if (DISHES.includes(itemId)) {
+      // 自制料理未命中偏好也有家常心意加成（8，生日 14）——菜做出来，总要有人捧场
+      delta = isBday ? 14 : 8;
+      line = `「亲手做的${it.name}？\n那我可不客气啦——谢谢！」`;
     } else {
       delta = isBday ? 10 : 5;
       line = `「${it.name}？谢谢啦，还挺用心的。」`;
