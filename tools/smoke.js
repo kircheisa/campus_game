@@ -966,8 +966,8 @@ async function pump(promise, maxSteps) {
   // —— 图鉴第 8 类 ——
   ok(A.Collect.CATS.length === 9 && A.Collect.CATS.some(c => c[0] === 'cards') && A.Collect.CATS.some(c => c[0] === 'scenes')
      && A.Collect.DB.critters.length === 48, '图鉴 9 类 + 生物图鉴 48 种（虫系旧 8 种并入生物图鉴）');
-  ok(A.Collect.DB.cards.length === 12 && A.Collect.DB.cards.every(c => c.id && c.name && c.star >= 1 && c.star <= 3),
-     `童年卡 ${A.Collect.DB.cards.length} 张齐备（含 1-3 星）`);
+  ok(A.Collect.DB.cards.length === 18 && A.Collect.DB.cards.every(c => c.id && c.name && c.star >= 1 && c.star <= 3),
+     `童年卡 12 + 街机限定 6 = ${A.Collect.DB.cards.length} 张齐备（含 1-3 星）`);
   // —— 地图触发点 ——
   const cus = A.Maps.get('campus');
   ok(['hopscotch', 'marbles', 'snowfight', 'radio'].every(s => cus.objects.some(o => o.s === s)),
@@ -1121,7 +1121,7 @@ async function pump(promise, maxSteps) {
   choosePick = () => (pages++ === 0 ? 2 : 3);           // 看卡册然后离开
   await pump(A.Game.S.cardman(null));
   choosePick = null;
-  ok(true, '王叔：卡册两页可翻看');
+  ok(true, '王叔：卡册逐页可翻看（页数随图鉴扩容，S4 后 3 页）');
   ok(!!A.Game.BOND.cardman && A.Game.BOND_META.cardman && A.Game.BOND_META.cardman.likes.includes('ballcard'),
      '王叔：好感故事与送礼偏好已注册');
 
@@ -6933,6 +6933,88 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         '日锁分离：陪练 sparDay / 上课 lessonDay / 体操 exerciseDay 专属化；点歌·班会·连战原锁不动；抽背接受才烧锁');
     } finally {
       A.Game.S._intro = realIntro101;
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  /* ==================== [5.102] S4 街机角 + 限定卡（批次三十四） ==================== */
+  console.log('\n[5.102] S4 街机角：打砖块 / 代币兑换台 / 六枚限定卡 / 霓虹海报');
+  {
+    const realIntro102 = A.Game.S._intro;
+    A.Game.S._intro = async () => {};
+    const MiniKeep102 = A.Mini, Rnd102 = Math.random;
+    try {
+      // —— A. 源断言：场地 / 精灵 / 新玩法 / 兑换台四处接线 ——
+      const maps102 = fs.readFileSync(path.join(ROOT, 'js', 'maps.js'), 'utf8');
+      const sprites102 = fs.readFileSync(path.join(ROOT, 'js', 'sprites.js'), 'utf8');
+      const engine102 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      const mini102 = fs.readFileSync(path.join(ROOT, 'js', 'minigame.js'), 'utf8');
+      const retro102 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      ok(maps102.includes('街机角') && (maps102.match(/s: 'arcade'/g) || []).length === 3
+        && maps102.includes("kind: 'neonArt', x: 21, y: 1") && maps102.includes('flags.arcadePoster'),
+        '街机角场地：镇上小卖部旁两机一牌（s:arcade ×3）+ 家中卧室条件霓虹海报（arcadePoster 门）');
+      ok(sprites102.includes('makeArcadeCab') && sprites102.includes('makeNeonArt')
+        && engine102.includes('arcadeCab: { h: 40 }') && engine102.includes('neonArt: { h: 24 }'),
+        '街机角精灵：街机柜 + 霓虹海报工厂与引擎高度注册在位');
+      ok((mini102.match(/kind === 'brick'/g) || []).length === 3 && mini102.includes('brick     打砖块'),
+        '打砖块玩法：start/update/draw 三处接线 + 玩法包头注释（30 秒 12 砖两条命）');
+      ok(retro102.includes('S.arcade = async') && retro102.includes("ARCADE_CARDS = ['c13', 'c14', 'c15', 'c16', 'c17', 'c18']")
+        && retro102.includes('Math.ceil(ADV.Collect.totalOf(\'cards\') / 6)') && retro102.includes('S.arcadePoster'),
+        '兑换台接线：S.arcade 菜单 + 六枚限定卡白名单 + 卡册页数动态化 + 海报彩蛋脚本');
+      // —— B. 行为：两台机器各赢一局 → 代币 2 → 4，日锁各自生效 ——
+      A.Game.newGame('hero_boy', false);
+      const F102 = A.Game.flags;
+      A.Cal.load({ day: 10, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 80 });
+      let miniKind102 = null, miniWin102 = true;
+      A.Mini = { start: (kind, cb) => { miniKind102 = kind; cb(miniWin102); }, active: false };
+      let intent102 = null;                               // 每次 pump 武装一个菜单意图；未武装轮次一律「离开」收束 while 循环
+      choosePick = opts => {
+        const arr = opts.map(String);
+        if (intent102 != null) {
+          const k = arr.findIndex(o => o.includes(intent102));
+          if (k >= 0) { intent102 = null; return k; }
+        }
+        return arr.length - 1;                            // 离开
+      };
+      intent102 = '打砖块';
+      await pump(A.Game.S.arcade());                      // 打砖块（赢）
+      ok(miniKind102 === 'brick' && F102.brickDay === 10 && F102.tok === 2,
+        '街机打砖块：判胜桩一局通关 → 代币 +2 · brickDay 落档');
+      intent102 = '打砖块';
+      await pump(A.Game.S.arcade());                      // 打砖块同日再玩 → 被拦
+      ok(F102.tok === 2, '街机日锁：同日再上打砖块被拦（代币不重复发）');
+      intent102 = '翻卡配对';
+      await pump(A.Game.S.arcade());                      // 翻卡配对（赢）
+      ok(miniKind102 === 'cards' && F102.arcadeCardDay === 10 && F102.tok === 4,
+        '街机翻卡配对：复用配对玩法判胜 → 代币 +2 · arcadeCardDay 落档（与王叔 cardDay 分锁）');
+      // —— C. 行为：卡包兑换（random→0 定桩拿 c13）+ 代币不足拦截 ——
+      Math.random = () => 0;
+      const cards0 = A.Collect.catCount('cards');
+      intent102 = '限定卡包';
+      await pump(A.Game.S.arcade());                      // 卡包：4 代币 → c13
+      ok(A.Collect.has('cards', 'c13') && F102.tok === 0 && A.Collect.catCount('cards') === cards0 + 1,
+        '街机限定卡包：🎙4 → 随机池首张 c13 入册（限定卡仅此一渠道）');
+      intent102 = '限定卡包';
+      await pump(A.Game.S.arcade());                      // 卡包：代币不足 → 被拦
+      ok(!A.Collect.has('cards', 'c14') && F102.tok === 0,
+        '街机经济：代币不足买卡包被婉拒（不透支、不静默扣空）');
+      // —— D. 行为：霓虹海报上墙 + 六枚集齐成就 ——
+      F102.tok = 8;
+      intent102 = '霓虹海报';
+      await pump(A.Game.S.arcade());                      // 海报：8 代币 → 上墙
+      const home102 = A.Maps.get('homeIn');
+      ok(F102.arcadePoster === true && F102.tok === 0 && home102.objects.some(o => o.kind === 'neonArt'),
+        '街机角霓虹海报：🎙8 兑换 → arcadePoster 落档 + homeIn 卧室墙真挂上 neonArt 物件');
+      ['c13', 'c14', 'c15', 'c16', 'c17', 'c18'].forEach(id => A.Collect.gain('cards', id));
+      ok(A.Game.achievements().find(a => a.name === '街机收藏家').done === true,
+        '成就「街机收藏家」：六枚限定卡集齐点亮');
+    } finally {
+      A.Mini = MiniKeep102;
+      Math.random = Rnd102;
+      choosePick = null;
+      A.Game.S._intro = realIntro102;
+      try { A.Engine.loadMap('campus', 22, 30, 'up'); } catch (e) {}
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
     }

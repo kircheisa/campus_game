@@ -274,7 +274,9 @@
       // —— 四师签名挑战 ——
       ['文理四通', ['math', 'chinese', 'science', 'english'].every(s => Object.keys((f.tkind || {})[s] || {}).length >= 4), '每门学科的试炼 / 作业 / 奥赛 / 签名挑战都体验过'],
       // —— 时段自习 & 学业榜 ——
-      ['全校第一', !!f.acadFirst, '登上学业光荣榜榜首（每周刷新的虚拟榜）']
+      ['全校第一', !!f.acadFirst, '登上学业光荣榜榜首（每周刷新的虚拟榜）'],
+      // —— S4 街机角 ——
+      ['街机收藏家', ['c13', 'c14', 'c15', 'c16', 'c17', 'c18'].every(id => C.has('cards', id)), '集齐街机角六枚限定卡']
     ];
     return A.map(([name, done, desc]) => ({ name, done: !!done, desc }));
   }

@@ -1023,14 +1023,76 @@ E().playAction(E().player, 'laugh', 1.6);
         }
         save();
       } else if (i === 2) {
-        for (let pg = 0; pg < 2; pg++) {
+        const pgN = Math.ceil(ADV.Collect.totalOf('cards') / 6);   // 卡册页数随图鉴扩容（S4 限定卡加入后自动多页）
+        for (let pg = 0; pg < pgN; pg++) {
           const lines = ADV.Collect.DB.cards.slice(pg * 6, pg * 6 + 6)
             .map(c => `${ADV.Collect.has('cards', c.id) ? '◆' : '◇'}${c.name} ${'★'.repeat(c.star || 1)}`);
-          await say({ name: '卡册', text: lines.join('\n') + `\n（${pg === 0 ? '翻页' : '完'}）` });
+          await say({ name: '卡册', text: lines.join('\n') + `\n（${pg < pgN - 1 ? '翻页' : '完'}）` });
         }
       } else return;
     }
   };
+  /* —— S4 街机角（小卖部旁 · 王叔代管）：两台街机 + 代币兑换台。
+   *    打砖块（新玩法）/ 翻卡配对每日各一次赢代币（赢 🎙2 / 输 🎙1 参与奖）；
+   *    代币换街机限定卡包（c13-c18 仅此一渠道）或霓虹海报（挂回家中墙上）；
+   *    六张限定集齐 → 成就「街机收藏家」。 —— */
+  const ARCADE_CARDS = ['c13', 'c14', 'c15', 'c16', 'c17', 'c18'];
+  S.arcade = async () => {
+    const f = F(), C = ADV.Cal;
+    while (true) {
+      const i = await choose([
+        `打砖块（每日一次 · 赢 🎙2 / 输 🎙1）${f.brickDay === C.day ? ' ✓' : ''}`,
+        `翻卡配对（每日一次 · 赢 🎙2 / 输 🎙1）${f.arcadeCardDay === C.day ? ' ✓' : ''}`,
+        `街机限定卡包（🎙4 · 一张未收录的限定卡）`,
+        f.arcadePoster ? '霓虹海报（已挂在家中墙上）' : '霓虹海报（🎙8 · 挂回家中墙上）',
+        `离开（代币 ${f.tok || 0} 🎙）`
+      ], { caption: { name: '街机角', text: '「一币通关是浪漫，\n代币攒够换卡换海报。」\n—— 机器是王叔代管的，收币的也是他' } });
+      if (i === 0) {
+        if (f.brickDay === C.day) { await say({ name: '街机', text: '（这台今天已经被你通关过一轮，\n机器也要歇歇——明天再来）' }); continue; }
+        await say({ name: '街机', text: '🧱 打砖块 RULES：\n30 秒内敲下 12 块砖，两条球命。\n球落在挡板边上，会斜着弹出去。' });
+        const win = await new Promise(res => ADV.Mini.start('brick', res));
+        f.brickDay = C.day;
+        f.tok = (f.tok || 0) + (win ? 2 : 1);
+        await say({ name: '街机', text: win ? 'GAME CLEAR！砖墙碎了，\n机器吐出两枚代币。（🎙 +2）' : '差一点……安慰币一枚。（🎙 +1）' });
+        logEvent('在街机角玩了一局打砖块');
+        save();
+      } else if (i === 1) {
+        if (f.arcadeCardDay === C.day) { await say({ name: '街机', text: '（十八张牌今天都让你翻熟了，\n明天再战）' }); continue; }
+        await say({ name: '街机', text: '🎴 翻卡配对：18 次翻牌内配齐 6 对。\n记忆力的买卖，童叟无欺。' });
+        const win = await new Promise(res => ADV.Mini.start('cards', res));
+        f.arcadeCardDay = C.day;
+        f.tok = (f.tok || 0) + (win ? 2 : 1);
+        await say({ name: '街机', text: win ? '六对全齐！代币哗啦啦掉出来。\n（🎙 +2）' : '牌没配齐……安慰币一枚。（🎙 +1）' });
+        logEvent('在街机角玩了一局翻卡配对');
+        save();
+      } else if (i === 2) {
+        const pool = ARCADE_CARDS.filter(id => !ADV.Collect.has('cards', id));
+        if (!pool.length) { await say({ name: '街机角', text: '「六张限定你都集齐啦，\n这包卡王叔说什么也不卖了。」' }); continue; }
+        if ((f.tok || 0) < 4) { ADV.Audio.sfx('wrong'); await say({ name: '街机角', text: `「代币不够——一包 4 枚，\n你现在手里只有 ${f.tok || 0} 枚。」` }); continue; }
+        f.tok -= 4;
+        const c = ADV.Collect.DB.cards.find(cd => cd.id === pool[(Math.random() * pool.length) | 0]);
+        ADV.Collect.gain('cards', c.id);
+        ADV.Audio.sfx('item');
+        await say({ name: '街机角', text: `「咔哒——撕，开！」\n是「${c.name}」${'★'.repeat(c.star || 1)}！限定卡进卡册啦。` });
+        logEvent(`在街机角兑到限定卡「${c.name}」`);
+        if (ARCADE_CARDS.every(id => ADV.Collect.has('cards', id))) {
+          addCup(5);
+          await say({ name: '街机角', text: '🏆 六张限定一应俱全——\n「整条街就你这么齐！服！」\n（学院分 +5 · 成就「街机收藏家」）' });
+          logEvent('集齐街机角六枚限定卡');
+        }
+        save();
+      } else if (i === 3) {
+        if (f.arcadePoster) { await say({ name: '街机角', text: '（海报已经挂在家里墙上——\n霓虹色的，夜里也亮）' }); continue; }
+        if ((f.tok || 0) < 8) { ADV.Audio.sfx('wrong'); await say({ name: '街机角', text: `「海报 8 枚代币，你现在 ${f.tok || 0} 枚。\n攒够了再来——王叔不赊账。」` }); continue; }
+        f.tok -= 8; f.arcadePoster = true;
+        ADV.Audio.sfx('fanfare');
+        await say({ name: '街机角', text: '「卷好了拿去——」\n一张霓虹海报，挂在家里卧室墙上正合适。\n（回家看看吧）' });
+        logEvent('兑到街机角限定霓虹海报');
+        save();
+      } else return;
+    }
+  };
+  S.arcadePoster = async () => { await say({ text: '（霓虹海报在墙上微微发光：\n一台街机，一颗星星，\n和一行小字——「再来一局」）' }); };
   S.picnic = async () => {
     const f = F(), C = ADV.Cal;
     if (!C.isWeekend()) { await say({ text: '长椅空着，阳光正好。\n（周末来这儿野餐吧）' }); return; }

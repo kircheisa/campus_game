@@ -23,6 +23,7 @@
  *   flower    飞花令：语文·接住补全诗句的「对字」花瓣，三句全中（终局主题字「月」）
  *   circuit   电路连通：科学·Z 旋转接头把电池和灯泡接通，接口步数有限
  *   arcade    单词街机：英语·敲中举字母的地鼠按顺序拼词，两个单词即胜
+ *   brick     打砖块：←→ 移挡板 Z 发球，30 秒敲下 12 块砖（两条球命）
  * X / Esc 随时退出（视为未获胜）
  * ========================================================= */
 window.ADV = window.ADV || {};
@@ -268,6 +269,12 @@ ADV.Mini = (function () {
         cur: 0, moles: Array.from({ length: 6 }, () => null), spawnT: .5,
         msg: '按顺序敲出目标单词——敲错一次扣 4 秒！'
       };
+    } else if (kind === 'brick') {
+      // 打砖块：←→ 移挡板 Z 发球，30 秒内敲下 12 块砖，2 条球命（计时只在球在场内时走）
+      const bricks = [];
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) bricks.push({ r, c, alive: true });
+      act = { kind, onDone, phase: 'serve', px: .5, balls: 2, t: 30, cnt: 0,
+              bx: W / 2, by: 488, bvx: 0, bvy: 0, bricks, msg: '←→ 移动挡板 · Z 发球！' };
     }
     ADV.Audio.sfx('start');
   }
@@ -920,6 +927,51 @@ ADV.Mini = (function () {
           act.t -= 4; ADV.Audio.sfx('wrong');
           act.msg = '敲错啦！时间 −4 秒';
           if (act.t <= 0) { act.msg = '时间耗光，街机熄屏……'; finish(false); return; }
+        }
+      }
+    } else if (act.kind === 'brick') {
+      if (held && held.left) act.px = Math.max(0, act.px - 1.7 * dt);     // 挡板：按住 ←→ 平移
+      if (held && held.right) act.px = Math.min(1, act.px + 1.7 * dt);
+      const padX = act.px * 560 + 200;
+      if (act.phase === 'serve') {
+        act.bx = padX; act.by = 488;                                      // 球停在挡板上待发
+        if (p.ok) {
+          act.phase = 'play';
+          act.bvx = (Math.random() < .5 ? -1 : 1) * (70 + Math.random() * 80);
+          act.bvy = -300;
+          ADV.Audio.sfx('cursor');
+        }
+      } else {
+        act.t -= dt;
+        if (act.t <= 0) { act.msg = '时间到！敲下 ' + act.cnt + ' 块……'; finish(false); return; }
+        act.bx += act.bvx * dt; act.by += act.bvy * dt;
+        if (act.bx < 208) { act.bx = 208; act.bvx = Math.abs(act.bvx); ADV.Audio.sfx('cursor'); }
+        if (act.bx > 752) { act.bx = 752; act.bvx = -Math.abs(act.bvx); ADV.Audio.sfx('cursor'); }
+        if (act.by < 138) { act.by = 138; act.bvy = Math.abs(act.bvy); ADV.Audio.sfx('cursor'); }
+        // 挡板：落点越靠边，弹出的横向速度越大（可以“打角度”）
+        if (act.bvy > 0 && act.by > 488 && act.by < 512 && Math.abs(act.bx - padX) < 53) {
+          act.by = 488;
+          act.bvx = Math.max(-230, Math.min(230, (act.bx - padX) / 45 * 170));
+          act.bvy = -300;
+          ADV.Audio.sfx('cursor');
+        }
+        // 砖：3 行 × 6 列，命中即碎（弹回 + 计数），攒满 12 块过关
+        for (const b of act.bricks) {
+          if (!b.alive) continue;
+          const kx0 = 204 + b.c * 92, ky0 = 150 + b.r * 34;
+          if (act.bx > kx0 - 8 && act.bx < kx0 + 96 && act.by > ky0 - 8 && act.by < ky0 + 34) {
+            b.alive = false; act.cnt += 1;
+            act.bvy = -act.bvy;
+            ADV.Audio.sfx('correct');
+            if (act.cnt >= 12) { act.msg = 'GAME CLEAR! 砖墙开了个大洞！'; finish(true); return; }
+            break;
+          }
+        }
+        if (act.by > 560) {                                               // 掉球：两条命用完就结束
+          act.balls -= 1;
+          if (act.balls <= 0) { act.msg = '球用光了……敲下 ' + act.cnt + ' 块。'; finish(false); return; }
+          act.phase = 'serve';
+          act.msg = '球掉了！还剩 ' + act.balls + ' 条球命';
         }
       }
     }
@@ -1610,6 +1662,28 @@ ADV.Mini = (function () {
       }
       text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
       text(g, '← ↑ ↓ → 瞄准 · Z 敲 · 按顺序拼词 · 敲错 −4 秒 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
+    } else if (act.kind === 'brick') {
+      const f = drawFrame(g, '🧱 打砖块');
+      // 场地
+      g.fillStyle = '#101226'; g.fillRect(200, 130, 560, 430);
+      g.strokeStyle = '#3a4266'; g.lineWidth = 3; g.strokeRect(200, 130, 560, 430);
+      // 砖墙（3 行 × 6 列）
+      const rowCol = ['#e85a5a', '#ffd94c', '#4ae86c'];
+      act.bricks.forEach(b => {
+        if (!b.alive) return;
+        g.fillStyle = rowCol[b.r];
+        g.fillRect(204 + b.c * 92, 150 + b.r * 34, 88, 26);
+        g.fillStyle = 'rgba(255,255,255,.25)';
+        g.fillRect(204 + b.c * 92, 150 + b.r * 34, 88, 5);
+      });
+      // 挡板与球
+      const padX = act.px * 560 + 200;
+      g.fillStyle = '#7ab0ff'; g.fillRect(padX - 45, 496, 90, 12);
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(act.bx, act.by, 8, 0, Math.PI * 2); g.fill();
+      text(g, '已敲 ' + act.cnt + '/12 · ⏱ ' + Math.max(0, Math.ceil(act.t)) + 's · 剩球 ' + '●'.repeat(act.balls),
+        W / 2, f.y + 56, 17, '#cfe0ff');
+      text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
+      text(g, '←→ 移动 · Z 发球 · 落点越靠边弹得越偏 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
     }
   }
 

@@ -1213,6 +1213,10 @@ ADV.Maps = (function () {
     // 小卖部（童年集换卡 · 王叔）
     m.objects.push({ kind: 'sign', x: 35, y: 12, w: 1, h: 2, text: '小卖部', solidTiles: [[0, 1]], s: 'cardStand' });
     m.npcs.push({ id: 'cardman', x: 35, y: 14, dir: 'down', pal: 'cardman', name: '王叔', s: 'cardman', acts: ['laugh', 'wave'] });
+    // 街机角（S4 · 两台街机 + 游戏角木牌，小卖部东侧 · 王叔代管；错开小红家门厅(36,12)与怪谈4修车铺(38,13)）
+    m.objects.push({ kind: 'arcadeCab', x: 38, y: 12, w: 1, h: 1, solidTiles: [[0, 0]], s: 'arcade' });
+    m.objects.push({ kind: 'arcadeCab', x: 40, y: 12, w: 1, h: 1, solidTiles: [[0, 0]], s: 'arcade' });
+    m.objects.push({ kind: 'sign', x: 39, y: 12, w: 1, h: 2, text: '游戏角', solidTiles: [[0, 1]], s: 'arcade' });
     // 跳蚤市场（东南空地：摆摊还价 / 以物易物 / 拍卖 · 摊主爷爷坐镇）
     rect(m, 46, 19, 3, 8, 'path');                        // 主街南下市场的鹅卵石小路
     rect(m, 44, 26, 12, 6, 'path');                       // 市场广场
@@ -1434,6 +1438,7 @@ ADV.Maps = (function () {
     m.objects.push({ kind: 'goban', x: 8, y: 9, w: 1, h: 1, s: 'dinnerTable', solidTiles: [[0, 0]] });
     rect(m, 17, 1, 3, 1, 'wallShelf');                 // 卧室墙书架（图书）
     m.objects.push({ kind: 'wallArt', x: 20, y: 1, w: 1, h: 1, s: 'myPoster', solidTiles: [] });  // 章节海报（随主线更替）
+    if (ADV.Game.flags.arcadePoster) m.objects.push({ kind: 'neonArt', x: 21, y: 1, w: 1, h: 1, s: 'arcadePoster', solidTiles: [] });   // 街机角限定：霓虹海报
     set(m, 7, 9, 'chair'); set(m, 9, 9, 'chair');      // 饭桌两侧椅子
     set(m, 18, 9, 'chair');                            // 课桌旁椅子
     m.spawn = { x: 11, y: 11, dir: 'up' };

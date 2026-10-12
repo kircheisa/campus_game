@@ -1229,6 +1229,7 @@ ADV.Engine = (function () {
     bookStack: { h: 26 }, plantRack: { h: 40 }, wallClock: { h: 24 }, curtain: { h: 40 },
     bbNews: { h: 26 }, coatHook: { h: 20 }, stove2: { h: 30 }, trophyFrame: { h: 24 },
     catBed: { h: 18 }, chair2: { h: 34 }, wallArt: { h: 24 }, mailbox2: { h: 34 },
+    arcadeCab: { h: 40 }, neonArt: { h: 24 },                          // S4 街机角：街机柜 + 限定霓虹海报
     newsstand: { h: 40 }, swing: { h: 44 }, clothesline: { h: 36 }, bannerFlag: { h: 44 },
     starFruit: { h: 30 },                                             // 星之果实（精力上限）
     plot: { h: 24 }, coop: { h: 40 },                                 // 后院农场：田垄 + 鸡舍

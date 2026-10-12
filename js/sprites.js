@@ -1881,6 +1881,31 @@ ADV.Sprites = (function () {
     q(g, 5, 18, 4, 1, '#4ae86c');
     return c;
   }
+  // S4 街机角：街机柜（暗色机身 + 霓虹屏 + 投币口）
+  function makeArcadeCab() {
+    const c = cnv(26, 40), g = c.getContext('2d');
+    q(g, 2, 6, 22, 34, '#3a3f5c'); q(g, 4, 0, 18, 8, '#e85a5a');       // 机身 + 顶棚灯箱
+    q(g, 5, 2, 14, 4, '#2a2a3e');                                      // 灯箱屏
+    g.fillStyle = '#ffd94c'; g.fillText('🕹', 7, 2);
+    q(g, 6, 10, 14, 10, '#0d0f1e');                                    // 游戏屏
+    q(g, 8, 12, 4, 3, '#4ae86c'); q(g, 13, 15, 5, 3, '#e85a5a');       // 屏内砖块
+    g.fillStyle = '#fff'; g.fillRect(10, 20, 3, 3);                    // 屏内球
+    q(g, 5, 24, 16, 3, '#7ab0ff');                                     // 控制面板
+    g.fillStyle = '#ffd94c'; g.beginPath(); g.arc(9, 25.5, 1.6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#e85a5a'; g.beginPath(); g.arc(15, 25.5, 1.6, 0, Math.PI * 2); g.fill();
+    q(g, 8, 30, 3, 2, '#22243a'); q(g, 8, 34, 10, 2, '#22243a');       // 投币口 + 铭牌
+    return c;
+  }
+  // 街机角限定：霓虹海报（挂在家中墙上，夜里也亮的那种）
+  function makeNeonArt() {
+    const c = cnv(28, 24), g = c.getContext('2d');
+    q(g, 0, 0, 28, 24, '#8a5a2e'); q(g, 2, 2, 24, 20, '#141628');
+    q(g, 4, 4, 20, 2, '#e85a5a'); q(g, 4, 8, 14, 2, '#4ae86c');        // 霓虹字排
+    q(g, 4, 12, 17, 2, '#7ab0ff'); q(g, 4, 16, 11, 2, '#ffd94c');
+    g.fillStyle = '#ffd94c'; g.beginPath(); g.arc(22, 17, 3, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#141628'; g.beginPath(); g.arc(22, 17, 1.4, 0, Math.PI * 2); g.fill();
+    return c;
+  }
   function makeMailbox2() {
     const c = cnv(20, 34), g = c.getContext('2d');
     q(g, 8, 12, 4, 20, '#7a4a26');
@@ -2136,6 +2161,8 @@ ADV.Sprites = (function () {
       case 'catBed': c = makeCatBed(); break;
       case 'chair2': c = makeRattanChair(); break;
       case 'wallArt': c = makeWallArt(); break;
+      case 'arcadeCab': c = makeArcadeCab(); break;
+      case 'neonArt': c = makeNeonArt(); break;
       case 'mailbox2': c = makeMailbox2(); break;
       case 'newsstand': c = makeNewsstand(); break;
       case 'swing': c = makeSwing(); break;
