@@ -14,6 +14,26 @@
   // 命名多槽位（README 规划项收口）：主档/影子槽之外玩家自选的三个手动存点；
   // 只在工具条 💾/📂 菜单里显式读写，不参与自动存档与损坏回退链
   const NAMED_SLOTS = [SAVE_KEY + '_m1', SAVE_KEY + '_m2', SAVE_KEY + '_m3'];
+  /* —— 版本迁移框架（B12）：结构变更新案从此有路可走——
+   *   新增字段用 blankFlags 兜底即可不动这里；改语义/删字段才升版本：
+   *   ① SAVE_VERSION + 1；② MIGRATIONS[新版本号] 挂「旧数据 → 新数据」一步函数；
+   *   读档/导入统一过 migrateSave：旧档逐级升到当前版，更新版档（v > SAVE_VERSION）明确拒绝。 —— */
+  const SAVE_VERSION = 1;
+  const MIGRATIONS = {
+    // 示例（v2 落地时启用）：2: d => { d.flags.newField = d.flags.oldField; d.v = 2; return d; }
+  };
+  function migrateSave(d) {
+    if (!d || typeof d !== 'object') return d;
+    let v = (typeof d.v === 'number' && d.v >= 1) ? d.v : 1;
+    if (v > SAVE_VERSION) return null;                 // 来自更新版本的档：旧代码不认识，明确拒绝（不静默回出生点）
+    while (v < SAVE_VERSION) {
+      const step = MIGRATIONS[v + 1];
+      if (!step) break;                                // 缺迁移步骤：停在当前版（结构兼容就继续读）
+      d = step(d);
+      v = (d && typeof d.v === 'number') ? d.v : v + 1;
+    }
+    return d;
+  }
 
   function storageOk() {             // 隐私模式等场景 localStorage 会直接抛错
     if (_storageOk !== null) return _storageOk;
@@ -22,10 +42,11 @@
     return _storageOk;
   }
 
-  /* 存档语义校验：JSON 合法 ≠ 档案可用（防损坏档把游戏带崩） */
+  /* 存档语义校验：JSON 合法 ≠ 档案可用（防损坏档把游戏带崩）。
+   * 只做结构判断；版本门槛在 migrateSave（v > SAVE_VERSION 拒绝，低版本逐级迁移）。 */
   function validSave(d) {
     return !!(d && typeof d === 'object'
-      && (d.v === 1 || !d.v)
+      && (!d.v || (typeof d.v === 'number' && d.v >= 1))
       && (!d.map || typeof d.map === 'string')
       && d.flags && typeof d.flags === 'object'
       && (!d.friends || typeof d.friends === 'object'));
@@ -35,7 +56,7 @@
   function buildSaveData() {
     const p = ADV.Engine.player;
     return {
-      v: 1, hero: state.hero,
+      v: SAVE_VERSION, hero: state.hero,
       map: ADV.Engine.map ? ADV.Engine.map.id : 'campus',
       x: p ? p.x : 22, y: p ? p.y : 30, dir: p ? p.dir : 'up',
       flags: state.flags,
@@ -69,8 +90,10 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
-      const d = JSON.parse(raw);
+      let d = JSON.parse(raw);
       if (!validSave(d)) return null;
+      d = migrateSave(d);                              // 旧档逐级升级 / 更新版档拒绝（B12）
+      if (!d) return null;
       // 旧档升级：合并全部默认旗标，保证新增字段存在
       if (d && d.flags) d.flags = { ...blankFlags(), ...d.flags, badges: { ...blankFlags().badges, ...d.flags.badges } };
       return d;
@@ -124,10 +147,28 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
   }
   function importSave(code) {
     try {
-      const raw = decodeURIComponent(escape(atob(String(code).trim())));
-      const d = JSON.parse(raw);
+      code = String(code);
+      if (code.length > 2 * 1024 * 1024) return false;              // 超长串同步 parse 会卡主线程（B14）
+      const raw = decodeURIComponent(escape(atob(code.trim())));
+      let d = JSON.parse(raw);
       if (!validSave(d)) return false;
+      // —— 型别收紧（B14）：结构校验之外的关键字段逐项把关 ——
+      if (d.x !== undefined && typeof d.x !== 'number') return false;
+      if (d.y !== undefined && typeof d.y !== 'number') return false;
+      if (d.hero !== undefined && !HERO_NAMES[d.hero]) return false;          // hero 白名单
+      for (const k of ['cal', 'growth', 'skills'])
+        if (d[k] !== undefined && d[k] !== null && typeof d[k] !== 'object') return false;
+      d = migrateSave(d);                               // 旧档升级 / 更新版档拒绝（B12）
+      if (!d) {
+        try { UI().toast(' ⚠ 存档来自更新版本的游戏，当前版本无法读取 '); } catch (e0) {}
+        return false;
+      }
       localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+      try {                                             // 影子槽同步换血（B13）：导入后回退链不再「恢复」出上一局的无关进度
+        localStorage.setItem(SAVE_SLOTS[0], JSON.stringify(d));
+        localStorage.setItem(SAVE_SLOTS[1], JSON.stringify(d));
+        _slotFlip = false;
+      } catch (e1) {}
       _hasSave = null;                                // 缓存失效
       return true;
     } catch (e) { return false; }

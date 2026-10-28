@@ -7251,6 +7251,60 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  // ====================== [5.106] 存档 B12-B14：版本迁移框架 / 导入清影子槽 / 导入校验收紧 ======================
+  console.log('\n[5.106] 存档加固：SAVE_VERSION+MIGRATIONS 迁移框架 / importSave 影子换血 / 型别白名单');
+  {
+    const KMAIN106 = 'campus_adventure_save_v1';
+    const KS106 = [KMAIN106, KMAIN106 + '_a', KMAIN106 + '_b'];
+    const keep106 = {};
+    for (const k of KS106) keep106[k] = localStorage.getItem(k);
+    const gSnap106 = JSON.stringify(A.Growth.dump());
+    try {
+      // —— B12 源守护：版本常量 + 迁移表 + 读写统一口径 ——
+      const src106 = fs.readFileSync(path.join(ROOT, 'js', 'game-save.js'), 'utf8');
+      ok(src106.includes('const SAVE_VERSION = 1') && src106.includes('const MIGRATIONS')
+        && /while \(v < SAVE_VERSION\)/.test(src106) && src106.includes('v: SAVE_VERSION, hero'),
+        'B12 源：SAVE_VERSION 常量 + MIGRATIONS 迁移表 + buildSaveData/migrateSave 统一版本口径');
+      // —— B12 行为：更新版档读档/导入都明确拒绝 ——
+      const dGood106 = { v: 1, hero: 'hero_boy', map: 'campus', x: 10, y: 10, dir: 'up',
+        flags: { gold: 777 }, friends: {}, cal: { day: 9, period: 2, weather: '晴', checkedIn: true, streak: 1 } };
+      for (const k of KS106) localStorage.removeItem(k);
+      localStorage.setItem(KMAIN106, JSON.stringify({ ...dGood106, v: 2 }));
+      ok(A.Game.validSave(JSON.parse(localStorage.getItem(KMAIN106))) === true,
+        'B12 行为①：v2 档结构校验通过——validSave 只管结构，版本门槛在 migrateSave');
+      ok(A.Game.load() === null,
+        'B12 行为②：更新版档 readSlot 拒绝 → 主档影子全空时 load() 明确 null（不再整链判坏静默回出生点）');
+      ok(A.Game.importSave(btoa(unescape(encodeURIComponent(JSON.stringify({ ...dGood106, v: 2 }))))) === false,
+        'B12 行为③：导入更新版档同样拒绝（导入与读档同一条版本口径）');
+      // —— B13 行为：导入成功 → 主档+双影子同内容 ——
+      ok(A.Game.importSave(btoa(unescape(encodeURIComponent(JSON.stringify(dGood106))))) === true, '导入：合法档通过');
+      const mRaw106 = localStorage.getItem(KMAIN106);
+      ok(mRaw106 && localStorage.getItem(KMAIN106 + '_a') === mRaw106 && localStorage.getItem(KMAIN106 + '_b') === mRaw106,
+        'B13 行为：导入后主档+两影子槽同内容——回退链只会「恢复」出本局，不再潜伏上一局进度');
+      // —— B14 行为：超长 / 坏型别 / 坏 hero / 坏整包 全拒 ——
+      ok(A.Game.importSave('A'.repeat(2 * 1024 * 1024 + 1)) === false,
+        'B14 行为①：>2MB 导入串直接拒（不再同步 parse 卡主线程）');
+      ok(A.Game.importSave(btoa(unescape(encodeURIComponent(JSON.stringify({ ...dGood106, x: '9' }))))) === false,
+        'B14 行为②：x 非数值拒');
+      ok(A.Game.importSave(btoa(unescape(encodeURIComponent(JSON.stringify({ ...dGood106, hero: 'hacker' }))))) === false,
+        'B14 行为③：hero 不在白名单拒');
+      ok(A.Game.importSave(btoa(unescape(encodeURIComponent(JSON.stringify({ ...dGood106, cal: 'oops' }))))) === false,
+        'B14 行为④：cal 整包非对象拒');
+      // —— B14 Growth.load 收型：坏字段收默认、好字段不受伤 ——
+      A.Growth.load({ xp: 'abc', lv: 'abc', dim: { knowledge: 'x', body: 5 }, log: 'no', relic: 42 });
+      const gBad106 = A.Growth.dump();
+      ok(gBad106.xp === 0 && gBad106.lv === 1 && gBad106.dim.knowledge === 0 && gBad106.dim.body === 5
+        && Array.isArray(gBad106.log) && gBad106.log.length === 0 && gBad106.relic === '',
+        'B14 行为⑤：Growth.load 坏字段收型（NaN→0 / lv 保底 1 / dim 逐键收数 / log 数组化 / relic 字符串化），正常值原样保留');
+    } finally {
+      for (const k of KS106) {
+        if (keep106[k] === null) localStorage.removeItem(k);
+        else localStorage.setItem(k, keep106[k]);
+      }
+      A.Growth.load(JSON.parse(gSnap106));
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

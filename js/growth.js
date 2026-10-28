@@ -91,9 +91,15 @@ ADV.Growth = (function () {
   function dump() { return JSON.parse(JSON.stringify(st)); }
   function load(d) {
     if (!d) return;
-    st.xp = d.xp || 0; st.lv = Math.min(30, d.lv || 1);
-    st.dim = { knowledge: 0, body: 0, mind: 0, bond: 0, art: 0, ...(d.dim || {}) };
-    st.log = d.log || []; st.relic = d.relic || '';
+    // 逐字段收型（B14）：导入档的坏字段不再把 NaN/异型带进状态
+    st.xp = Math.max(0, Number(d.xp) || 0);
+    st.lv = Math.min(30, Math.max(1, Number(d.lv) || 1));
+    const dim = { knowledge: 0, body: 0, mind: 0, bond: 0, art: 0 };
+    if (d.dim && typeof d.dim === 'object') for (const k of Object.keys(dim))
+      dim[k] = Math.max(0, Number(d.dim[k]) || 0);
+    st.dim = dim;
+    st.log = Array.isArray(d.log) ? d.log : [];
+    st.relic = typeof d.relic === 'string' ? d.relic : '';
     aggCache = null;                                             // 存档切换：聚合缓存作废
   }
   function reset(relic) {
