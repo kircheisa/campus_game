@@ -1136,7 +1136,7 @@ ADV.Game = {
     NAMED_SLOTS, slotSummary, saveToSlot, loadFromSlot,  // 命名多槽位（工具条菜单消费 / 供测试）
     playerName, HERO_NAMES,                              // 主角名（开局自定义；HUD/序章消费，供测试）
     goldenKey,                                           // 金钥匙彩蛋（口令 → +1000 金，游戏日限 3000）
-    nextGoal, questList, logEvent, npcMindLine, guideStage, chapterState,
+    nextGoal, questList, todayLeft, logEvent, npcMindLine, guideStage, chapterState,
     themeWeek, upcomingEvents, achievements, growthReport, ngStart, OLYMP, OLYMP_QUIZ, OFFICE_LINES, FORGES, CLUBS, RECIPES, QUEST_POOL, RUMORS, DISH_BUFF, BUFF_META, buffActive, olympPrepTick, classicReadTick,
     farmTick,                                             // 后院农场每日结算（睡觉时调用 / 供测试）
     HOTBAR_SLOTS, hotbarCur, hotbarSelect, hotbarToolMatch,   // 工具热键栏（星露谷式快捷执行）

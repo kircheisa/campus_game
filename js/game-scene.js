@@ -298,6 +298,15 @@
       save();
     }
   };
+  /* 今日剩余委托数（B20「今日未完成」聚合行消费；与 helpBoard 同一套资格+按日洗牌口径） */
+  S.helpBoardLeft = () => {
+    const f = F(), C = ADV.Cal;
+    if (!C || !f.helpIntro) return 0;
+    const eligible = HELP_POOL.filter(r =>
+      (!r.seasons || r.seasons.includes(C.seasonEn()))
+      && (!r.need || f[r.need]));
+    return seededShuffle(eligible, C.day * 7 + 3).filter(r => f.helpDone[r.id] !== C.day).length;
+  };
 
   /* —— 教室 · 班务角（C7 班委竞选）：凭帮助板声望竞聘委员，就任后每周一份职责小任务 —— */
   const CLASS_ROLES = {

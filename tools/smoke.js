@@ -7188,6 +7188,69 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     for (let i = 0; i < 340; i++) A.UI.update(1 / 60, {});   // 清场，不污染后续测试块
   }
 
+  // ====================== [5.105] 引导表现批次：发卡分支 / ✔金行 / 今日聚合 / 触屏翻页 / HUD 目标行（B15-B20 · C21-C22） ======================
+  {
+    const srcUI105 = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8');
+    const f105 = A.Game.flags;
+    const snap105 = JSON.stringify(f105);
+    const cal105 = { day: A.Cal.day, period: A.Cal.period, weather: A.Cal.weather, checkedIn: A.Cal.checkedIn, streak: A.Cal.streak };
+    try {
+      // [5.103] 收尾停在新生档（introDone=false）——任务清单 arrival 段早退，这里临时推进到完整阶段（finally 快照还原）
+      f105.introDone = true; f105.metPrincipal = true; f105.gateOpen = true;
+      // —— B19：发卡支线按进度三分支（来源指引 ≠ 交付指引） ——
+      f105.heardHairpin = true; f105.hairpinReturned = false; f105.gotHairpin = false; f105.breadShared = false;
+      ok(A.Game.questList().some(s => s.includes('食堂找小胖')),
+        'B19 行为①：未打听时指引「食堂找小胖（先拿面包）」——不再一律「先找小胖聊聊」');
+      f105.breadShared = true;
+      ok(A.Game.questList().some(s => s.includes('池塘')) && !A.Game.questList().some(s => s.includes('小胖打听')),
+        'B19 行为②：得线索后指引「喷泉东北池塘」——话题从找小胖推进到调查点');
+      f105.gotHairpin = true;
+      ok(A.Game.questList().some(s => s.startsWith('✔') && s.includes('小红')),
+        'B19 行为③：到手后 ✔ 可交付行指向小红（操场）——交付点不再指错人');
+      // —— B19：漫画两分支 ——
+      f105.heardComic = true; f105.comicReturned = false; f105.gotComic = false;
+      ok(A.Game.questList().some(s => s.includes('抽屉')) , 'B19 行为④：漫画未拾取时指引「教室课桌抽屉」');
+      f105.gotComic = true;
+      ok(A.Game.questList().some(s => s.startsWith('✔') && s.includes('小明')), 'B19 行为⑤：漫画到手后 ✔ 行指向小明（教学楼）');
+      // —— B20：今日未完成聚合（旗标直推） ——
+      A.Cal.load({ day: 12, period: 3, weather: '晴', checkedIn: false, streak: 2 });   // 周五·有课日
+      f105.lessonDay = 11;                               // 昨天上过 → 今天未上
+      const left105a = A.Game.todayLeft();
+      ok(Array.isArray(left105a) && left105a.some(s => s.includes('打卡')) && left105a.some(s => s.startsWith('上课')),
+        `B20 行为①：未打卡+未上课进「今日未完成」聚合（${left105a.join('·')}）`);
+      A.Cal.load({ day: 12, period: 3, weather: '晴', checkedIn: true, streak: 2 });
+      f105.lessonDay = 12;
+      const left105b = A.Game.todayLeft();
+      ok(!left105b.some(s => s.includes('打卡')) && !left105b.some(s => s.startsWith('上课')),
+        'B20 行为②：打卡/上课完成后从聚合行消失');
+      // —— B18：✔ 行挂金（源守护）——
+      ok(srcUI105.includes("s.startsWith('✔')"), 'B18 源：任务页按 ✔ 前缀挂金——可交付一眼可辨');
+      // —— B15：触屏翻页（源守护：命中区扩到任务/背包 + 话术切换） ——
+      ok(srcUI105.includes('tab === 0 || tab === 1 || tab === 5') && srcUI105.includes('function pageHint()')
+        && srcUI105.includes("touchUI ? '▲▼ 点按翻页'"),
+        'B15 源：任务/背包页滚动箭头命中区 + PgUp 话术按 touchUI 切换');
+      // —— B16/B17/C21/C22：HUD 新行（源守护 + 渲染不崩） ——
+      ok(srcUI105.includes('Q 面板 · L 回看'), 'B16 源：HUD 提示行补「Q 面板 · L 回看」');
+      ok(srcUI105.includes("'🎯 ' + ADV.Game.nextGoal()"), 'B17 源：完整面板常驻 🎯 当前目标行');
+      ok(srcUI105.includes("' 人  '") && srcUI105.includes('图例'), 'C21 源：小地图窗下图例行（●人 ▪门 ▫你 与绘制一一对应）');
+      ok(srcUI105.includes("'【' + s + '】'") && srcUI105.includes("flags.lessonDay === ADV.Cal.day"),
+        'C22 源：课表当日重点【高亮】+ 已上/未上（与 takeClass 同式取当日节次）');
+      A.UI.renderHUD(makeCtx(makeCanvas()), A.Game.flags, '校园', false);
+      ok(true, 'B17/C21/C22 行为：HUD 目标行/课表高亮/图例渲染不崩');
+      A.UI.renderJournal(makeCtx(makeCanvas()), A.Game.friends, A.Game.BOND, 1);
+      ok(true, 'B18/B20 行为：任务页 ✔金行/聚合行/滚动箭头渲染不崩');
+      // —— journalHit 命中区行为（纯函数：任务/背包页 ▲▼ 可命中，其它页不误触） ——
+      const jx = 120 + 720 - 34, jyUp = 50 + 70 + 87, jyDown = 50 + 70 + 456 - 45;
+      ok(A.UI.journalHit(1, jx, jyUp) && A.UI.journalHit(1, jx, jyUp).t === 'fup'
+        && A.UI.journalHit(5, jx, jyDown).t === 'fdown',
+        'B15 行为：任务/背包页 ▲▼ 命中返回 fup/fdown（main.js 既有通路直接翻 listScroll）');
+      ok((A.UI.journalHit(2, jx, jyUp) || {}).t !== 'fup', 'B15 行为：非滚动页（日历）同位置不误触翻页');
+    } finally {
+      Object.assign(f105, JSON.parse(snap105));
+      A.Cal.load(cal105);
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

@@ -470,7 +470,7 @@ ADV.UI = (function () {
       const tx = x + 444 + si * 70, ty = y + 18;
       if (px >= tx - 8 && px <= tx + 58 && py >= ty - 4 && py <= ty + 20) return { t: 'tab', ti: gr.tabs[si] };
     }
-    if (tab === 0) {                                                     // 好友页滚动箭头
+    if (tab === 0 || tab === 1 || tab === 5) {                           // 好友/任务/背包页滚动箭头（B15：触屏也能翻长列表）
       const cy2 = y + 70, ch2 = h - 84;
       if (px >= x + w - 50 && px <= x + w - 18) {
         if (py >= cy2 + 70 && py <= cy2 + 104) return { t: 'fup' };
@@ -529,6 +529,8 @@ ADV.UI = (function () {
   }
   function resetJournalScroll() { friendScroll = 0; listScroll = 0; }
   function journalPageMax(rows) { return Math.max(0, rows - FRIEND_ROWS); }
+  /* 翻页话术按输入方式切换（B15）：键盘 PgUp/PgDn，触屏 ▲▼ 点按 */
+  function pageHint() { return touchUI ? '▲▼ 点按翻页' : 'PgUp/PgDn'; }
   function renderJournal(g, friends, BOND, tab, ctx2) {
     tab = Math.max(0, Math.min(TAB_META.length - 1, tab || 0));
     let gi = JOURNAL_GROUPS.findIndex(gr => gr.tabs.indexOf(tab) >= 0);
@@ -552,7 +554,7 @@ ADV.UI = (function () {
       text(g, (ti === tab ? '▶ ' : '') + TAB_META[ti].label, tx, ty, 16, ti === tab ? '#ffe9a8' : GROUP_COLOR[picked.group]);
     });
     text(g, picked.hint, x + w - 26, y + 46, 13, GROUP_COLOR[picked.group], 'right', 'normal');
-    text(g, '← → 切页 · ↑ ↓ 切组' + (tab === 0 ? ' · PgUp/PgDn 翻好友' : '') + ' · F 关闭', x + w - 26, y + h - 26, 13, '#8a94c0', 'right', 'normal');
+    text(g, touchUI ? '点上方切页 · ▲▼ 翻页 · 点窗外关闭' : '← → 切页 · ↑ ↓ 切组' + (tab === 0 ? ' · PgUp/PgDn 翻好友' : '') + ' · F 关闭', x + w - 26, y + h - 26, 13, '#8a94c0', 'right', 'normal');
     if (tab === 0) renderFriends(g, friends, BOND, x, cy, w, ch);
     else if (tab === 1 && ADV.Game && ADV.Game.questList) renderQuests(g, x, cy, w, ch);
     else if (tab === 2 && ADV.Game && ADV.Game.upcomingEvents) renderCalendar(g, x, cy + 60, w, ch - 80);
@@ -761,10 +763,22 @@ ADV.UI = (function () {
     list.slice(start, start + vis).forEach((s, i) => {
       const main = s.startsWith('【主线】');
       const chapterLine = s.startsWith('【章节】');
-      text(g, s, x + 44, y + oy + i * 30, chapterLine ? 17 : (main ? 19 : 16), chapterLine ? '#7ab0ff' : (main ? '#ffe9a8' : '#e8ecff'), undefined, 'left');
+      const ready = s.startsWith('✔');                     // 可交付行挂金（B18：交付时机不再靠碰）
+      text(g, s, x + 44, y + oy + i * 30, chapterLine ? 17 : (main ? 19 : 16), chapterLine ? '#7ab0ff' : ready ? '#ffd94c' : (main ? '#ffe9a8' : '#e8ecff'), undefined, 'left');
     });
-    if (list.length > vis)
-      text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 项 · PgUp/PgDn 翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
+    if (list.length > vis) {                               // 滚动指示 + 行号（B15：触屏箭头命中区见 journalHit）
+      text(g, '▲', x + w - 34, y + 82, 15, listScroll > 0 ? '#ffe9a8' : '#5a6288', 'center');
+      text(g, '▼', x + w - 34, y + h - 50, 15, listScroll < list.length - vis ? '#ffe9a8' : '#5a6288', 'center');
+      text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 项 · ${pageHint()}翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
+    }
+    // 今日未完成聚合（B20）：旗标直推一行，顶角常驻不与清单正文抢位
+    if (ADV.Game.todayLeft) {
+      try {
+        const left = ADV.Game.todayLeft();
+        if (left.length) text(g, '📋 未完成：' + left.join(' · '), x + w - 44, y + 36, 13, '#ffb0a0', 'right', 'normal');
+        else text(g, '✅ 今日日常完成', x + w - 44, y + 36, 13, '#b8e8c0', 'right', 'normal');
+      } catch (e) {}
+    }
     text(g, stage === 'full' ? '睡一觉后，会提示今日目标' : '第一天不用赶进度，先熟悉校园和人', x + w / 2, y + h - 30, 13, '#8a94c0', 'center');
   }
   function renderFriends(g, friends, BOND, x, y, w, h) {
@@ -806,7 +820,7 @@ ADV.UI = (function () {
       const max = journalPageMax(rows);
       text(g, '▲', x + w - 34, y + 82, 15, friendScroll > 0 ? '#ffe9a8' : '#5a6288', 'center');
       text(g, '▼', x + w - 34, y + h - 50, 15, friendScroll < max ? '#ffe9a8' : '#5a6288', 'center');
-      text(g, `${friendScroll + 1}-${Math.min(rows, friendScroll + FRIEND_ROWS)}/${rows} 行 · PgUp/PgDn`, x + w - 48, y + h - 26, 11, '#8a94c0', 'right', 'normal');
+      text(g, `${friendScroll + 1}-${Math.min(rows, friendScroll + FRIEND_ROWS)}/${rows} 行 · ${pageHint()}`, x + w - 48, y + h - 26, 11, '#8a94c0', 'right', 'normal');
     }
   }
   function renderCollect(g, x, y, w, h) {
@@ -896,8 +910,11 @@ ADV.UI = (function () {
       const cx = x + 40 + (i % 2) * 330, cy = y + 106 + ((i / 2) | 0) * 30;
       text(g, `${it.gift ? '🎁' : '·'} ${it.name} ×${it.n}`, cx, cy, 16, '#fff', undefined, 'left');
     });
-    if (list.length > vis)
-      text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 件 · PgUp/PgDn 翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
+    if (list.length > vis) {
+      text(g, '▲', x + w - 34, y + 82, 15, listScroll > 0 ? '#ffe9a8' : '#5a6288', 'center');
+      text(g, '▼', x + w - 34, y + h - 50, 15, listScroll < list.length - vis ? '#ffe9a8' : '#5a6288', 'center');
+      text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 件 · ${pageHint()}翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
+    }
     text(g, 'G 键面向 NPC 送礼（生日当天翻倍）', x + w / 2, y + h - 30, 14, '#8a94c0', 'center');
   }
   /* 📖 背包页底部食谱区（S5 料理 buff）：已学食谱 + 当日生效的加成一览 */
@@ -1069,17 +1086,35 @@ ADV.UI = (function () {
       drawWindow(g, 16, 164, w2, 30);
       if (icon) g.drawImage(icon, 26, 167, 22, 22);
       text(g, lab, 30 + iw, 172, 13, ADV.Cal.checkedIn ? '#b8e8c0' : '#ffb0a0', undefined, 'normal');
-      // 今日课程行（课程表，休息日不显示）
+      // 今日课程行（课程表，休息日不显示）——当日重点节次【高亮】+ 已上/未上（C22：课表≠全天5门都能上）
       if (ADV.Cal.today) {
         const list = ADV.Cal.today();
         if (list.length) {
-          const lab2 = '课表：' + list.join(' · ');
+          const cur = list[(ADV.Cal.day - 1) % list.length];       // 当日重点节次（与 takeClass 同式）
+          const done = flags.lessonDay === ADV.Cal.day;
+          const segs = [['课表：', '#8a94c0']];
+          list.forEach((s, i) => {
+            if (i) segs.push([' · ', '#8a94c0']);
+            segs.push([s === cur ? '【' + s + '】' : s, s === cur ? '#ffe9a8' : '#aab4d4']);
+          });
+          segs.push([done ? '　已上' : '　未上', done ? '#b8e8c0' : '#ffb0a0']);
           g.font = FONT(12);
-          const w3 = g.measureText(lab2).width + 24;
+          const w3 = segs.reduce((a, [t]) => a + g.measureText(t).width, 0) + 24;
           drawWindow(g, 16, 198, w3, 24);
-          text(g, lab2, 28, 204, 12, '#aab4d4', undefined, 'normal');
+          let sx = 28;
+          for (const [t, col] of segs) { text(g, t, sx, 204, 12, col, 'left', 'normal'); sx += g.measureText(t).width; }
         }
       }
+    }
+    // 当前目标行（B17：nextGoal 早已带方位指引，HUD 常驻一行——想知道「现在去哪」不再翻手册）
+    if (ADV.Game && ADV.Game.nextGoal) {
+      try {
+        g.font = FONT(13);
+        const goal = '🎯 ' + ADV.Game.nextGoal();
+        const wg = g.measureText(goal).width + 24;
+        drawWindow(g, 16, 226, wg, 24);
+        text(g, goal, 28, 232, 13, '#ffe9a8', undefined, 'normal');
+      } catch (e) {}
     }
     text(g, 'Q 收起', 16 + 322 - 8, 14, 12, '#8a94c0', 'right', 'normal');
 
@@ -1107,12 +1142,18 @@ ADV.UI = (function () {
       const pa = .55 + .45 * Math.sin(performance.now() / 180);
       g.fillStyle = `rgba(255,255,255,${pa.toFixed(2)})`;
       g.fillRect(mx + pl.x * miniSc - 1.5, my + pl.y * miniSc - 1.5, 4, 4);
+      // 图例（C21：点义不再靠试错——形状+颜色与上层绘制一一对应）
+      g.font = FONT(11);
+      const toks = [['●', '#6ee8ff'], [' 人  ', '#8a94c0'], ['▪', '#ffd94c'], [' 门  ', '#8a94c0'], ['▫', '#ffffff'], [' 你', '#8a94c0']];
+      const totW = toks.reduce((a, [t]) => a + g.measureText(t).width, 0);
+      let lx = mx + (mw - totW) / 2;
+      for (const [t, col] of toks) { text(g, t, lx, my + mh + 9, 11, col, 'left', 'normal'); lx += g.measureText(t).width; }
     }
 
     // 操作提示（右下 · 触屏模式下虚拟按键自带语义，不再挤占画面）
     if (!touchUI) {
       g.save(); g.globalAlpha = .55;
-      text(g, '方向键/WASD 移动 · Z/空格 确认 · C 招手 · G 送礼 · H 邀同学 · Tab 小地图 · Shift 加速' + (muted ? ' · 已静音(M)' : ''), W - 20, H - 30, 14, '#cdd6f0', 'right', 'normal');
+      text(g, '方向键/WASD 移动 · Z/空格 确认 · C 招手 · G 送礼 · H 邀同学 · Tab 小地图 · Shift 加速 · Q 面板 · L 回看' + (muted ? ' · 已静音(M)' : ''), W - 20, H - 30, 14, '#cdd6f0', 'right', 'normal');
       g.restore();
     }
   }

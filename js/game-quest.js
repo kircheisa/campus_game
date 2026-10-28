@@ -105,6 +105,34 @@
     if (n < 4) return `收集智慧徽章（${n}/4）：${f.badges.math ? '' : '数学 '}${f.badges.chinese ? '' : '语文 '}${f.badges.science ? '' : '科学 '}${f.badges.english ? '' : '英语'}`;
     return '调查后山石门（最东侧）';
   }
+  /* —— 今日未完成聚合（B20）：从旗标直推，手册任务页顶角消费——不再靠回忆晨报 —— */
+  function todayLeft() {
+    const f = F(), C = ADV.Cal;
+    if (!C) return [];
+    const out = [];
+    if (!C.checkedIn) out.push('打卡');
+    const subs = (C.today && C.today()) || [];
+    if (subs.length && f.lessonDay !== C.day) out.push(`上课（重点：${subs[(C.day - 1) % subs.length]}）`);
+    if (ADV.Collect && ADV.Collect.count && ADV.Collect.count('fishingRod') > 0) {
+      const cap = ADV.Skills ? ADV.Skills.fishRods() : 3;
+      const fd = f.fish || {}, used = fd.day === C.day ? (fd.n || 0) : 0;
+      if (used < cap) out.push(`钓鱼 ${cap - used} 竿`);
+    }
+    if (f.cow && f.milkReady > 0) out.push('挤奶');
+    if (f.sheep && f.woolReady > 0) out.push('剪毛');
+    try {
+      const hb = (ADV.Game && ADV.Game.S && ADV.Game.S.helpBoardLeft) ? ADV.Game.S.helpBoardLeft() : 0;
+      if (hb > 0) out.push(f.helpIntro ? `帮助板 ×${hb}` : '帮助板');
+    } catch (e) {}
+    return out;
+  }
+  /* —— 发卡支线按进度分支（B19）：来源指引 ≠ 交付指引——三段各指下一步该找谁·在哪 —— */
+  function hairpinRow() {
+    const f = F();
+    if (f.gotHairpin) return '✔ 🎀 把发卡还给小红（操场东侧）';
+    if (f.breadShared) return '🎀 小胖的线索：喷泉东北边的池塘，水草里有亮晶晶的东西';
+    return '🎀 小红丢了发卡——去食堂找小胖打听（先从阿姨柜台拿芝麻面包）';
+  }
   /* —— 章节中点过场（改进方案 A4）：每章 50% 处一个 30 秒的转折，一次性旗标 —— */
   async function chapterMid(n) {
     const f = F(), key = 'midCh' + n;
@@ -150,8 +178,8 @@
       add(true, '🏫 去北边几栋教学楼逛逛，熟悉校园布局');
       add(!(ADV.Cal && ADV.Cal.checkedIn), '📝 放学前记得去校务板打卡，晚上才能安心睡觉');
       add(badgeCount() === 0, '🎓 先挑一位老师聊聊，试试第一枚智慧徽章');
-      add(f.heardHairpin && !f.hairpinReturned, '🎀 小红丢了发卡（先找小胖聊聊）');
-      add(f.heardComic && !f.comicReturned, '📚 小明的漫画书落在教室课桌');
+      add(f.heardHairpin && !f.hairpinReturned, hairpinRow());
+      add(f.heardComic && !f.comicReturned, f.gotComic ? '✔ 📚 把漫画还给小明（教学楼）' : '📚 小明的漫画书落在教室课桌（抽屉翻找）');
       return out;
     }
     if (chapter.id === 'ch1_badges') {
@@ -192,8 +220,8 @@
     if (chapter.phase >= 4) {
       add(true, '🌻 终章状态：主线完成，适合专心补图鉴、友谊、社团、武林与四季花园');
     }
-    add(f.heardHairpin && !f.hairpinReturned, '🎀 小红丢了发卡（先找小胖聊聊）');
-    add(f.heardComic && !f.comicReturned, '📚 小明的漫画书落在教室课桌');
+    add(f.heardHairpin && !f.hairpinReturned, hairpinRow());
+    add(f.heardComic && !f.comicReturned, f.gotComic ? '✔ 📚 把漫画还给小明（教学楼）' : '📚 小明的漫画书落在教室课桌（抽屉翻找）');
     add(f.mapPieces > 0 && !f.caveOpen, `🗺 宝藏图碎片 ${f.mapPieces}/3`);
     add(f.caveOpen && !f.chests.chestC, '🗝 藏宝洞窟：三只宝箱');
     add(f.act >= 2 && !f.wuyunB3, '🥊 道场：乌云帮三连战');
@@ -203,7 +231,7 @@
     add(f.act >= 4 && !f.midterm, '📝 校务板：期中大考（S 级有惊喜）');
     add(f.photoStreetQuest && !f.photoStreetDone, `📷 照相馆：街区风景 ${ownedCount('scenes', STREET_SCENES)}/3`);
     add(f.photoStreetDone && !f.photoRuralDone, `🌾 照相馆：郊外风景 ${ownedCount('scenes', RURAL_SCENES)}/2`);
-    add(f.tailorQuest && !f.tailorDone, '🧵 裁缝阿姨：花束 + 幸运发绳');
+    add(f.tailorQuest && !f.tailorDone, '🧵 裁缝阿姨（老街裁缝铺）：花束 + 幸运发绳');
     add((f.clockWins || 0) < 3, `⏰ 钟表铺：报时练习 ${f.clockWins || 0}/3`);
     add(f.marketCharmDay === ADV.Cal.day && f.marketCharmUsed !== ADV.Cal.day, '💈 今日理发加成还没用：去跳蚤市场卖一件东西');
     add(!f.comicCornerDone, '📚 老街漫画角：给小明留一本到手的漫画');
