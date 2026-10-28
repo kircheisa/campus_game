@@ -1766,19 +1766,23 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     genVisitor();
     // —— 后院农场结算：浇过水的田长一截 / 小鸡下一枚蛋 ——
     farmTick();
-    // 生日提醒等事件
-    for (const ev of events) UI().toast(' ' + ev.text + ' ');
+    // 生日提醒等事件（同步写入 L 键回看历史——晨报洪峰易顶掉 toast，审计 A4）
+    for (const ev of events) { UI().toast(' ' + ev.text + ' '); UI().pushHistory('晨报', ev.text); }
     // 情节连续性：晨间播报今日大事件（校务板上的大事件不再靠玩家自己撞见）
-    for (const t of upcomingEvents().rows[0].evs) UI().toast(' 📌 今日：' + t + ' ');
+    const todayEvs = upcomingEvents().rows[0].evs;
+    for (const t of todayEvs) UI().toast(' 📌 今日：' + t + ' ');
+    if (todayEvs.length) UI().pushHistory('晨报', '今日：' + todayEvs.join('、'));
     // 体验收束（一）：系统开张导览——一天最多开张一家，新玩法逐日登场
     const tourTip = systemTour();
-    if (tourTip) UI().toast(' ' + tourTip + ' ');
+    if (tourTip) { UI().toast(' ' + tourTip + ' '); UI().pushHistory('导览', tourTip); }
     // 新生阶段只给最关键的提醒，先让玩家把学校过熟。
     if (guideStage() === 'full') {
       const fortunes = ['大吉：今天适合挖宝', '中吉：考试运不错', '小吉：和朋友多聊聊', '平：稳稳的一天', '末吉：今晚早点睡'];
       UI().toast(' 🔮 ' + fortunes[(Math.random() * fortunes.length) | 0] + ' ');
     }
-    UI().toast((guideStage() === 'full' ? ' 📌 今日目标：' : ' 🌤 今天先做这几件事：') + nextGoal() + ' ');
+    const goalLine = (guideStage() === 'full' ? ' 📌 今日目标：' : ' 🌤 今天先做这几件事：') + nextGoal() + ' ';
+    UI().toast(goalLine);
+    UI().pushHistory('晨报', goalLine.trim());   // 今日目标入回看：错过晨报 toast 也能 L 键找回（审计 A4）
     await new Promise(res => ADV.Engine.fadeTo(0, .6, res));
     // 清晨问候：在自己家醒来，爸妈的一句早安（星露谷式的家庭温度）
     if (atHome) {

@@ -208,7 +208,10 @@ ADV.UI = (function () {
   function toast(t) {
     // 时长随文本长度伸缩（读得完再消失），队列上限放宽到 5 条
     toasts.push({ text: t, t: 0, dur: 2.2 + Math.min(2.2, String(t).length / 14) });
-    if (toasts.length > 5) toasts.shift();   // 超过 5 条时挤掉最旧的
+    if (toasts.length > 5) {                 // 超限优先挤「非 📌」旧条目：晨报指引类系统条目不静默蒸发（审计 A4）
+      const keep = toasts.findIndex(x => !String(x.text).includes('📌'));
+      toasts.splice(keep < 0 ? 0 : keep, 1);
+    }
   }
 
   /* ---------- 对话历史（L 键回看） ---------- */
@@ -1163,6 +1166,7 @@ ADV.UI = (function () {
     get busy() { return !!(active || itemAnim); },
     get activeInfo() { return active ? { type: active.type, index: active.index, n: active.options ? active.options.length : undefined, ci: active.cancelIndex } : (itemAnim ? { type: 'anim' } : null); },   // 供 e2e 诊断：当前窗口类型/选项数/高亮/取消位
     get toastCount() { return toasts.length; },   // 供冒烟测试断言队列
+    get toastPeek() { return toasts.map(x => x.text); },   // 供冒烟测试断言挤掉策略（📌 保护）
     get minimapOn() { return minimapOn; },        // 供冒烟测试断言开关
     get safePad() { return safePad; },            // 供冒烟测试断言安全区
     get touchUI() { return touchUI; },

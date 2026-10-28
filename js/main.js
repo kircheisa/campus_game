@@ -154,6 +154,7 @@ ADV.Main = (function () {
   let titleIdx = 0;
   let heroIdx = 0;
   let helpFrom = 'title';
+  let helpPage = 0;             // 操作说明分页（←→ 翻页）
   let ending = { t: 0 };
   let titleT = 0;
   let journalOpen = false;      // F：生活手册
@@ -227,13 +228,13 @@ ADV.Main = (function () {
       ADV.Audio.init(); ADV.Audio.resume(); ADV.Audio.sfx('start');
       const it = items[titleIdx];
       if (it === '开始新冒险') {
-        if (ADV.Game.hasSave()) { state = 'confirmNew'; titleIdx = 0; }
+        if (ADV.Game.hasSave()) { state = 'confirmNew'; titleIdx = 1; }   // 默认聚焦「返回」：破坏项永不默认
         else { state = 'heroSelect'; }
       } else if (it === '继续冒险') {
         if (ADV.Game.continueGame()) { ADV.UI.toast(' 已读取存档 '); state = 'play'; }
       } else if (it === '新的学期（NG+）') {
         state = 'ngRelic'; titleIdx = 0;                     // 先选成长信物，再开学
-      } else if (it === '操作说明') { helpFrom = 'title'; state = 'help'; }
+      } else if (it === '操作说明') { helpFrom = 'title'; helpPage = 0; state = 'help'; }
       else if (it === '导出存档') { exportSaveUI(); }
       else if (it === '导入存档') { importSaveUI(); }
     }
@@ -477,7 +478,42 @@ ADV.Main = (function () {
   }
 
   /* ==================== 操作说明 ==================== */
+  // 操作说明分三页（每页 ≤11 行 ×34px=374px，窗内 y 150~524，不再画到 640 画布外——审计 A1）
+  const HELP_PAGES = [
+    [ // 基础操作
+      ['方向键 / WASD', '四处走动（Shift 加速）'],
+      ['Z / 回车 / 空格', '对话 · 调查 · 确认'],
+      ['X / Esc', '取消 · 关闭'],
+      ['C', '挥手打招呼（NPC 会回应你）'],
+      ['G', '面向 NPC 送礼（投其所好！）'],
+      ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
+      ['M', '静音开关（三档循环）'],
+      ['Q / L / P / V', 'HUD 三态 · 对话回看 · 自动播放 · 虚拟按键'],
+      ['💾 / 📂 工具条', '手动保存 / 读取进度（主档外可存三个命名槽位；平时也自动存）'],
+      ['🔑 工具条', '金钥匙（输入正确口令才能转动）'],
+      ['F', '手册（↑ ↓ 切组 · ← → 切页：关系/生活/收藏/学习/成长）'],
+    ],
+    [
+      ['【生活】', ''],
+      ['· 每天到校园"打卡处"答题', '难度渐涨，错题重做后算打卡'],
+      ['· 周五有周测，月中有月考', '夜晚在家复习会更简单'],
+      ['· 礼品店买礼物、G 键送礼', '记住每个人的偏好！'],
+      ['· 家里饭桌旁帮忙做家务', '每天一次，赚零花钱'],
+      ['· 挖宝要铲子+乌云的残页', '全校埋着 8 处宝藏'],
+    ],
+    [
+      ['【玩法】', ''],
+      ['· 与老师对话，接受学科试炼', '答对题目获得智慧徽章'],
+      ['· 集齐 数学/语文/科学/英语 四枚徽章', '打开后山的古老石门'],
+      ['· 穿过后山秘境的最终试炼', '点亮祭坛，见证结局！'],
+      ['· 体育馆与音乐教室藏着小游戏', '赢取宝藏图碎片'],
+      ['· 集齐三张宝藏图', '打开东郊的藏宝洞窟！'],
+      ['· 和同学们聊聊天', '他们个个能说会道哦']
+    ],
+  ];
   function updateHelp() {
+    if (pressed.left) { helpPage = (helpPage + HELP_PAGES.length - 1) % HELP_PAGES.length; ADV.Audio.sfx('cursor'); }
+    if (pressed.right) { helpPage = (helpPage + 1) % HELP_PAGES.length; ADV.Audio.sfx('cursor'); }
     if (pressed.ok || pressed.cancel) { ADV.Audio.sfx('cancel'); state = helpFrom; }
   }
   function renderHelp() {
@@ -486,40 +522,15 @@ ADV.Main = (function () {
     const w = 620, h = 520, x = (W - w) / 2, y = 70;
     ADV.UI.drawWindow(ctx, x, y, w, h);
     text('操 作 说 明', W / 2, y + 26, 30, '#ffe9a8', 'center');
-    const rows = [
-      ['方向键 / WASD', '四处走动（Shift 加速）'],
-      ['Z / 回车 / 空格', '对话 · 调查 · 确认'],
-      ['X / Esc', '取消 · 关闭'],
-      ['C', '挥手打招呼（NPC 会回应你）'],
-      ['G', '面向 NPC 送礼（投其所好！）'],
-      ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
-      ['M', '静音开关'],
-      ['💾 / 📂 工具条', '手动保存 / 读取进度（主档外可存三个命名槽位；平时也自动存）'],
-      ['🔑 工具条', '金钥匙（输入正确口令才能转动）'],
-      ['F', '手册（↑ ↓ 切组 · ← → 切页：关系/生活/收藏/学习/成长）'],
-      ['', ''],
-      ['【生活】', ''],
-      ['· 每天到校园"打卡处"答题', '难度渐涨，错题重做后算打卡'],
-      ['· 周五有周测，月中有月考', '夜晚在家复习会更简单'],
-      ['· 礼品店买礼物、G 键送礼', '记住每个人的偏好！'],
-      ['· 家里饭桌旁帮忙做家务', '每天一次，赚零花钱'],
-      ['· 挖宝要铲子+乌云的残页', '全校埋着 8 处宝藏'],
-      ['', ''],
-      ['【玩法】', ''],
-      ['· 与老师对话，接受学科试炼', '答对题目获得智慧徽章'],
-      ['· 集齐 数学/语文/科学/英语 四枚徽章', '打开后山的古老石门'],
-      ['· 穿过后山秘境的最终试炼', '点亮祭坛，见证结局！'],
-      ['· 体育馆与音乐教室藏着小游戏', '赢取宝藏图碎片'],
-      ['· 集齐三张宝藏图', '打开东郊的藏宝洞窟！'],
-      ['· 和同学们聊聊天', '他们个个能说会道哦']
-    ];
+    const rows = HELP_PAGES[helpPage];
     rows.forEach((r, i) => {
       if (r[0]) {
         text(r[0], x + 50, y + 80 + i * 34, 18, '#8ab4ff');
         text(r[1], x + 250, y + 80 + i * 34, 18, '#fff', undefined, 'normal');
       }
     });
-    text(ADV.UI.touchUI ? '按 ● / ✕ 返回' : '按 Z / X 返回', W / 2, y + h - 46, 17, '#aab4d4', 'center', 'normal');
+    const touch = ADV.UI.touchUI;
+    text((touch ? '点两侧翻页' : '← → 翻页') + ` · ${helpPage + 1}/${HELP_PAGES.length} · ` + (touch ? '点 ● / ✕ 返回' : '按 Z / X 返回'), W / 2, y + h - 46, 17, '#aab4d4', 'center', 'normal');
   }
 
   /* ==================== 结局画面 ==================== */
@@ -757,11 +768,15 @@ ADV.Main = (function () {
       if (tapMenuRow(p.x, p.y, items, 52, { mx: (W - mw) / 2, mw, padTop: 20, my: H - 24 - mh })) return;
       return;
     }
-    if (state === 'confirmNew') {                   // 覆盖确认双按钮
+    if (state === 'confirmNew') {                   // 覆盖确认双按钮：首击选中，同格再击确认（防误触覆盖档）
       const w = 480, x = (W - w) / 2, y = H / 2 - 95;
       for (let i = 0; i < 2; i++) {
         const ox = W / 2 - 180 + i * 220;
-        if (hitRect(p.x, p.y, ox - 90, y + 96, 180, 40)) { titleIdx = i; pressed.ok = true; return; }
+        if (hitRect(p.x, p.y, ox - 90, y + 96, 180, 40)) {
+          if (titleIdx === i) pressed.ok = true;
+          else { titleIdx = i; ADV.Audio.sfx('cursor'); }
+          return;
+        }
       }
       pressed.cancel = true; return;
     }
@@ -787,7 +802,12 @@ ADV.Main = (function () {
       }
       return;
     }
-    if (state === 'help') { pressed.cancel = true; return; }        // 点任意处返回
+    if (state === 'help') {                         // 操作说明：点左/右侧翻页，中间任意处返回
+      if (p.x < W / 3 && helpPage > 0) { helpPage--; ADV.Audio.sfx('cursor'); }
+      else if (p.x > W * 2 / 3 && helpPage < HELP_PAGES.length - 1) { helpPage++; ADV.Audio.sfx('cursor'); }
+      else { ADV.Audio.sfx('cancel'); state = helpFrom; }
+      return;
+    }
     if (state === 'ending') { if (ending.t > 2) pressed.ok = true; return; }
     if (state === 'play') {
       if (journalOpen) {                            // 手册：组片/子页/滚动箭头/窗外关闭

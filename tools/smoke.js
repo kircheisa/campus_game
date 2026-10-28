@@ -7080,6 +7080,53 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  // ====================== [5.104] P0 四连：帮助分页 / 覆盖档确认安全 / errbox 层级 / 晨报防挤掉（技能对照审计 A1-A4） ======================
+  {
+    const srcMain104 = fs.readFileSync(path.join(__dirname, '..', 'js', 'main.js'), 'utf8');
+    const srcUI104 = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui.js'), 'utf8');
+    const srcTown104 = fs.readFileSync(path.join(__dirname, '..', 'js', 'game-town.js'), 'utf8');
+    const srcCss104 = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+
+    // —— A2：覆盖档确认默认聚焦「返回」+ 触屏首击只选中 ——
+    ok(/state = 'confirmNew'; titleIdx = 1;/.test(srcMain104),
+      'A2 源：覆盖档确认默认聚焦「返回」（破坏项「重新开始」永不默认）');
+    const confirmTouch104 = srcMain104.match(/state === 'confirmNew'[\s\S]{0,400}?pressed\.cancel = true; return;/);
+    ok(!!confirmTouch104 && confirmTouch104[0].includes('if (titleIdx === i) pressed.ok = true;'),
+      'A2 源：触屏确认框首击选中、同格再击确认（单击不再直接覆盖存档）');
+
+    // —— A1：操作说明分三页，每页行数画得进窗口（≤11 行 ×34px），←→ 翻页 ——
+    const litHelp104 = srcMain104.match(/const HELP_PAGES = \[([\s\S]*?)\n  \];/);
+    ok(!!litHelp104 && litHelp104[1].indexOf('基础操作') >= 0
+      && litHelp104[1].indexOf('【生活】') < litHelp104[1].indexOf('【玩法】'),
+      'A1 源：帮助页拆分三页（基础 / 生活 / 玩法），原溢出内容全部保留');
+    const pageChunks104 = litHelp104 ? litHelp104[1].split('    ],') : [];
+    const rowCounts104 = pageChunks104.slice(0, 3).map(c => (c.match(/\['/g) || []).length);
+    ok(rowCounts104.length === 3 && rowCounts104.every(n => n > 0 && n <= 11),
+      `A1 源：三页行数 ${rowCounts104.join('/')} ≤11——最大页 y 终点 150+10×34=490 < 页脚 544（不再画出 640 画布外）`);
+    ok(/helpPage = 0; state = 'help'/.test(srcMain104) && /pressed\.left.*HELP_PAGES\.length - 1/.test(srcMain104)
+      && /← → 翻页/.test(srcMain104),
+      'A1 源：入口归零 + ←→ 循环翻页 + 页脚「N/3」指示（触屏点两侧翻页）');
+
+    // —— A3：errbox 层级高于 splash（加载期脚本错误可见） ——
+    const errbox104 = srcCss104.match(/#errbox \{[\s\S]*?\}/);
+    const splash104 = srcCss104.match(/#splash \{[\s\S]*?z-index: 200;/);
+    ok(!!errbox104 && /z-index: 300/.test(errbox104[0]) && !!splash104,
+      'A3 源：errbox z-index 300 > splash 200——加载期致命错误不再被启动画面盖住');
+
+    // —— A4：toast 超限优先挤非 📌 条目（行为）+ 晨报关键条入回看（源） ——
+    for (let i = 0; i < 340; i++) A.UI.update(1 / 60, {});   // 排干历史 toast
+    ['普通一', '普通二', '普通三', '📌 指引甲', '📌 指引乙'].forEach(t => A.UI.toast(t));
+    A.UI.toast('普通四'); A.UI.toast('📌 指引丙');
+    const peek104 = A.UI.toastPeek;
+    ok(A.UI.toastCount === 5 && peek104.includes('📌 指引甲') && peek104.includes('📌 指引乙')
+      && peek104.includes('📌 指引丙') && !peek104.includes('普通一') && !peek104.includes('普通二'),
+      'A4 行为：队列超限挤掉的是最旧普通条目——三条 📌 指引全数存活（旧 shift() 会丢最早两条指引）');
+    ok(/includes\('📌'\)/.test(srcUI104) && /pushHistory\('晨报'/.test(srcTown104)
+      && /pushHistory\('导览'/.test(srcTown104),
+      'A4 源：toast 📌 保护 + 晨报（事件/今日/目标）与开张导览写入 L 键回看历史');
+    for (let i = 0; i < 340; i++) A.UI.update(1 / 60, {});   // 清场，不污染后续测试块
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

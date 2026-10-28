@@ -97,11 +97,11 @@ body.modal #toolbar { display: none; }
 }
 @keyframes tipFade { 0%, 72% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
 
-/* 运行错误提示（便于排查） */
+/* 运行错误提示（便于排查）；层级高于 #splash——加载期脚本错误不被启动画面盖住 */
 #errbox {
   position: absolute; left: 10px; bottom: 10px; max-width: 80%;
   background: rgba(120, 20, 20, .92); color: #fff; font-size: 12px;
-  padding: 8px 12px; border-radius: 6px; white-space: pre-wrap; z-index: 99;
+  padding: 8px 12px; border-radius: 6px; white-space: pre-wrap; z-index: 300;
 }
 
 /* 启动画面：遮住脚本加载期的白屏/半成品画面，主循环首帧后移除 */
