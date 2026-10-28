@@ -579,7 +579,7 @@ ADV.Battle = (function () {
     return balls.concat(food, baits);
   }
 
-  function update(dt, p) {
+  function update(dt, p, held) {
     if (!act) return;
     const a = act;
     /* B4 顿帧：命中后 2-5 帧动画定格（闪白/震屏/飘字/血条/后仰全部停住），
@@ -620,6 +620,15 @@ ADV.Battle = (function () {
     if (p.up) { a.sel = (a.sel + nSub - 1) % Math.max(1, nSub); ADV.Audio.sfx('cursor'); }
     if (p.down) { a.sel = (a.sel + 1) % Math.max(1, nSub); ADV.Audio.sfx('cursor'); }
     if (a.mode === 'cat' && (p.left || p.right)) { a.catSel = 1 - a.catSel; ADV.Audio.sfx('cursor'); }
+    // B6 长按连发：按住 ↑/↓ 0.35s 后每 0.09s 重复移一项（按下沿仍即时响应；触屏点按与冒烟按键序列不受影响）
+    if (p.up || p.down) { a.repT = .35; a.repDir = p.up ? -1 : 1; }
+    else if (held && (held.up || held.down) && a.repDir) {
+      a.repT = (a.repT || 0) - dt;
+      if (a.repT <= 0) {
+        a.repT = .09; a.repDir = held.up ? -1 : 1;
+        a.sel = (a.sel + nSub + a.repDir) % Math.max(1, nSub); ADV.Audio.sfx('cursor');
+      }
+    } else a.repDir = 0;
 
     const foeBeat = intent => beat(() => {               // 敌方行动延迟一拍上演，演完接胜负检查与回合推进（B1）
       enemyTurn(intent);

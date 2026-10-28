@@ -42,6 +42,9 @@ global.localStorage = {
   removeItem: k => { delete store[k]; }
 };
 global.innerWidth = 960; global.innerHeight = 640;
+const storageEvents = [];                    // C17：捕获存档模块注册的 storage 监听——浏览器专属通路也能行为化测试
+const realAddEL108 = global.addEventListener;
+global.addEventListener = (type, fn) => { if (type === 'storage') storageEvents.push(fn); else if (realAddEL108) realAddEL108(type, fn); };
 
 /* ---------- 按依赖顺序加载脚本 ---------- */
 const ROOT = path.join(__dirname, '..');
@@ -7392,6 +7395,205 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         '帧诊断行为⑤：关闭即清缓冲、perfPush no-op（主循环常挂零开销）');
     } finally {
       if (A.UI.perfOn() !== wasOn107) A.UI.togglePerf();
+    }
+  }
+
+  // ====================== [5.108] 小件收口十四件：T1 九件 + T2 手感四件 + T3 音频三件（hat/过门/变奏 · 成就 stinger · 主档余量）+ 健壮性两件（模态互斥 · 多标签防护） ======================
+  console.log('\n[5.108] 小件收口：小地图记忆 / 手账封顶 / 滚动记忆 / 移动手感 / 战斗连发 / BGM 变奏 / 成就 stinger / 模态互斥 / 多标签防护 等');
+  {
+    const srcUI108 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+    const srcLife108 = fs.readFileSync(path.join(ROOT, 'js', 'game-life.js'), 'utf8');
+    const srcSave108 = fs.readFileSync(path.join(ROOT, 'js', 'game-save.js'), 'utf8');
+    const srcMain108 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+    // —— 源守护 ——
+    ok(srcUI108.includes("localStorage.getItem('campus_minimap')") && srcUI108.includes("localStorage.setItem('campus_minimap'"),
+      '源：小地图开关持久化 campus_minimap（C6，下次进游戏沿用）');
+    ok(srcUI108.includes('gm.y + 20') && srcUI108.includes('gm.h - 20')
+      && srcUI108.includes('measureText(b.name).width') && !srcUI108.includes('cx + 96'),
+      '源：选项滚动带 28→20 窄化（C11 首行末行可点）+ 好友心形按名字实测宽度跟排（C7）');
+    ok(srcLife108.includes('f.diary.length > 60') && srcLife108.includes('f.diary.shift()'),
+      '源：手账 60 篇封顶 shift（C18，存档不再无限膨胀）');
+    ok(srcSave108.includes('const raw = JSON.stringify(buildSaveData())')
+      && srcSave108.includes('const blob = JSON.stringify(d)'),
+      '源：save/importSave 序列化一次复用（C19，写放大 3→1）');
+    ok(srcMain108.includes('function setJournalTab')
+      && (srcMain108.split('resetJournalScroll').length - 1) === 1
+      && srcMain108.includes("journalTab = defaultJournalTab(); ADV.UI.journalInvalidate(); }"),
+      '源：手册滚动记忆（C5）——开页不清滚动，resetJournalScroll 只在切页 setJournalTab 里');
+    ok(srcMain108.includes('if (inPlay) manualSave()') && srcMain108.includes('进入游戏后可用')
+      && srcMain108.includes('从标题页「继续游戏」读档'),
+      '源：标题页工具条 💾📂📖🔑 提示不再静默（C9）');
+    ok(srcMain108.includes('原串已回填') && /tries < 3/.test(srcMain108)
+      && srcMain108.includes('将覆盖当前进度'),
+      '源：导入失败原串回填重试至多三次（C10）+ 有档先弹覆盖确认');
+    // —— 行为：小地图开关持久化 ——
+    const mmKey108 = localStorage.getItem('campus_minimap');
+    const mmOn108 = A.UI.minimapOn;
+    try {
+      if (A.UI.minimapOn !== true) A.UI.toggleMinimap();            // 先归位到开
+      ok(A.UI.toggleMinimap() === false && localStorage.getItem('campus_minimap') === '0',
+        '小地图行为①：关闭即持久化 campus_minimap=0');
+      ok(A.UI.toggleMinimap() === true && localStorage.getItem('campus_minimap') === '1',
+        '小地图行为②：再开即持久化 campus_minimap=1');
+    } finally {
+      if (A.UI.minimapOn !== mmOn108) A.UI.toggleMinimap();
+      try {
+        if (mmKey108 === null) localStorage.removeItem('campus_minimap');
+        else localStorage.setItem('campus_minimap', mmKey108);
+      } catch (e) {}
+    }
+    // —— 行为：命名槽摘要补全（period 中文 / act / v）——
+    const calSnap108 = A.Cal.dump();
+    try {
+      A.Cal.load({ ...calSnap108, day: 12, period: 2 });
+      ok(A.Game.saveToSlot(2) === true, '摘要补全：临时档存入槽三');
+      const s108 = A.Game.slotSummary(2);
+      ok(s108.used === true && s108.day === 12 && s108.period === '午休'
+        && typeof s108.act === 'number' && typeof s108.v === 'number' && s108.v >= 1,
+        '槽位摘要行为：day/period(中文)/act/v 齐全——覆盖前看得更明白（C20）');
+    } finally {
+      try { localStorage.removeItem('campus_adventure_save_v1_m3'); } catch (e) {}
+      A.Cal.load(calSnap108);
+    }
+    // —— 行为：序列化复用后主档与影子槽字节一致 ——
+    A.Game.save();
+    const mainRaw108 = localStorage.getItem('campus_adventure_save_v1');
+    ok(!!mainRaw108 && (localStorage.getItem('campus_adventure_save_v1_a') === mainRaw108
+      || localStorage.getItem('campus_adventure_save_v1_b') === mainRaw108),
+      '存档行为：save() 主档与影子槽字节级一致（一次 stringify 两处复用，C19）');
+    // —— 源守护（T2 输入手感 + 战斗两观察）——
+    const srcEng108 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+    const srcBat108 = fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8');
+    const srcScene108 = fs.readFileSync(path.join(ROOT, 'js', 'game-scene.js'), 'utf8');
+    ok(srcEng108.includes('let lastDir') && srcEng108.includes('mvBuf = { dir: d, t: .25 }')
+      && srcEng108.includes('(b === lastDir) - (a === lastDir)') && /mvBuf = null;\s+\/\/ 换图后不再衔接/.test(srcEng108),
+      '源：B2 lastDir 换向优先 + B3 步中段移动缓冲（0.25s 盖过整步；换图清缓冲兜底）');
+    ok(srcBat108.includes('function update(dt, p, held)') && srcBat108.includes('a.repT = .35')
+      && srcBat108.includes('a.repT = .09'),
+      '源：B6 战斗菜单长按连发（0.35s 起手 / 0.09s 重复）');
+    ok(srcMain108.includes('let battleSeen = false') && srcMain108.includes('battleSeen ? pressed : {}'),
+      '源：开战首帧吞输入（开战那下 Z 不穿透进战斗菜单）');
+    ok(srcScene108.includes('挪到了最后一格'),
+      '源：支援特训文案点名「逃跑挪到了最后一格」（肌肉记忆提醒）');
+    // —— 行为：B6 战斗菜单长按连发（换回真战斗模块直接驱动；判胜桩已在前面各段装回）——
+    {
+      const battleKeep108 = A.Battle;
+      try {
+        A.Battle = RealBattle;
+        let r108 = null;
+        A.Battle.start('dummy', {}, res => { r108 = res; });
+        A.Battle.update(1 / 60, { down: true });                       // 按下沿：0→1，同时武装连发计时
+        ok(A.Battle.act && A.Battle.act.sel === 1, '战斗连发：按下沿即时移到第 1 项');
+        for (let i = 0; i < 20; i++) A.Battle.update(1 / 60, {}, { down: true });   // ~0.33s < 起手 0.35s
+        ok(A.Battle.act.sel === 1, '战斗连发：起手延迟 0.35s 内不误发');
+        let g1 = 0;
+        while (A.Battle.act.sel === 1 && g1++ < 3) A.Battle.update(1 / 60, {}, { down: true });   // 第 21 帧（±浮点尾差）→ 再移一项
+        ok(A.Battle.act.sel === 2, '战斗连发：按住约 0.35s 起手后再移一项');
+        let g2 = 0;
+        while (A.Battle.act.sel === 2 && g2++ < 8) A.Battle.update(1 / 60, {}, { down: true });   // 0.09s ≈ 6 帧（±浮点尾差）→ 再移一项
+        ok(A.Battle.act.sel === 3, '战斗连发：之后每约 0.09s 重复一项');
+        for (let i = 0; i < 300 && A.Battle.active; i++) { A.Battle.update(1 / 60, { cancel: true }); A.Battle.update(1 / 60, {}); }
+        ok(!A.Battle.active, '战斗连发：收场干净退出');
+      } finally { A.Battle = battleKeep108; }
+    }
+    // —— 行为：B2/B3 移动手感（清 NPC + 清伙伴的绝对干净跑道）——
+    {
+      const npcsKeep108 = A.Engine.npcs.splice(0, A.Engine.npcs.length);
+      const buddyKeep108 = A.Game.flags.buddy || '';
+      A.Game.flags.buddy = '';
+      const mapId108 = A.Engine.map ? A.Engine.map.id : 'campus';
+      const px108 = A.Engine.player.x, py108 = A.Engine.player.y, pdir108 = A.Engine.player.dir;
+      try {
+        A.Engine.loadMap('campus', 23, 12, 'down');
+        const m108 = A.Engine.map;
+        const free108 = (x, y) => y > 0 && y < m108.h && x > 0 && x < m108.w
+          && !A.Maps.SOLID.has(m108.g[y][x]) && !m108.doors.some(dd => dd.x === x && dd.y === y)
+          && !A.Engine.npcs.some(n => n.x === x && n.y === y)
+          && A.Engine.npcs.every(n => Math.abs(n.x - x) + Math.abs(n.y - y) > 3);   // 离 NPC 巢 3 格外：漫步中途不闯跑道
+        let spot = null;
+        for (let y = 4; y < m108.h && !spot; y++)
+          for (let x = 1; x < m108.w - 1 && !spot; x++)
+            if (free108(x, y) && free108(x, y - 1) && free108(x, y - 2) && free108(x - 1, y - 1)) spot = { x, y };
+        if (spot) {
+          A.Engine.loadMap('campus', spot.x, spot.y, 'down');
+          const P = A.Engine.player;                               // loadMap 重建 player 对象，断言必须重新取
+          A.Engine.update(1 / 60, { held: { up: true } });         // 站定轻点一帧
+          for (let i = 0; i < 40 && P.mv; i++) A.Engine.update(1 / 60, { held: {} });
+          ok(P.y === spot.y - 1 && !P.mv,
+            '移动手感①：站定轻点恰好一步即停（B3 缓冲只在步中段武装，不双发）');
+          A.Engine.update(1 / 60, { held: { left: true } });       // 起步向左
+          A.Engine.update(1 / 60, { held: { left: true, right: true } });   // 步中段按下右（沿 → lastDir=右 + 缓冲右）
+          for (let i = 0; i < 40 && P.mv; i++) A.Engine.update(1 / 60, { held: {} });   // 松手：让缓冲自己衔接
+          ok(P.x === spot.x && P.y === spot.y - 1 && !P.mv,
+            '移动手感②：按左途中按下右即刻换向（B2 lastDir 优先：左一步+缓冲右一步回原点）');
+        } else ok(false, '移动手感：未找到干净跑道（不应发生）');
+      } finally {
+        A.Engine.loadMap(mapId108, px108, py108, pdir108);
+        A.Game.flags.buddy = buddyKeep108;
+      }
+    }
+    // —— 源守护（T3 音频 + 健壮性）——
+    const srcAud108 = fs.readFileSync(path.join(ROOT, 'js', 'audio.js'), 'utf8');
+    ok((srcAud108.match(/volMode === 2 \? 0 : 0\.7/g) || []).length === 2,
+      '源：master 0.9→0.7（C16，init 与 applyVolume 同口径 ≈-3dB 留削波余量）');
+    ok(srcAud108.includes("case 'achieve'") && srcAud108.includes('[587, 740, 880]'),
+      '源：achieve 专属 stinger（C15，双和弦顿挫 + 高音闪尾，与上行琶音族区分）');
+    ok(srcAud108.includes('const lift = loop % 4 === 2 ? 2 : 0')
+      && srcAud108.includes('bgm.lead[i] + lift') && srcAud108.includes('bgm.bass[i] + lift')
+      && srcAud108.includes('tone(6000, nextT, .03') && srcAud108.includes('loop % 4 === 1 && i >= 30'),
+      '源：BGM hat 第三轨 + 变奏圈前过门 + 每 4 圈第 3 圈双轨整体升全音（C12 伪变奏）');
+    ok(srcMain108.includes('function prefBlock') && srcMain108.includes('function prefBlockSoft')
+      && (srcMain108.match(/!prefBlock\(\)/g) || []).length === 7
+      && (srcMain108.match(/!prefBlockSoft\(\)/g) || []).length === 1,
+      '源：M/V/Q/T/F9/Tab/数字键全量模态守卫 ×7 + P 软守卫 ×1（C8：对话中仍可开关自动播放）');
+    ok(srcSave108.includes("addEventListener('storage'") && srcSave108.includes('function onStorageKey')
+      && srcSave108.includes('indexOf(SAVE_KEY) === 0') && srcSave108.includes('achWatch();'),
+      '源：storage 监听只认本游戏槽位前缀（C17）+ save() 末尾挂成就差分监视（C15）');
+    // —— 行为：C15 成就点亮差分监视（老档首存立基线不响；点亮差值吹号角恰一次）——
+    {
+      const f108b = A.Game.flags;
+      const realSfx108b = A.Audio.sfx;
+      const achCalls108 = [];
+      const prevSeen108 = f108b.achSeen;
+      try {
+        A.Audio.sfx = n => { if (n === 'achieve') achCalls108.push(n); };
+        delete f108b.achSeen;
+        A.Game.save();
+        ok(typeof f108b.achSeen === 'number' && achCalls108.length === 0,
+          '成就 stinger 行为①：首存立基线（achSeen 落 flags），老档/新档不补响');
+        const base108 = f108b.achSeen;
+        f108b.achSeen = base108 - 1;                                 // 模拟「点亮数比记录多一个」
+        A.Game.save();
+        ok(f108b.achSeen === base108 && achCalls108.length === 1,
+          '成就 stinger 行为②：点亮差值 → achieve 号角恰一次 + 计数收敛');
+      } finally {
+        A.Audio.sfx = realSfx108b;
+        if (prevSeen108 === undefined) delete f108b.achSeen; else f108b.achSeen = prevSeen108;
+      }
+    }
+    // —— 行为：C17 多标签 storage 互扰（监听作废 hasSave 缓存，本页立刻看见真实存储）——
+    ok(storageEvents.length === 1, '多标签防护：存档模块注册了 storage 监听（浏览器双开通路）');
+    {
+      const slots108 = ['campus_adventure_save_v1', 'campus_adventure_save_v1_a', 'campus_adventure_save_v1_b',
+        'campus_adventure_save_v1_m1', 'campus_adventure_save_v1_m2', 'campus_adventure_save_v1_m3'];
+      const snap108 = slots108.map(k => localStorage.getItem(k));
+      try {
+        slots108.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+        storageEvents[0]({ key: 'campus_adventure_save_v1' });       // 先作废可能存在的旧缓存
+        localStorage.setItem('campus_adventure_save_v1', JSON.stringify({ v: 1, flags: {} }));
+        ok(A.Game.hasSave() === true, '多标签防护 前置：有效主档 → hasSave=true（已进缓存）');
+        localStorage.removeItem('campus_adventure_save_v1');
+        ok(A.Game.hasSave() === true, '多标签防护 病灶：主档已消失但缓存口径仍 true（正要修的陈旧缓存）');
+        storageEvents[0]({ key: 'campus_adventure_save_v1' });
+        ok(A.Game.hasSave() === false, '多标签防护 行为：storage 事件作废缓存——本页立刻看见真实存储状态');
+      } finally {
+        slots108.forEach((k, i) => {
+          try {
+            if (snap108[i] === null) localStorage.removeItem(k);
+            else localStorage.setItem(k, snap108[i]);
+          } catch (e) {}
+        });
+      }
     }
   }
 

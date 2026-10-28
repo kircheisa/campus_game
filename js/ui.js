@@ -88,9 +88,14 @@ ADV.UI = (function () {
     return { r, cw, ch, cx, cy, pad };
   }
 
-  /* ---------- 小地图（Tab 开关；静态层按地图离屏缓存） ---------- */
-  let minimapOn = true, miniCv = null, miniKey = '', miniSc = 2;
-  function toggleMinimap() { minimapOn = !minimapOn; return minimapOn; }
+  /* ---------- 小地图（Tab 开关；静态层按地图离屏缓存；开关记忆，下次进游戏沿用 C6） ---------- */
+  let minimapOn = (() => { try { return localStorage.getItem('campus_minimap') !== '0'; } catch (e) { return true; } })();
+  let miniCv = null, miniKey = '', miniSc = 2;
+  function toggleMinimap() {
+    minimapOn = !minimapOn;
+    try { localStorage.setItem('campus_minimap', minimapOn ? '1' : '0'); } catch (e) {}
+    return minimapOn;
+  }
   function buildMini(m) {
     const sc = Math.min(140 / m.w, 110 / m.h);
     const mw = Math.round(m.w * sc), mh = Math.round(m.h * sc);
@@ -512,8 +517,8 @@ ADV.UI = (function () {
         if (active.cancelIndex >= 0) { const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i); }
         return true;
       }
-      if (py <= gm.y + 28 && active.sc > 0) { active.sc--; ADV.Audio.sfx('cursor'); return true; }                                       // ▲
-      if (py >= gm.y + gm.h - 28 && active.sc + gm.view < active.options.length) { active.sc++; ADV.Audio.sfx('cursor'); return true; }  // ▼
+      if (py <= gm.y + 20 && active.sc > 0) { active.sc--; ADV.Audio.sfx('cursor'); return true; }                                       // ▲（窄带 C11：不再吃掉第一行点击）
+      if (py >= gm.y + gm.h - 20 && active.sc + gm.view < active.options.length) { active.sc++; ADV.Audio.sfx('cursor'); return true; }  // ▼（同窄带：护住末行）
       const vi = Math.floor((py - (gm.y + 12)) / (gm.pitch || 40));
       if (vi >= 0 && vi < gm.view) {
         const i = active.sc + vi;
@@ -890,7 +895,9 @@ ADV.UI = (function () {
       const cx = x + 30 + (i % 2) * colW;
       text(g, b.name, cx, cy, 18, '#fff');
       const hearts = Math.round(f.love / 10);
-      text(g, '♥'.repeat(Math.max(0, hearts)) + '♡'.repeat(Math.max(0, 10 - hearts)), cx + 96, cy + 1, 15, hearts >= 7 ? '#ff8ab0' : '#d8c078');
+      g.font = FONT(18);                                 // 心形按名字实测宽度跟排（C7）：长短名都不再挤压或留缝
+      const nameW = Math.min(g.measureText(b.name).width, colW - 130);
+      text(g, '♥'.repeat(Math.max(0, hearts)) + '♡'.repeat(Math.max(0, 10 - hearts)), cx + nameW + 10, cy + 1, 15, hearts >= 7 ? '#ff8ab0' : '#d8c078');
       const meta = (ADV.Game.BOND_META || {})[id];
       const bdayTag = meta ? ` · 生日第${meta.bday}天` : '';
       const stage = ['初识', '相识', '知己', '挚友'][Math.min(3, f.stage)] || '初识';

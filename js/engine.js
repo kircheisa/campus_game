@@ -343,29 +343,54 @@ ADV.Engine = (function () {
   }
 
   /* ---------- 玩家更新 ---------- */
-  function updatePlayer(dt, input) {
-    if (player.mv) {
-      if (stepEntity(player, dt)) onArrive();
-      return;
-    }
-    const dirs = ['up', 'down', 'left', 'right'].filter(d => input.held[d]);
-    if (!dirs.length) return;
-    // 👟 健步如飞（料理 buff）：当天走路步频加快；冲刺键不变
+  /* B2/B3 输入手感：lastDir 记最近按下的方向（反向换向不再被固定顺序吞掉）；
+   * mvBuf 是步中段轻点的移动缓冲（0.25s，盖过一整步），到格立刻衔接——触屏高频点按不再整步丢失 */
+  let lastDir = '', prevHeld = {}, mvBuf = null;
+  function stepDur(input) {                       // 👟 健步如飞（料理 buff）：当天走路步频加快；冲刺键不变
     let dur = .22;
     try { const b = ADV.Game.flags.buff; if (b && b.swift === ADV.Cal.day) dur = .18; } catch (e) {}
-    if (input.held.dash) dur = .13;
-    // 贴墙滑动：同时按住多个方向时逐个尝试（斜推遇墙会沿墙走，不再原地卡死）
-    let moved = false;
-    for (const dir of dirs) {
-      if (startMove(player, dir, dur)) { moved = true; break; }
-    }
-    if (!moved) { player.dir = dirs[0]; return; }   // 四面全被挡：至少面朝第一个按住的方向
-    // 脚步声：按脚下材质分三种（草地软 / 硬地板脆 / 洞穴带回声）
+    if (input && input.held && input.held.dash) dur = .13;
+    return dur;
+  }
+  function playStepFx(input) {                    // 脚步声（按脚下材质分三种）+ 跑步扬尘；正常步与缓冲步共用
     const tile = map.g[player.y] && map.g[player.y][player.x] || '';
     const surface = /^cave/.test(tile) ? 'cave' : map.indoor ? 'floor' : 'grass';
     ADV.Audio.sfx('step', surface);
-    // 跑步扬尘：脚下冒两粒小灰点
     if (input.held.dash) for (let i = 0; i < 2; i++) particles.push(newDust());
+  }
+  function stepBuf(input) {                       // B3：消费移动缓冲（站定且还有未过期的轻点方向）
+    if (!mvBuf || player.mv) return false;
+    const d = mvBuf.dir; mvBuf = null;
+    if (!startMove(player, d, stepDur(input))) return false;
+    lastDir = d;
+    playStepFx(input);
+    return true;
+  }
+  function updatePlayer(dt, input) {
+    for (const d of ['up', 'down', 'left', 'right']) {          // 方向按下沿（B2/B3 前置）
+      if (input.held[d] && !prevHeld[d]) {
+        lastDir = d;
+        if (player.mv) mvBuf = { dir: d, t: .25 };              // 步中段轻点才缓冲；窗口 0.25s 盖过一整步（步长 0.22s/冲刺 0.13s），到格必衔接
+      }
+    }
+    prevHeld = { ...input.held };
+    if (mvBuf) { mvBuf.t -= dt; if (mvBuf.t <= 0) mvBuf = null; }
+    if (player.mv) {
+      if (stepEntity(player, dt)) { onArrive(); stepBuf(input); }   // 到格即消费缓冲，衔接不停顿
+      return;
+    }
+    if (stepBuf(input)) return;                                 // 轻点后已松手：缓冲照走一步
+    const dirs = ['up', 'down', 'left', 'right'].filter(d => input.held[d]);
+    if (!dirs.length) return;
+    const dur = stepDur(input);
+    // lastDir 优先（B2）：后按的方向先试，其余方向仍作贴墙滑动兜底
+    dirs.sort((a, b) => (b === lastDir) - (a === lastDir));
+    let moved = false;
+    for (const dir of dirs) {
+      if (startMove(player, dir, dur)) { moved = true; lastDir = dir; break; }
+    }
+    if (!moved) { player.dir = dirs[0]; return; }   // 四面全被挡：至少面朝第一个按住的方向
+    playStepFx(input);
   }
 
   function onArrive() {
@@ -407,6 +432,7 @@ ADV.Engine = (function () {
 
   /* ---------- 场景切换 ---------- */
   function doTransfer(d) {
+    mvBuf = null;                                          // 换图后不再衔接图前的轻点缓冲（B3 兜底）
     if (ADV.Game.flags && ADV.Game.flags.party) {          // 换图与同伴道别
       ADV.Game.flags.party = '';
       ADV.UI.toast(' 与同伴挥手道别 ');

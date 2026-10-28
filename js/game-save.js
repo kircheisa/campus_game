@@ -14,6 +14,23 @@
   // 命名多槽位（README 规划项收口）：主档/影子槽之外玩家自选的三个手动存点；
   // 只在工具条 💾/📂 菜单里显式读写，不参与自动存档与损坏回退链
   const NAMED_SLOTS = [SAVE_KEY + '_m1', SAVE_KEY + '_m2', SAVE_KEY + '_m3'];
+  /* —— C17 多标签页互扰防护：storage 事件只在「其它」标签页触发——
+   * 别的标签页写了本游戏的档（主/影/命名槽），本页立刻作废 hasSave 缓存（否则标题页
+   * 捧着陈旧缓存看不见真实存储状态）并提醒一次：两页同玩会互相覆盖，认准一页。 —— */
+  let _twinWarned = false;
+  function onStorageKey() {
+    _hasSave = null;
+    if (!_twinWarned) {
+      _twinWarned = true;
+      try { UI().toast(' 📑 检测到其它标签页写入了本游戏存档——两页同时玩会互相覆盖，建议只留一页 '); } catch (e) {}
+    }
+  }
+  try {
+    if (typeof window !== 'undefined' && window.addEventListener)
+      window.addEventListener('storage', ev => {
+        try { if (ev && ev.key && String(ev.key).indexOf(SAVE_KEY) === 0) onStorageKey(ev.key); } catch (e) {}
+      });
+  } catch (e) {}
   /* —— 版本迁移框架（B12）：结构变更新案从此有路可走——
    *   新增字段用 blankFlags 兜底即可不动这里；改语义/删字段才升版本：
    *   ① SAVE_VERSION + 1；② MIGRATIONS[新版本号] 挂「旧数据 → 新数据」一步函数；
@@ -68,12 +85,29 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     };
   }
 
+  /* —— C15 成就点亮监视：成就墙是派生式数据（没有中央解锁钩子），把 save() 当检查点做便宜差分——
+   * 点亮数比 flags.achSeen 多 → 吹专属号角（achieve stinger）；
+   * 老档/新档首存只立基线不补响（避免一读档号角连天）；读档回退等口径收敛，同样不响。 —— */
+  function achWatch() {
+    try {
+      const f = state.flags;
+      if (!f) return;
+      const n = achievements().reduce((s, a) => s + (a[1] ? 1 : 0), 0);
+      if (typeof f.achSeen !== 'number') { f.achSeen = n; return; }    // 首见：立基线
+      if (n > f.achSeen) {
+        f.achSeen = n;
+        ADV.Audio.sfx('achieve');
+        UI().toast(` 🏆 成就点亮！已达成 ${n} 项（手册 · 成就页可查） `);
+      } else if (n < f.achSeen) f.achSeen = n;
+    } catch (e) {}
+  }
+
   function save() {
     try {
-      const data = buildSaveData();
-      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      const raw = JSON.stringify(buildSaveData());           // 序列化一次复用（C19：大档 stringify 占写档大头，砍掉重复开销）
+      localStorage.setItem(SAVE_KEY, raw);
       try {                                                    // 影子槽写失败不影响主档（配额紧张时退化为单槽）
-        localStorage.setItem(SAVE_SLOTS[_slotFlip ? 1 : 0], JSON.stringify(data));
+        localStorage.setItem(SAVE_SLOTS[_slotFlip ? 1 : 0], raw);
         _slotFlip = !_slotFlip;
       } catch (e1) {}
       _hasSave = true;
@@ -84,6 +118,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
         try { UI().toast(' ⚠ 进度无法保存（浏览器存储不可用），可在标题页「导出存档」手动备份 '); } catch (e2) {}
       }
     }
+    achWatch();                                          // C15：存档点即成就检查点（放在写档后，本标记随下次落盘）
   }
   /* 读单个槽位：JSON 解析 + 语义校验 + 旧档升级，任何一步失败都视为槽位不可用 */
   function readSlot(key) {
@@ -120,7 +155,10 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
   function slotSummary(i) {
     const d = readSlot(NAMED_SLOTS[i]);
     if (!d) return { used: false };
+    const P = (ADV.Cal && ADV.Cal.PERIODS) || [];       // 摘要补全（C20）：时段/学院分/版本号，覆盖前看得更明白
     return { used: true, day: d.cal ? d.cal.day : '?',
+      period: d.cal ? (P[d.cal.period] || '') : '',
+      act: (d.flags && d.flags.act) || 0, v: d.v || 0,
       name: (d.flags && d.flags.name) || '', gold: (d.flags && d.flags.gold) || 0,
       savedAt: d.savedAt || 0 };
   }
@@ -163,10 +201,11 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
         try { UI().toast(' ⚠ 存档来自更新版本的游戏，当前版本无法读取 '); } catch (e0) {}
         return false;
       }
-      localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+      const blob = JSON.stringify(d);                   // 序列化一次复用（C19）
+      localStorage.setItem(SAVE_KEY, blob);
       try {                                             // 影子槽同步换血（B13）：导入后回退链不再「恢复」出上一局的无关进度
-        localStorage.setItem(SAVE_SLOTS[0], JSON.stringify(d));
-        localStorage.setItem(SAVE_SLOTS[1], JSON.stringify(d));
+        localStorage.setItem(SAVE_SLOTS[0], blob);
+        localStorage.setItem(SAVE_SLOTS[1], blob);
         _slotFlip = false;
       } catch (e1) {}
       _hasSave = null;                                // 缓存失效

@@ -102,7 +102,7 @@ ADV.Audio = (function () {
     try {
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = volMode === 2 ? 0 : 0.9;
+      master.gain.value = volMode === 2 ? 0 : 0.7;       // C16：0.9→0.7（≈-3dB），给密集音效留削波余量
       master.connect(ctx.destination);
       bgmBus = ctx.createGain();                          // 音乐/环境音总线：仅音效·无BGM 档静音
       bgmBus.gain.value = (volMode === 1 || volMode === 3) ? 0 : 1;
@@ -169,6 +169,13 @@ ADV.Audio = (function () {
         [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, t + i * .06, .14, 'triangle', .06));
         tone(1568, t + .32, .3, 'square', .05);
         break;
+      case 'achieve': {                                  // C15 成就 stinger：双和弦顿挫 + 高音闪尾——换结构不换音色，与上行琶音族（correct/fanfare/levelup）区分
+        duckMusic();
+        [[523, 659, 784], [587, 740, 880]].forEach((ch, ci) =>
+          ch.forEach(f => tone(f, t + ci * .14, .2, 'square', .042)));
+        [2093, 2637].forEach((f, i) => tone(f, t + .34 + i * .08, .22, 'triangle', .03));
+        break;
+      }
       case 'cat':     tone(740, t, .22, 'sine', .08); tone(932, t + .18, .28, 'sine', .08); break;
       case 'start':   [523, 659, 784].forEach((f, i) => tone(f, t + i * .07, .12, 'square', .06)); break;
       case 'dig':     tone(180, t, .08, 'square', .07); tone(140, t + .1, .12, 'sawtooth', .06); break;
@@ -221,8 +228,14 @@ ADV.Audio = (function () {
     bgmTimer = setInterval(() => {
       while (nextT < ctx.currentTime + 0.5) {            // C14：lookahead 0.5s——长 GC 不出音符缺口（绝对时钟不漂移）
         const i = step % bgm.lead.length;
-        if (bgm.lead[i]) tone(mf(bgm.lead[i]), nextT, stepDur * .9, bgm.leadType || 'square', .032, musicBus || bgmBus);
-        if (bgm.bass[i])  tone(mf(bgm.bass[i]),  nextT, stepDur * 1.7, 'triangle', .05, musicBus || bgmBus);
+        const loop = (step / bgm.lead.length) | 0;
+        const lift = loop % 4 === 2 ? 2 : 0;             // C12 伪变奏：每 4 圈第 3 圈整体升全音，双轨同移不断和声
+        if (bgm.lead[i]) tone(mf(bgm.lead[i] + lift), nextT, stepDur * .9, bgm.leadType || 'square', .032, musicBus || bgmBus);
+        if (bgm.bass[i])  tone(mf(bgm.bass[i] + lift),  nextT, stepDur * 1.7, 'triangle', .05, musicBus || bgmBus);
+        if (step % 2 === 0)                              // C12 hat：偶数步 6kHz 短「嚓」垫底，双轨循环不再单薄
+          tone(6000, nextT, .03, 'square', .012, musicBus || bgmBus);
+        if (loop % 4 === 1 && i >= 30)                   // C12 过门：变奏圈前一圈的末两步小上行，预告转调
+          tone(4000 + (i - 30) * 400, nextT, .05, 'square', .02, musicBus || bgmBus);
         nextT += stepDur; step++;
       }
     }, 60);
@@ -235,7 +248,7 @@ ADV.Audio = (function () {
 
   /* ---------- 音量四档（M 键循环：全开 → 无BGM（留环境声） → 仅音效 → 静音；偏好持久化） ---------- */
   function applyVolume() {
-    if (master) master.gain.value = volMode === 2 ? 0 : 0.9;
+    if (master) master.gain.value = volMode === 2 ? 0 : 0.7;   // C16：与 init 同口径 0.7
     if (bgmBus) bgmBus.gain.value = (volMode === 1 || volMode === 3) ? 0 : 1;
     if (ambBus) ambBus.gain.value = volMode === 1 ? 0 : .85;   // B11：仅音效档严格只剩音效；无BGM 档保留环境声
   }

@@ -968,6 +968,7 @@
       ? DIARY_TPL[f.diary.length % DIARY_TPL.length]({ event, quote, from })
       : `${event}。\n（今天没有引用句子，就写写自己的心情吧。）`;
     f.diary.push({ day: C.day, season: C.season(), weather: C.weather, event, quote, from, text: head + '\n' + body });
+    if (f.diary.length > 60) f.diary.shift();      // 手账只留最近 60 篇（C18）：常年游玩不再把存档无限撑大；星数另计不受影响
     f.diaryStars = (f.diaryStars || 0) + 1;
     f.studyBuff = true;                            // 写日记 = 复盘，等同复习
     await say({ name: '日记', text: head + '\n' + body });

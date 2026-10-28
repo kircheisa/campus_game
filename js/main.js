@@ -47,41 +47,41 @@ ADV.Main = (function () {
         }
       }
     }
-    if (e.code === 'KeyM') {                                                   // M：音量四档循环（全开→无BGM→仅音效→静音）
+    if (e.code === 'KeyM' && !prefBlock()) {                                   // M：音量四档循环（全开→无BGM→仅音效→静音；C8 模态中不穿透）
       const m = ADV.Audio.cycleVolume();
       ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 3 ? ' 🌧 无 BGM（保留环境声） ' : m === 1 ? ' 🎵 仅音效（音乐·环境静音） ' : ' 🔇 已静音 ');
     }
-    if (e.code === 'KeyV') {                                                  // V：虚拟按键开关
+    if (e.code === 'KeyV' && !prefBlock()) {                                  // V：虚拟按键开关（C8 模态中不穿透）
       padPref = document.body.classList.contains('nopad');                    // 当前隐藏 → 切为显示
       try { localStorage.setItem('campus_pad_hidden', padPref ? '0' : '1'); } catch (err) {}
       applyPad();
       ADV.UI.toast(padPref ? ' 🎮 虚拟按键：显示 ' : ' 🎮 虚拟按键：隐藏（画面更大） ');
       fit();
     }
-    if (e.code === 'KeyQ') {                                                  // Q：HUD 三态循环（完整 → 迷你 → 隐藏）
+    if (e.code === 'KeyQ' && !prefBlock()) {                                  // Q：HUD 三态循环（完整 → 迷你 → 隐藏；C8 模态中不穿透）
       const m = ADV.UI.toggleHud();
       ADV.UI.toast(m === 'full' ? ' 📋 HUD：展开完整面板 ' : m === 'mini' ? ' 📋 HUD：折叠为迷你条（Q 隐藏） ' : ' 📋 HUD：已隐藏（Q 恢复） ');
     }
     if (e.code === 'KeyF' && state === 'play') toggleJournal();             // F：生活手册
     if (e.code === 'KeyL' && state === 'play' && !journalOpen) ADV.UI.toggleLog();   // L：对话回看
-    if (e.code === 'KeyP' && state === 'play') {                            // P：对话自动播放开关
+    if (e.code === 'KeyP' && state === 'play' && !prefBlockSoft()) {                          // P：对话自动播放开关（软守卫：对话中可用）
       const on = ADV.UI.toggleAuto();
       ADV.UI.toast(on ? ' ⏩ 自动播放：开（对话自动翻页，选项仍需手动选） ' : ' ⏸ 自动播放：关 ');
     }
-    if (e.code === 'KeyT' && state === 'play') {                            // T：字号两档循环（小屏大字）
+    if (e.code === 'KeyT' && state === 'play' && !prefBlock()) {                            // T：字号两档循环（小屏大字；C8 模态中不穿透）
       const k = ADV.UI.fontCycle();
       ADV.UI.toast(k > 1 ? ' 🔍 大字模式：开（对话·选项·HUD 字号放大，T 切回） ' : ' 🔍 大字模式：关 ');
     }
-    if (e.code === 'F9' && state === 'play') {                              // F9：帧耗时诊断叠层（实机量化用）
+    if (e.code === 'F9' && state === 'play' && !prefBlock()) {                              // F9：帧耗时诊断叠层（实机量化用；C8 模态中不穿透）
       const on = ADV.UI.togglePerf();
       ADV.UI.toast(on ? ' ⏱ 帧耗时诊断：开（左下角读数，F9 关） ' : ' ⏱ 帧耗时诊断：关 ');
     }
-    if (e.code === 'Tab' && state === 'play') {                             // Tab：小地图开关
+    if (e.code === 'Tab' && state === 'play' && !prefBlock()) {                             // Tab：小地图开关（C8 模态中不穿透）
       e.preventDefault();
       const on = ADV.UI.toggleMinimap();
       ADV.UI.toast(on ? ' 小地图：开 ' : ' 小地图：关 ');
     }
-    if (state === 'play' && /^Digit[0-9]$/.test(e.code)) {                  // 数字键：工具热键栏
+    if (state === 'play' && !prefBlock() && /^Digit[0-9]$/.test(e.code)) {                  // 数字键：工具热键栏（C8 模态中不穿透）
       e.preventDefault();
       const G = ADV.Game;
       if (G && G.HOTBAR_SLOTS && G.hotbarSelect) {
@@ -119,7 +119,8 @@ ADV.Main = (function () {
     btn.addEventListener('pointerdown', e => {
       e.preventDefault(); ADV.Audio.init(); ADV.Audio.resume();
       const t = btn.dataset.t;
-      if (t === 'journal') { if (state === 'play') toggleJournal(); }
+      const inPlay = state === 'play';                    // 标题页点游玩类按钮给提示，不再静默（C9）
+      if (t === 'journal') { if (inPlay) toggleJournal(); else ADV.UI.toast(' 📖 进入游戏后可用 '); }
       else if (t === 'map') { ADV.UI.toast(ADV.UI.toggleMinimap() ? ' 小地图：开 ' : ' 小地图：关 '); }
       else if (t === 'hotbar') { ADV.UI.toast(ADV.UI.toggleHotbar() ? ' 🛠 工具栏：开（点数字槽切换工具） ' : ' 🛠 工具栏：关 '); }
       else if (t === 'vol') {
@@ -134,9 +135,9 @@ ADV.Main = (function () {
         const k = ADV.UI.fontCycle();
         ADV.UI.toast(k > 1 ? ' 🔍 大字模式：开（对话·选项·HUD 字号放大） ' : ' 🔍 大字模式：关 ');
       }
-      else if (t === 'save') manualSave();                // 手动保存（自动存档之外的显式存点）
-      else if (t === 'load') manualLoad();                // 手动读取（回档到上次保存）
-      else if (t === 'key') goldenKeyUI();                // 金钥匙彩蛋（口令 → 金币，日限 3000）
+      else if (t === 'save') { if (inPlay) manualSave(); else ADV.UI.toast(' 💾 进入游戏后才能存档 '); }
+      else if (t === 'load') { if (inPlay) manualLoad(); else ADV.UI.toast(' 📂 从标题页「继续游戏」读档 '); }
+      else if (t === 'key') { if (inPlay) goldenKeyUI(); else ADV.UI.toast(' 🔑 进入游戏后可用 '); }  // 金钥匙彩蛋（口令 → 金币，日限 3000）
       else if (t === 'fs') toggleFullscreen();
     });
   });
@@ -171,6 +172,7 @@ ADV.Main = (function () {
   let titleT = 0;
   let journalOpen = false;      // F：生活手册
   let journalTab = 0;           // 0 好友 / 1 任务 / 2 日历 / 3 收藏 ...
+  let battleSeen = false;       // 战斗活跃标记：开战首帧吞输入（开战那下 Z/空格不穿透进战斗菜单）
   function defaultJournalTab() {
     try {
       const stage = ADV.Game && ADV.Game.guideStage ? ADV.Game.guideStage() : 'full';
@@ -181,8 +183,12 @@ ADV.Main = (function () {
     const opening = !journalOpen;
     if (opening && ADV.UI.busy) return;        // 对话/选项/拾取动画中不开手册，避免输入串扰
     journalOpen = opening;
-    if (opening) { journalTab = defaultJournalTab(); ADV.UI.resetJournalScroll(); ADV.UI.journalInvalidate(); }
+    if (opening) { journalTab = defaultJournalTab(); ADV.UI.journalInvalidate(); }   // 滚动位置保留（C5）：重开还停在原来那页
     else ADV.UI.toggleLog(false);              // 关手册时顺带收起回看浮层
+  }
+  function setJournalTab(t) {                  // 切页才清页内滚动（C5 滚动记忆的另一半）；同页不重置、不出声
+    if (t === journalTab) return;
+    journalTab = t; ADV.UI.resetJournalScroll(); ADV.Audio.sfx('cursor');
   }
   const clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: 40 + i * 55, s: .4 + Math.random() * .8 }));
   const stars = Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.6 + .4, ph: Math.random() * 6.28 }));
@@ -278,10 +284,30 @@ ADV.Main = (function () {
     } catch (e) { ADV.UI.toast(' ⚠ 导出失败：' + (e && e.message ? e.message : e)); }
   }
   function importSaveUI() {
-    const code = window.prompt('粘贴存档代码：');
+    if (ADV.Game.hasSave() && !window.confirm(' ⚠ 导入将覆盖当前进度（建议先「导出存档」备份）。继续吗？ ')) return;   // C10：有档才确认，标题页裸导入不打扰
+    let code = window.prompt('粘贴存档代码：');
     if (!code) return;
-    if (ADV.Game.importSave(code) && ADV.Game.continueGame()) { ADV.Audio.sfx('start'); ADV.UI.toast(' 📥 存档导入成功，欢迎回来！ '); state = 'play'; }
-    else ADV.UI.toast(' ⚠ 存档代码无效或已损坏，导入失败 ');
+    for (let tries = 0; tries < 3; tries++) {              // 失败不直接打回（C10）：原串回填输入框，多半是首尾没复制全
+      if (ADV.Game.importSave(code) && ADV.Game.continueGame()) {
+        ADV.Audio.sfx('start'); ADV.UI.toast(' 📥 存档导入成功，欢迎回来！ '); state = 'play'; return;
+      }
+      if (tries === 2) break;
+      code = window.prompt(' ⚠ 存档代码无效——请检查首尾是否复制完整（原串已回填，改完再试；取消放弃）：', code);
+      if (!code) return;
+    }
+    ADV.UI.toast(' ⚠ 存档代码无效或已损坏，导入失败 ');
+  }
+
+  /* —— C8 模态互斥（偏好热键版）：手册/对话/战斗/小游戏/阅读器开着时，M/V/Q/T/F9/Tab/数字键
+   * 不再穿透改全局状态（toast 叠脸、HUD 半路换形态）；标题页不受影响。
+   * P（自动播放）例外走软守卫：对话中开/关自动播放是正当用法，只挡其余模态。 —— */
+  function prefBlock() {
+    return journalOpen || ADV.Game.busy || ADV.UI.busy ||
+      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
+  }
+  function prefBlockSoft() {
+    return journalOpen || ADV.Game.busy ||
+      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
   }
 
   /* —— 游玩中手动保存 / 读取（工具条 💾 📂；战斗/小游戏/阅读器/对话/手册中不响应） —— */
@@ -302,7 +328,7 @@ ADV.Main = (function () {
     }
     const opts = [0, 1, 2].map(i => {                      // 命名槽：显示已有摘要，覆盖写入
       const s = ADV.Game.slotSummary(i);
-      return s.used ? `📥 槽位${CN[i]}（第${s.day}天 · ${s.name || '小勇'} · 💰${s.gold}）覆盖写入`
+      return s.used ? `📥 槽位${CN[i]}（第${s.day}天${s.period ? '·' + s.period : ''} · ${s.name || '小勇'} · 💰${s.gold}）覆盖写入`
                     : `📥 槽位${CN[i]}（空）存入`;
     });
     const si = await ADV.UI.choose([...opts, '取消'], { cancelIndex: 3 });
@@ -316,7 +342,7 @@ ADV.Main = (function () {
     const sums = [0, 1, 2].map(i => ADV.Game.slotSummary(i));
     if (!ADV.Game.hasSave() && !sums.some(s => s.used)) { ADV.UI.toast(' ⚠ 还没有存档 '); return; }
     const pick = await ADV.UI.choose(['📂 主档（上次保存·影子自动回退）',
-        ...sums.map((s, i) => s.used ? `📗 槽位${CN[i]}（第${s.day}天 · ${s.name || '小勇'} · 💰${s.gold}）`
+        ...sums.map((s, i) => s.used ? `📗 槽位${CN[i]}（第${s.day}天${s.period ? '·' + s.period : ''} · ${s.name || '小勇'} · 💰${s.gold}）`
                                       : `📗 槽位${CN[i]}（空）`),
         '取消'], { cancelIndex: 4 });
     if (pick === 4 || pick < 0 || uiModalBlock()) return;  // 确认期间状态可能已变，再守一道
@@ -634,13 +660,15 @@ ADV.Main = (function () {
         case 'help': updateHelp(); renderHelp(); break;
         case 'ending': updateEnding(dt); renderEnding(); break;
         case 'play':
+          if (!(ADV.Battle && ADV.Battle.active)) battleSeen = false;
           if (ADV.Books && ADV.Books.active) {            // 阅读器接管画面与输入
             ADV.Books.update(dt, pressed);
             ADV.Books.render(ctx);
             break;
           }
           if (ADV.Battle && ADV.Battle.active) {            // 战斗接管画面与输入
-            ADV.Battle.update(dt, pressed);
+            ADV.Battle.update(dt, battleSeen ? pressed : {}, held);   // 开战首帧吞输入（开战的 Z 不穿透进菜单）+ held 供菜单长按连发（B6）
+            battleSeen = true;
             ADV.Battle.render(ctx);
             break;
           }
@@ -650,10 +678,10 @@ ADV.Main = (function () {
             break;
           }
           if (journalOpen) {                              // 手册：暂停世界；← → 切组内页，↑ ↓ 切组
-            if (pressed.left) { journalTab = ADV.UI.journalMove(journalTab, 'left'); ADV.Audio.sfx('cursor'); }
-            if (pressed.right) { journalTab = ADV.UI.journalMove(journalTab, 'right'); ADV.Audio.sfx('cursor'); }
-            if (pressed.up) { journalTab = ADV.UI.journalMove(journalTab, 'up'); ADV.Audio.sfx('cursor'); }
-            if (pressed.down) { journalTab = ADV.UI.journalMove(journalTab, 'down'); ADV.Audio.sfx('cursor'); }
+            if (pressed.left) setJournalTab(ADV.UI.journalMove(journalTab, 'left'));
+            if (pressed.right) setJournalTab(ADV.UI.journalMove(journalTab, 'right'));
+            if (pressed.up) setJournalTab(ADV.UI.journalMove(journalTab, 'up'));
+            if (pressed.down) setJournalTab(ADV.UI.journalMove(journalTab, 'down'));
             if (pressed.pageup) ADV.UI.journalPage(-1, journalTab);   // 列表翻页（好友/任务/收藏/背包）
             if (pressed.pagedown) ADV.UI.journalPage(1, journalTab);
             if (pressed.cancel) { journalOpen = false; ADV.Audio.sfx('cancel'); }
@@ -830,8 +858,8 @@ ADV.Main = (function () {
         const hit = ADV.UI.journalHit(journalTab, p.x, p.y);
         if (!hit) return;
         if (hit.t === 'close') { journalOpen = false; ADV.Audio.sfx('cancel'); }
-        else if (hit.t === 'group') { journalTab = hit.tab; ADV.Audio.sfx('cursor'); }
-        else if (hit.t === 'tab') { journalTab = hit.ti; ADV.Audio.sfx('cursor'); }
+        else if (hit.t === 'group') setJournalTab(hit.tab);
+        else if (hit.t === 'tab') setJournalTab(hit.ti);
         else if (hit.t === 'fup') ADV.UI.journalPage(-1, journalTab);
         else if (hit.t === 'fdown') ADV.UI.journalPage(1, journalTab);
         return;
