@@ -39,6 +39,7 @@ ADV.Growth = (function () {
     while (st.lv < 30 && st.xp >= LV_XP(st.lv)) { st.xp -= LV_XP(st.lv); st.lv++; ups++; }
     if (ups > 0) {
       const t = title();
+      if (ADV.Audio && ADV.Audio.sfx) ADV.Audio.sfx('levelup');   // B7：最高频正反馈时刻补一声专属 stinger
       if (ADV.UI && ADV.UI.toast) ADV.UI.toast(` ✨ 升级！Lv.${st.lv}「${t}」 `);
       if (ups >= 2 && ADV.UI && ADV.UI.toast) ADV.UI.toast(' 📢 校长广播：又有同学进步啦！');
       milestone(`⭐ 升到 Lv.${st.lv}，称号「${t}」`);

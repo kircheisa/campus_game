@@ -47,9 +47,9 @@ ADV.Main = (function () {
         }
       }
     }
-    if (e.code === 'KeyM') {                                                   // M：音量三档循环（全开→仅音效→静音）
+    if (e.code === 'KeyM') {                                                   // M：音量四档循环（全开→无BGM→仅音效→静音）
       const m = ADV.Audio.cycleVolume();
-      ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 1 ? ' 🎵 仅音效（音乐静音） ' : ' 🔇 已静音 ');
+      ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 3 ? ' 🌧 无 BGM（保留环境声） ' : m === 1 ? ' 🎵 仅音效（音乐·环境静音） ' : ' 🔇 已静音 ');
     }
     if (e.code === 'KeyV') {                                                  // V：虚拟按键开关
       padPref = document.body.classList.contains('nopad');                    // 当前隐藏 → 切为显示
@@ -116,7 +116,7 @@ ADV.Main = (function () {
       else if (t === 'hotbar') { ADV.UI.toast(ADV.UI.toggleHotbar() ? ' 🛠 工具栏：开（点数字槽切换工具） ' : ' 🛠 工具栏：关 '); }
       else if (t === 'vol') {
         const m = ADV.Audio.cycleVolume();
-        ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 1 ? ' 🎵 仅音效（音乐静音） ' : ' 🔇 已静音 ');
+        ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 3 ? ' 🌧 无 BGM（保留环境声） ' : m === 1 ? ' 🎵 仅音效（音乐·环境静音） ' : ' 🔇 已静音 ');
       }
       else if (t === 'auto') {
         const on = ADV.UI.toggleAuto();
@@ -487,7 +487,7 @@ ADV.Main = (function () {
       ['C', '挥手打招呼（NPC 会回应你）'],
       ['G', '面向 NPC 送礼（投其所好！）'],
       ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
-      ['M', '静音开关（三档循环）'],
+      ['M', '音量四档循环（全开/无BGM/仅音效/静音）'],
       ['Q / L / P / V', 'HUD 三态 · 对话回看 · 自动播放 · 虚拟按键'],
       ['💾 / 📂 工具条', '手动保存 / 读取进度（主档外可存三个命名槽位；平时也自动存）'],
       ['🔑 工具条', '金钥匙（输入正确口令才能转动）'],

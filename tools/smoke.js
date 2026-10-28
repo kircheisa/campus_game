@@ -1375,15 +1375,36 @@ A.Skills.reset();   // 社交清零：闲聊给社交经验会升到 Lv1→chatB
   A.Engine.render(makeCtx(makeCanvas()));
   ok(A.Engine.player.y < 30, '跑步尘土：冲刺移动正常（尘土粒子生成/更新/渲染不崩）');
 
-  // —— 音量三档（M 键循环：全开 → 仅音效 → 静音 → 全开；toggleMute 兼容旧语义） ——
-  ok(A.Audio.volMode === 0, '音量三档：初始为全开');
-  ok(A.Audio.cycleVolume() === 1 && A.Audio.volMode === 1, '音量三档：第一档仅音效（音乐/环境静音）');
-  ok(A.Audio.cycleVolume() === 2 && A.Audio.muted === true, '音量三档：第二档全静音');
-  ok(A.Audio.cycleVolume() === 0 && A.Audio.muted === false, '音量三档：循环回全开');
+  // —— 音量四档（M 键循环：全开 → 无BGM（留环境声） → 仅音效 → 静音；toggleMute 兼容旧语义） ——
+  ok(A.Audio.volMode === 0, '音量四档：初始为全开');
+  ok(A.Audio.cycleVolume() === 3 && A.Audio.volMode === 3, '音量四档：第一档无 BGM（旋律静音，雨声等环境声保留）');
+  ok(A.Audio.cycleVolume() === 1 && A.Audio.volMode === 1, '音量四档：第二档仅音效（音乐·环境全静音）');
+  ok(A.Audio.cycleVolume() === 2 && A.Audio.muted === true, '音量四档：第三档全静音');
+  ok(A.Audio.cycleVolume() === 0 && A.Audio.muted === false, '音量四档：循环回全开');
   A.Audio.toggleMute();
   ok(A.Audio.volMode === 2, '音量兼容：toggleMute 从全开直达静音');
   A.Audio.toggleMute();
   ok(A.Audio.volMode === 0, '音量兼容：toggleMute 再切回全开');
+
+  // —— 音频批次七连：升级 stinger / sfx 压限 / 脚步变调 / ducking / 环境总线 / attack 包络 / lookahead ——
+  const auSrc = fs.readFileSync(path.join(ROOT, 'js', 'audio.js'), 'utf8');
+  ok(auSrc.includes("case 'levelup'") && fs.readFileSync(path.join(ROOT, 'js', 'growth.js'), 'utf8').includes("sfx('levelup')") &&
+     auSrc.includes('createDynamicsCompressor') && auSrc.includes('duckMusic') &&
+     auSrc.includes(".94 + Math.random() * .12") && auSrc.includes('ambBus.connect(master)') &&
+     auSrc.includes('linearRampToValueAtTime(vol, t + 0.004)') && auSrc.includes('ctx.currentTime + 0.5'),
+     '音频七连：源守护——stinger/压限/ducking/脚步变调/环境挂 master/attack 包络/lookahead 0.5s 全在位');
+  ok(fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8').includes('无 BGM（保留环境声）'),
+     '音频七连：M 键与工具条档位提示同步四档（含「无 BGM」档标签）');
+  const gSnap = JSON.stringify(A.Growth.dump());         // B7 行为：升级确实喊一声 levelup（快照还原）
+  const realSfx = A.Audio.sfx, sfxCalls = [];
+  A.Audio.sfx = n => sfxCalls.push(n);
+  try {
+    A.Growth.addXP(99999, '音频测试');
+    ok(sfxCalls.includes('levelup'), '音频七连：升级瞬间触发 levelup stinger（addXP spies 到调用）');
+  } finally {
+    A.Audio.sfx = realSfx;
+    A.Growth.load(JSON.parse(gSnap));
+  }
 
   // —— 战斗飘字（重载真实 battle 模块：普攻产生伤害飘字、完整战斗通关、渲染不崩，测完还原判胜桩） ——
   const BattleStub = A.Battle;

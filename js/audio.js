@@ -6,9 +6,9 @@
  * ========================================================= */
 window.ADV = window.ADV || {};
 ADV.Audio = (function () {
-  let ctx = null, master = null, bgmBus = null, musicBus = null;
-  let volMode = 0;               // 音量三档：0 全开 / 1 仅音效 / 2 静音（M 键循环）
-  try { const v = parseInt(localStorage.getItem('campus_vol'), 10); if (v === 0 || v === 1 || v === 2) volMode = v; } catch (e) {}
+  let ctx = null, master = null, bgmBus = null, musicBus = null, sfxBus = null;
+  let volMode = 0;               // 音量四档：0 全开 / 3 无BGM（留环境声）/ 1 仅音效 / 2 静音（M 键循环）
+  try { const v = parseInt(localStorage.getItem('campus_vol'), 10); if (v === 0 || v === 1 || v === 2 || v === 3) volMode = v; } catch (e) {}
   let bgmName = null, bgmTimer = null, step = 0, nextT = 0;
 
   // 每步为 8 分音符，数字为 MIDI 音高，0 为休止
@@ -104,13 +104,19 @@ ADV.Audio = (function () {
       master = ctx.createGain();
       master.gain.value = volMode === 2 ? 0 : 0.9;
       master.connect(ctx.destination);
-      bgmBus = ctx.createGain();                          // 音乐/环境音总线：仅音效档整体静音
-      bgmBus.gain.value = volMode === 1 ? 0 : 1;
+      bgmBus = ctx.createGain();                          // 音乐/环境音总线：仅音效·无BGM 档静音
+      bgmBus.gain.value = (volMode === 1 || volMode === 3) ? 0 : 1;
       bgmBus.connect(master);
       musicBus = ctx.createGain();                        // BGM 旋律独立子总线：换曲时可淡入淡出
       musicBus.gain.value = 1;
       musicBus.connect(bgmBus);
-    } catch (e) { ctx = null; master = null; bgmBus = null; musicBus = null; return; }
+      sfxBus = ctx.createGain();                          // B8：音效总线（.8）串压限器——密集音效+雷声同帧不削波
+      sfxBus.gain.value = .8;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 20; comp.ratio.value = 4;
+      comp.attack.value = .003; comp.release.value = .2;
+      sfxBus.connect(comp); comp.connect(master);
+    } catch (e) { ctx = null; master = null; bgmBus = null; musicBus = null; sfxBus = null; return; }
     // 切到后台标签页时挂起声音（回来自动恢复），避免后台 BGM 卡顿
     if (typeof document !== 'undefined' && document.addEventListener)
       document.addEventListener('visibilitychange', () => {
@@ -125,10 +131,22 @@ ADV.Audio = (function () {
   function tone(freq, t, dur, type, vol, dest) {
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.004);      // C13 attack 包络：4ms 起音，消「啪」的 click
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g); g.connect(dest || master);
+    o.connect(g); g.connect(dest || sfxBus || master);
     o.start(t); o.stop(t + dur + 0.03);
+  }
+
+  function duckMusic() {                               // B10：关键 stinger 侧链压 BGM——高光时刻不被满音量旋律盖住
+    if (!ctx || !musicBus || volMode !== 0) return;
+    try {
+      const t0 = ctx.currentTime;
+      musicBus.gain.cancelScheduledValues(t0);
+      musicBus.gain.setValueAtTime(musicBus.gain.value, t0);
+      musicBus.gain.linearRampToValueAtTime(.35, t0 + .06);
+      musicBus.gain.linearRampToValueAtTime(1, t0 + 1.35);
+    } catch (e) {}
   }
 
   function sfx(name, arg) {
@@ -138,26 +156,33 @@ ADV.Audio = (function () {
       case 'ok':      tone(880, t, .07, 'square', .05); break;
       case 'cursor':  tone(660, t, .05, 'square', .04); break;
       case 'cancel':  tone(392, t, .08, 'square', .05); tone(311, t + .06, .1, 'square', .05); break;
-      case 'correct': [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * .09, .12, 'square', .05)); break;
-      case 'wrong':   tone(196, t, .18, 'sawtooth', .05); tone(185, t + .12, .2, 'sawtooth', .05); break;
+      case 'correct': duckMusic(); [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * .09, .12, 'square', .05)); break;
+      case 'wrong':   duckMusic(); tone(196, t, .18, 'sawtooth', .05); tone(185, t + .12, .2, 'sawtooth', .05); break;
       case 'item':    [659, 784, 988, 1319].forEach((f, i) => tone(f, t + i * .08, .14, 'triangle', .08)); break;
       case 'door':    tone(147, t, .1, 'square', .06); tone(110, t + .09, .14, 'square', .06); break;
       case 'emote':   tone(988, t, .06, 'triangle', .06); tone(1319, t + .05, .08, 'triangle', .06); break;
       case 'save':    tone(784, t, .06, 'triangle', .05); tone(1047, t + .07, .09, 'triangle', .05); break;
       case 'open':    [131, 131, 156, 175, 196].forEach((f, i) => tone(f, t + i * .1, .16, 'sawtooth', .045)); break;
-      case 'fanfare': [523, 523, 659, 784, 784, 1047, 1319].forEach((f, i) => tone(f, t + i * .11, .16, 'square', .055)); break;
+      case 'fanfare': duckMusic(); [523, 523, 659, 784, 784, 1047, 1319].forEach((f, i) => tone(f, t + i * .11, .16, 'square', .055)); break;
+      case 'levelup':                                      // B7 升级 stinger：上行五连音 + 高音收尾，与胜利 fanfare 区分
+        duckMusic();
+        [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, t + i * .06, .14, 'triangle', .06));
+        tone(1568, t + .32, .3, 'square', .05);
+        break;
       case 'cat':     tone(740, t, .22, 'sine', .08); tone(932, t + .18, .28, 'sine', .08); break;
       case 'start':   [523, 659, 784].forEach((f, i) => tone(f, t + i * .07, .12, 'square', .06)); break;
       case 'dig':     tone(180, t, .08, 'square', .07); tone(140, t + .1, .12, 'sawtooth', .06); break;
       case 'photo':   tone(1200, t, .04, 'square', .06); tone(900, t + .05, .06, 'square', .05); tone(1500, t + .1, .05, 'square', .05); break;
-      case 'step':    // 脚步声（arg: grass 草地软 / floor 硬地板脆 / cave 洞穴带回声）
-        if (arg === 'grass') tone(140, t, .05, 'triangle', .02);
+      case 'step': {    // 脚步声（arg: grass 草地软 / floor 硬地板脆 / cave 洞穴带回声）；B9 频率音量微随机破「机关枪效应」
+        const pj = .94 + Math.random() * .12, aj = .9 + Math.random() * .2;
+        if (arg === 'grass') tone(140 * pj, t, .05, 'triangle', .02 * aj);
         else {
-          tone(230, t, .03, 'triangle', .022);
-          tone(115, t + .012, .04, 'square', .01);
-          if (arg === 'cave') tone(190, t + .1, .06, 'triangle', .012);   // 洞穴里的回响
+          tone(230 * pj, t, .03, 'triangle', .022 * aj);
+          tone(115 * pj, t + .012, .04, 'square', .01 * aj);
+          if (arg === 'cave') tone(190 * pj, t + .1, .06, 'triangle', .012 * aj);   // 洞穴里的回响
         }
         break;
+      }
     }
   }
 
@@ -194,7 +219,7 @@ ADV.Audio = (function () {
     const stepDur = 30 / bgm.bpm;
     step = 0; nextT = ctx.currentTime + (fade ? 0.4 : 0.08);
     bgmTimer = setInterval(() => {
-      while (nextT < ctx.currentTime + 0.2) {
+      while (nextT < ctx.currentTime + 0.5) {            // C14：lookahead 0.5s——长 GC 不出音符缺口（绝对时钟不漂移）
         const i = step % bgm.lead.length;
         if (bgm.lead[i]) tone(mf(bgm.lead[i]), nextT, stepDur * .9, bgm.leadType || 'square', .032, musicBus || bgmBus);
         if (bgm.bass[i])  tone(mf(bgm.bass[i]),  nextT, stepDur * 1.7, 'triangle', .05, musicBus || bgmBus);
@@ -208,13 +233,18 @@ ADV.Audio = (function () {
     bgmTimer = null; bgmName = null;
   }
 
-  /* ---------- 音量三档（M 键循环：全开 → 仅音效 → 静音；偏好持久化） ---------- */
+  /* ---------- 音量四档（M 键循环：全开 → 无BGM（留环境声） → 仅音效 → 静音；偏好持久化） ---------- */
   function applyVolume() {
     if (master) master.gain.value = volMode === 2 ? 0 : 0.9;
-    if (bgmBus) bgmBus.gain.value = volMode === 1 ? 0 : 1;
+    if (bgmBus) bgmBus.gain.value = (volMode === 1 || volMode === 3) ? 0 : 1;
+    if (ambBus) ambBus.gain.value = volMode === 1 ? 0 : .85;   // B11：仅音效档严格只剩音效；无BGM 档保留环境声
   }
   function saveVolPref() { try { localStorage.setItem('campus_vol', String(volMode)); } catch (e) {} }
-  function cycleVolume() { volMode = (volMode + 1) % 3; applyVolume(); saveVolPref(); return volMode; }
+  const VOL_CYCLE = [0, 3, 1, 2];                      // 声音递减排序：全开 → 无BGM → 仅音效 → 静音
+  function cycleVolume() {
+    volMode = VOL_CYCLE[(VOL_CYCLE.indexOf(volMode) + 1) % VOL_CYCLE.length];
+    applyVolume(); saveVolPref(); return volMode;
+  }
   function toggleMute() {                               // 兼容旧调用：静音 ↔ 恢复
     volMode = volMode === 2 ? 0 : 2;
     applyVolume(); saveVolPref();
@@ -272,7 +302,11 @@ ADV.Audio = (function () {
   function ensureAmb() {
     init(); resume();
     if (!ctx) return false;
-    if (!ambBus) { ambBus = ctx.createGain(); ambBus.gain.value = .85; ambBus.connect(bgmBus || master); }
+    if (!ambBus) {
+      ambBus = ctx.createGain();                         // B11：环境音直接挂 master——「无 BGM」档也能听雨声
+      ambBus.gain.value = volMode === 1 ? 0 : .85;
+      ambBus.connect(master);
+    }
     return true;
   }
   function getNoise() {                             // 2 秒白噪声缓存（循环播放）
