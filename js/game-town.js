@@ -112,6 +112,35 @@
     save();
   }
 
+  // —— 请客吃料理（README 余候选 · 群体好感事件）：摆一桌自制菜，宴请已结识的伙伴 ——
+  // 赴宴者 = 好感最高且 >0 的前三位（同分按 id 定序，确定性）；命中菜偏好 +4，家常款待 +2
+  async function treatFriends() {
+    const f = F(), CO = ADV.Collect;
+    const owned = Object.keys(DISH_BUFF).filter(id => CO.count(id) > 0);
+    const met = Object.keys(state.friends).filter(id => id !== 'mom' && id !== 'dad'
+      && BOND[id] && state.friends[id].love > 0)
+      .sort((a, b) => state.friends[b].love - state.friends[a].love || (a < b ? -1 : 1));
+    const guests = met.slice(0, 3);
+    const j = await choose(owned.map(id => `${CO.itemInfo(id).name} ×${CO.count(id)}`).concat('还是算了'),
+      { caption: { name: '饭桌', text: `摆一桌，请 ${guests.map(id => BOND[id].name).join('、')} 来家里吃？\n（吃好了好感都涨——每天最多一桌）` } });
+    if (j < 0 || j >= owned.length) return;                // 还是算了：不落日锁，随时改主意
+    const dishId = owned[j], dishName = CO.itemInfo(dishId).name;
+    CO.useItem(dishId, 1);
+    f.treatDay = ADV.Cal.day;
+    ADV.Audio.sfx('emote');
+    await say({ name: '家宴', text: `《${dishName}》端上桌——\n${guests.map(id => BOND[id].name).join('、')}循着香味就来了，\n小饭桌挤得满满当当！` });
+    for (const id of guests) {
+      const hit = (BOND_META[id].likes || []).includes(dishId);
+      if (hit) await say({ name: BOND[id].name, text: `「这是……《${dishName}》？！\n我最爱这一口！」${BOND[id].name}眼睛都亮了。` });
+      else await say({ name: BOND[id].name, text: `「家常味道，最暖胃了。」\n${BOND[id].name}悄悄添了第二碗饭。` });
+      gainBond(id, hit ? 4 : 2);
+    }
+    await say({ name: '家宴', text: '盘子见了底，大家约好——\n「下次还来你家吃饭！」' });
+    if (ADV.Skills) ADV.Skills.add('social', 2, '请客');
+    logEvent(`在家摆了一桌《${dishName}》，${guests.map(id => BOND[id].name).join('、')}都吃美了`);
+    save();
+  }
+
   // —— 武斗大会（周末 · 道场挑战榜前插入） ——
   async function tourney() {
     const f = F();
@@ -1626,6 +1655,11 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
     if (known.length) opts.push('自己做顿饭');
     if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0)) opts.push('吃点自己做的小菜');
     if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0) && f.familyDishDay !== C.day) opts.push('给家人尝尝手艺');
+    { // 请客吃料理（群体好感）：背包有自制菜 + 已结识伙伴（非家人、好感>0）至少两位 + 每天一桌
+      const metN = Object.keys(state.friends).filter(id => id !== 'mom' && id !== 'dad'
+        && BOND[id] && state.friends[id].love > 0).length;
+      if (Object.keys(DISH_BUFF).some(id => ADV.Collect.count(id) > 0) && metN >= 2 && f.treatDay !== C.day) opts.push('请伙伴来家吃一桌');
+    }
     if (C.period >= 4 && f.dinnerDay !== C.day) opts.push('吃妈妈做的晚饭');
     const i = await choose(opts, { caption: { name: '饭桌', text: known.length ? '妈妈留了字条：想做就自己做哦～' : '饭桌收拾得干干净净。' } });
     if (opts[i] === '陪爸妈出门走走（周日）') {
@@ -1671,6 +1705,10 @@ await say({ text: '你抡起小锄头，把土翻得松软。\n（去田伯那�
       gainBond('mom', 3);
       logEvent(`把亲手做的${dishName}端上了家里的饭桌`);
       save();
+      return;
+    }
+    if (opts[i] === '请伙伴来家吃一桌') {
+      await treatFriends();
       return;
     }
     if (opts[i] === '吃妈妈做的晚饭') {

@@ -7597,6 +7597,68 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.109] 请客吃料理：饭桌摆一桌宴请伙伴——群体好感事件（批次四十五） ==================== */
+  console.log('\n[5.109] 请客吃料理：偏好命中 +4 / 家常 +2 · top-3 赴宴 · 每天一桌');
+  {
+    const snap109 = JSON.stringify(A.Game.flags);
+    const snapF109 = JSON.stringify(A.Game.friends);
+    const snapSk109 = JSON.stringify(A.Skills.dump());
+    try {
+      // —— A. 源断言：饭桌选项 + treatDay 日锁 + 好感阶梯 + social 技能 ——
+      const gt109 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+      ok(gt109.includes('请伙伴来家吃一桌') && gt109.includes('treatDay') && gt109.includes('function treatFriends'),
+        '请客吃料理：饭桌新选项「请伙伴来家吃一桌」+ treatFriends 函数 + treatDay 日锁在位');
+      ok(gt109.includes('gainBond(id, hit ? 4 : 2)') && gt109.includes("'social', 2, '请客'") && gt109.includes("met.slice(0, 3)"),
+        '请客吃料理：偏好命中 +4 / 家常款待 +2 阶梯 · top-3 赴宴 · social 技能 +2 在位');
+      // —— B. 行为：摆一桌《阳光蛋包饭》——小胖(r1 偏好) +4 · 小明/小红 +2 · 星儿(top-3 外)不赴宴 ——
+      A.Game.newGame('hero_boy', false);
+      const F109 = A.Game.flags;
+      A.Cal.load({ day: 11, period: 2, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      A.Game.friends.xiaoming = { love: 12, stage: 1 };    // r1 未命中 → +2
+      A.Game.friends.xiaopang = { love: 9, stage: 1 };     // likes r1 → +4
+      A.Game.friends.xiaohong = { love: 6, stage: 1 };     // r1 未命中 → +2
+      A.Game.friends.star     = { love: 3, stage: 1 };     // 好感第 4 → 不在邀请席
+      A.Collect.addItem('r1', 1);
+      const love0 = id => A.Game.friends[id].love;
+      let sawMenu109 = null, secondMenu109 = null, call109 = 0;
+      choosePick = opts => {
+        const arr = opts.map(String);
+        call109++;
+        if (call109 === 1) sawMenu109 = arr.slice();
+        if (call109 === 3) secondMenu109 = arr.slice();
+        const k = arr.findIndex(o => o.includes('请伙伴'));
+        if (k >= 0) return k;
+        const d = arr.findIndex(o => o.includes('阳光蛋包饭'));
+        if (d >= 0) return d;
+        if (arr.some(o => o.includes('赚零花钱'))) return arr.length - 1;   // 家务子菜单 → 婉拒
+        return 0;
+      };
+      await pump(A.Game.S.dinnerTable(), 8000);            // 第一次：主菜单 → 菜选单 → 开席五句
+      await pump(A.Game.S.dinnerTable(), 4000);            // 第二次：同日验证日锁（顺手婉拒家务）
+      choosePick = null;
+      ok(!!sawMenu109 && sawMenu109.some(o => o.includes('请伙伴')) && F109.treatDay === 11
+         && A.Collect.count('r1') === 0
+         && love0('xiaoming') === 14 && love0('xiaopang') === 13 && love0('xiaohong') === 8
+         && love0('star') === 3,
+        '请客吃料理：摆一桌《阳光蛋包饭》→ 命中小胖 +4 / 小明小红 +2 · 星儿(top-3 外)不赴宴 · 菜 -1 · treatDay 落档');
+      ok(!!secondMenu109 && !secondMenu109.some(o => o.includes('请伙伴')),
+        '请客日锁：同日再进饭桌，「请伙伴来家吃一桌」不再出现（每天一桌）');
+    } finally {
+      try {                                               // 礼貌还原（字段清单 + friends 全量 + 技能快照）
+        const old = JSON.parse(snap109);
+        const cur = A.Game.flags;
+        for (const k of ['treatDay', 'familyDishDay', 'houseworkDay', 'dinnerDay', 'gold', 'buff', 'metDad', 'recipes'])
+          cur[k] = old[k];
+        const oldF = JSON.parse(snapF109);
+        for (const k of Object.keys(A.Game.friends)) delete A.Game.friends[k];
+        for (const k of Object.keys(oldF)) A.Game.friends[k] = oldF[k];
+        A.Skills.load(JSON.parse(snapSk109));
+      } catch (e) {}
+      A.Game.busy = false;
+      for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
