@@ -68,6 +68,14 @@ ADV.Main = (function () {
       const on = ADV.UI.toggleAuto();
       ADV.UI.toast(on ? ' ⏩ 自动播放：开（对话自动翻页，选项仍需手动选） ' : ' ⏸ 自动播放：关 ');
     }
+    if (e.code === 'KeyT' && state === 'play') {                            // T：字号两档循环（小屏大字）
+      const k = ADV.UI.fontCycle();
+      ADV.UI.toast(k > 1 ? ' 🔍 大字模式：开（对话·选项·HUD 字号放大，T 切回） ' : ' 🔍 大字模式：关 ');
+    }
+    if (e.code === 'F9' && state === 'play') {                              // F9：帧耗时诊断叠层（实机量化用）
+      const on = ADV.UI.togglePerf();
+      ADV.UI.toast(on ? ' ⏱ 帧耗时诊断：开（左下角读数，F9 关） ' : ' ⏱ 帧耗时诊断：关 ');
+    }
     if (e.code === 'Tab' && state === 'play') {                             // Tab：小地图开关
       e.preventDefault();
       const on = ADV.UI.toggleMinimap();
@@ -122,6 +130,10 @@ ADV.Main = (function () {
         const on = ADV.UI.toggleAuto();
         ADV.UI.toast(on ? ' ⏩ 自动播放：开（对话自动翻页，选项仍需手动选） ' : ' ⏸ 自动播放：关 ');
       }
+      else if (t === 'font') {                            // 字号两档（小屏大字，同 T 键）
+        const k = ADV.UI.fontCycle();
+        ADV.UI.toast(k > 1 ? ' 🔍 大字模式：开（对话·选项·HUD 字号放大） ' : ' 🔍 大字模式：关 ');
+      }
       else if (t === 'save') manualSave();                // 手动保存（自动存档之外的显式存点）
       else if (t === 'load') manualLoad();                // 手动读取（回档到上次保存）
       else if (t === 'key') goldenKeyUI();                // 金钥匙彩蛋（口令 → 金币，日限 3000）
@@ -169,7 +181,7 @@ ADV.Main = (function () {
     const opening = !journalOpen;
     if (opening && ADV.UI.busy) return;        // 对话/选项/拾取动画中不开手册，避免输入串扰
     journalOpen = opening;
-    if (opening) { journalTab = defaultJournalTab(); ADV.UI.resetJournalScroll(); }
+    if (opening) { journalTab = defaultJournalTab(); ADV.UI.resetJournalScroll(); ADV.UI.journalInvalidate(); }
     else ADV.UI.toggleLog(false);              // 关手册时顺带收起回看浮层
   }
   const clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: 40 + i * 55, s: .4 + Math.random() * .8 }));
@@ -488,7 +500,7 @@ ADV.Main = (function () {
       ['G', '面向 NPC 送礼（投其所好！）'],
       ['H', '放学后邀同学同行（地图 ♥ 处有双人事件）'],
       ['M', '音量四档循环（全开/无BGM/仅音效/静音）'],
-      ['Q / L / P / V', 'HUD 三态 · 对话回看 · 自动播放 · 虚拟按键'],
+      ['Q / L / P / V / T', 'HUD 三态 · 对话回看 · 自动播放 · 虚拟按键 · 大字模式'],
       ['💾 / 📂 工具条', '手动保存 / 读取进度（主档外可存三个命名槽位；平时也自动存）'],
       ['🔑 工具条', '金钥匙（输入正确口令才能转动）'],
       ['F', '手册（↑ ↓ 切组 · ← → 切页：关系/生活/收藏/学习/成长）'],
@@ -589,8 +601,10 @@ ADV.Main = (function () {
   let ambClock = 0;                                  // 环境音评估节流（0.5 秒一次）
   let splashEl = document.getElementById('splash');  // 启动画面（脚本 defer 加载完首帧后移除）
   function loop(now) {
+    const frameMs = now - last;                        // 出帧间隔（含浏览器合成）＝真实帧节奏
+    const __t0 = performance.now();                    // 本帧逻辑（update+render）计时起点
     try {
-      const dt = Math.min(.05, (now - last) / 1000);
+      const dt = Math.min(.05, frameMs / 1000);
       last = now;
       if (splashEl) {                                  // 首帧渲染成功 → 撤掉“加载中”启动画面
         try { if (splashEl.remove) splashEl.remove(); else splashEl.style.display = 'none'; } catch (e0) {}
@@ -681,9 +695,11 @@ ADV.Main = (function () {
           }
           break;
       }
+      if (state === 'play' && ADV.UI.perfOn && ADV.UI.perfOn()) ADV.UI.renderPerf(ctx);   // F9 诊断叠层（最顶层）
     } catch (err) {
       showFatal(err);          // 单帧异常不再杀死整个 rAF 循环（白屏假死）
     } finally {
+      ADV.UI.perfPush(frameMs, performance.now() - __t0);   // 帧耗时入环形缓冲（关闭时 no-op）
       consume();
       requestAnimationFrame(loop);
     }

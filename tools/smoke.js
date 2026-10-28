@@ -7305,6 +7305,96 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  // ====================== [5.107] 性能与可读性打磨：字号两档 / 手册按图缓存 / F9 帧诊断 ======================
+  console.log('\n[5.107] 字号档（T 键） / 手册整窗离屏缓存 / F9 帧耗时诊断');
+  {
+    const srcMain107 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+    const srcUI107 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+    // —— 源守护 ——
+    ok(srcMain107.includes("e.code === 'KeyT'") && srcMain107.includes("e.code === 'F9'")
+      && srcMain107.includes('ADV.UI.perfPush(frameMs') && srcMain107.includes('ADV.UI.journalInvalidate()'),
+      '源：main.js T/F9 键接线 + 主循环 perfPush 采样 + 开手册失效页缓存');
+    ok(srcUI107.includes('function tsz') && srcUI107.includes('const sayH')
+      && srcUI107.includes('campus_font_scale') && /view \* tsz\(40\)/.test(srcUI107),
+      '源：字号档 tsz/sayH/持久化 + 选项窗行高随档派生（档位 1 几何与旧版一致）');
+    ok(srcUI107.includes('jCache.key !== key')
+      && /\[tab, friendScroll, listScroll, touchUI \? 1 : 0, fontScale, stamp\]/.test(srcUI107)
+      && srcUI107.includes('drawJournalInto'),
+      '源：手册整窗离屏缓存 key（tab/滚动/触屏/字号/日·时段）+ 兜底直绘');
+    ok(srcMain107.includes("'Q / L / P / V / T'") && srcMain107.includes("t === 'font'"),
+      '源：帮助页隐藏键行补 T + 触屏工具条 🔍 字号按钮');
+    // —— 字号档行为：两档循环 + 持久化 ——
+    const lsFont107 = localStorage.getItem('campus_font_scale');
+    const f0107 = A.UI.fontCur();
+    try {
+      const k1 = A.UI.fontCycle();
+      ok(f0107 === 1 && k1 === 1.25 && A.UI.fontCur() === 1.25 && localStorage.getItem('campus_font_scale') === '125',
+        '字号档行为①：1 → 1.25 循环，持久化 campus_font_scale=125');
+      const k2 = A.UI.fontCycle();
+      ok(k2 === 1 && A.UI.fontCur() === 1 && localStorage.getItem('campus_font_scale') === '1',
+        '字号档行为②：1.25 → 1 切回，持久化回 1');
+    } finally {
+      if (A.UI.fontCur() !== f0107) A.UI.fontCycle();
+      try {
+        if (lsFont107 === null) localStorage.removeItem('campus_font_scale');
+        else localStorage.setItem('campus_font_scale', lsFont107);
+      } catch (e) {}
+    }
+    // —— 手册按图缓存行为：key 命中不重画，翻页/换时段重建（getContext 次数 = 重建次数） ——
+    const docOrig107 = global.document;
+    const calSnap107 = A.Cal.dump();
+    let cvGets107 = 0;
+    global.document = {
+      createElement: tag => {
+        if (tag !== 'canvas') return docOrig107.createElement(tag);
+        const cv = makeCanvas();
+        const origGet = cv.getContext;
+        cv.getContext = function (...a) { cvGets107++; return origGet.apply(cv, a); };
+        return cv;
+      },
+      getElementById: docOrig107.getElementById, querySelectorAll: docOrig107.querySelectorAll, body: docOrig107.body
+    };
+    try {
+      const g107 = makeCtx(makeCanvas());
+      A.UI.journalInvalidate();
+      A.UI.renderJournal(g107, A.Game.friends, A.Game.BOND, 1);
+      ok(cvGets107 === 1, '缓存行为①：首画建图（离屏 getContext ×1）');
+      A.UI.renderJournal(g107, A.Game.friends, A.Game.BOND, 1);
+      ok(cvGets107 === 1, '缓存行为②：key 命中不重画——手册打开期间每帧 drawImage 一次');
+      A.UI.journalPage(1, 1);
+      A.UI.renderJournal(g107, A.Game.friends, A.Game.BOND, 1);
+      ok(cvGets107 === 2, '缓存行为③：翻页（listScroll 变）→ key 失效重建');
+      A.Cal.load({ ...calSnap107, period: (calSnap107.period + 1) % 6 });
+      A.UI.renderJournal(g107, A.Game.friends, A.Game.BOND, 1);
+      ok(cvGets107 === 3, '缓存行为④：时段变化（stamp）→ 重建（换天/换时段的内容更新不靠打开动作）');
+    } finally {
+      global.document = docOrig107;
+      A.Cal.load(calSnap107);
+      A.UI.journalInvalidate();
+    }
+    // —— F9 帧诊断行为：环形缓冲 / 统计口径 / 关闭 no-op ——
+    const wasOn107 = A.UI.perfOn();
+    try {
+      ok(A.UI.togglePerf() === true && A.UI.perfOn() === true && A.UI.perfStats() === null,
+        '帧诊断行为①：开启后空缓冲统计为 null（不出空读数）');
+      for (let i = 0; i < 59; i++) A.UI.perfPush(16.7, 3);
+      A.UI.perfPush(40, 3);
+      const st107 = A.UI.perfStats();
+      ok(st107.n === 60 && st107.worst === 40 && st107.p95 === 16.7 && st107.fps > 55 && st107.fps < 63 && st107.lavg === 3,
+        '帧诊断行为②：60 帧统计——峰 40 / P95 16.7（1/60 卡顿不抬 P95）/ FPS≈60 / 逻辑均值 3ms');
+      for (let i = 0; i < 61; i++) A.UI.perfPush(16.7, 3);
+      ok(A.UI.perfStats().n === 120, '帧诊断行为③：环形缓冲 120 帧封顶（约 2 秒窗口）');
+      A.UI.renderPerf(makeCtx(makeCanvas()));
+      ok(A.UI.togglePerf() === false && A.UI.perfOn() === false,
+        '帧诊断行为④：renderPerf 出读数不崩 + F9 再按关闭');
+      A.UI.perfPush(999, 999);
+      ok(A.UI.perfStats() === null,
+        '帧诊断行为⑤：关闭即清缓冲、perfPush no-op（主循环常挂零开销）');
+    } finally {
+      if (A.UI.perfOn() !== wasOn107) A.UI.togglePerf();
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
