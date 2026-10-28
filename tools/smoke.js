@@ -50,11 +50,16 @@ global.addEventListener = (type, fn) => { if (type === 'storage') storageEvents.
 const ROOT = path.join(__dirname, '..');
 const GAME_CHUNKS = ['game-core', 'game-event', 'game-scene', 'game-quest', 'game-retro', 'game-town', 'game-life', 'game-save'];
 const gameSrc = () => GAME_CHUNKS.map(f => fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8')).join('\n');
-for (const f of ['audio', 'sprites', 'maps', 'ui', 'engine', 'cal', 'books', 'collect', 'mistake', 'growth', 'skills', 'ai', 'battle', 'minigame', ...GAME_CHUNKS]) {
+for (const f of ['audio', 'sprites', 'maps', 'ui', 'stage3d', 'engine', 'cal', 'books', 'collect', 'mistake', 'growth', 'skills', 'ai', 'battle', 'minigame', ...GAME_CHUNKS]) {
   vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 const A = global.ADV;
 A.UI.setCtx(makeCtx(makeCanvas()));   // UI 需要测量文本宽度
+// 序章延迟定时器全局隔离：ngStart/newGame 遗留的 80ms intro 定时器若在后段中途开窗，
+// 会顶掉该段正在等待输入的 say/choose（UI 窗口单例）→ 挂死（曾为 [5.96]/[5.98] 随机挂因；
+// 游戏侧 armIntro 已加空闲门闸，冒烟里序章内容仍由下方 realIntro 显式 pump 验证）。
+const realIntro = A.Game.S._intro;
+A.Game.S._intro = async () => {};
 A.Main = { startEnding: noop };       // main.js 不参与冒烟测试，祭坛结局走桩
 const RealMini = A.Mini;                   // 真实小游戏引擎（[5.14] 确定性通关用）
 A.Mini = { start: (kind, cb) => cb(true), active: false };   // 小游戏直接判胜，测奖励链路
@@ -266,7 +271,7 @@ async function pump(promise, maxSteps) {
   console.log('\n[3] 引擎：加载 / 移动 / 场景切换');
   A.Game.newGame('hero_boy');
   ok(A.Engine.map.id === 'homeIn' && A.Engine.player.x === 18 && A.Engine.player.y === 11, 'newGame 后在家中卧室（开场即家）');
-  await pump(A.Game.S._intro({}));
+  await pump(realIntro({}));
   ok(A.Game.flags.introDone, '序章：背景与游戏目标交代完毕');
   A.Engine.loadMap('campus', 22, 30, 'up');
   tickHold('left', 30);
@@ -3189,7 +3194,7 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
   const keepCol = JSON.stringify(A.Game.flags.col);
   const keepFriends = JSON.stringify(A.Game.friends);
   A.Game.ngStart();
-  await pump(A.Game.S._intro({}));
+  await pump(realIntro({}));
   ok(A.Game.flags.ngplus === true && A.Game.flags.badges.math === false &&
      JSON.stringify(A.Game.flags.col) === keepCol && JSON.stringify(A.Game.friends) === keepFriends,
      'NG+：友谊与图鉴完整继承、主线进度重置');
@@ -5519,8 +5524,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
       // —— errbox 只认游戏自身 js 的错误（main.js 源码口径） ——
       const main81 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
-      ok(main81.indexOf('[a-z]+\\.js') >= 0 && main81.indexOf('非游戏脚本') >= 0 && main81.indexOf('showFatal(') >= 0,
-        '错误框：window.onerror 按来源过滤 —— 仅 js/*.js 进错误框，插件/用户脚本报错只留控制台');
+      ok(main81.indexOf('[a-z0-9]+\\.js') >= 0 && main81.indexOf('非游戏脚本') >= 0 && main81.indexOf('showFatal(') >= 0,
+        '错误框：window.onerror 按来源过滤 —— 仅 js/*.js（含数字文件名 stage3d.js）进错误框，插件/用户脚本报错只留控制台');
     } finally {
       pressQueue = qKeep;
       for (let i = 0; i < 300 && (A.UI.busy || A.Game.busy); i++) A.UI.update(1 / 60, {});
@@ -7771,6 +7776,55 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         try { localStorage.setItem('campus_shake', shakeSnap111 ? '1' : '0'); } catch (e) {}
       } catch (e) {}
       A.Game.busy = false;
+    }
+  }
+
+  /* ==================== [5.112] 立体演出层：three.js r159 UMD（时光回廊跃迁 / 标题立体校园） ==================== */
+  console.log('\n[5.112] 立体演出层：Stage3D 模块 / 回退路径 / 时光回廊跃迁判定');
+  {
+    // —— A. 源断言：vendor 在位且是正版 r159 UMD；页面与模块接线 ——
+    const threeSrc = fs.readFileSync(path.join(ROOT, 'js', 'vendor', 'three.min.js'), 'utf8');
+    ok(threeSrc.length > 600000 && threeSrc.includes('Copyright 2010-2023 Three.js Authors')
+       && threeSrc.includes('REVISION') && threeSrc.includes('typeof exports') && !/^\s*(import|export)\s/m.test(threeSrc),
+      'vendor：three r159 UMD 构建在位（668KB / 版权头 / UMD 而非 ESM），file:// 双击即玩兼容');
+    const idx112 = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    const en112 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+    const main112 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+    ok(idx112.includes('js/vendor/three.min.js') && idx112.includes('js/stage3d.js')
+       && idx112.indexOf('js/stage3d.js') < idx112.indexOf('js/main.js'),
+      '接线：index.html 经典 script 引入 vendor + stage3d（defer，先于 main.js）');
+    ok(en112.includes('ADV.Stage3D.warp') && en112.includes('timeWarpDest')
+       && main112.includes('ADV.Stage3D.titleBackground'),
+      '接线：doTransfer 走 Stage3D.warp 跃迁、标题背景走 titleBackground，均带回退');
+    // —— B. 回退面：Node 环境无 THREE / WebGL → 全接口同步 false，绝不悬挂回调 ——
+    ok(typeof A.Stage3D.available === 'function' && typeof A.Stage3D.warp === 'function'
+       && typeof A.Stage3D.titleBackground === 'function',
+      '模块：ADV.Stage3D 导出 available / warp / titleBackground 三接口');
+    ok(A.Stage3D.available() === false,
+      '回退探测：无 THREE 环境 available() === false（不抛错、结果缓存）');
+    let mid112 = false, done112 = false;
+    ok(A.Stage3D.warp({ onMid: () => { mid112 = true; }, onDone: () => { done112 = true; } }) === false
+       && !mid112 && !done112,
+      '回退跃迁：warp() 同步返回 false 且 onMid/onDone 零触发（调用方安全落回淡出路径）');
+    ok(A.Stage3D.titleBackground(makeCtx(makeCanvas()), 1.5) === false,
+      '回退标题：titleBackground() 返回 false（标题画面画原版 2D 剪影）');
+    // —— C. 跃迁判定：时代之门 / BOSS 之门 / 首入回廊 / 回廊内部互返 / 普通图 ——
+    const mapSnap = A.Engine.map ? { id: A.Engine.map.id, x: A.Engine.player.x, y: A.Engine.player.y } : null;
+    try {
+      ok(A.Engine.timeWarpDest('era2') === true && A.Engine.timeWarpDest('bosshall') === true,
+        '跃迁判定：时代之门（era1-4）/ BOSS 之门无论来处 → 演出');
+      ok(A.Engine.timeWarpDest('campus') === false,
+        '跃迁判定：普通地图传送 → 不演出');
+      A.Engine.loadMap('northyard', 16, 9, 'up');
+      ok(A.Engine.timeWarpDest('timehall') === true,
+        '跃迁判定：北新区首入钟楼地底（timehall）→ 演出');
+      A.Engine.loadMap('timehall', 13, 12, 'down');
+      ok(A.Engine.timeWarpDest('era1') === true,
+        '跃迁判定：回廊内穿时代之门 → 演出');
+      ok(A.Engine.timeWarpDest('timehall') === false,
+        '跃迁判定：era→timehall 回程互返 → 不演出（普通淡出）');
+    } finally {
+      if (mapSnap) A.Engine.loadMap(mapSnap.id, mapSnap.x, mapSnap.y, 'down');
     }
   }
 

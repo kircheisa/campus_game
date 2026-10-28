@@ -470,6 +470,16 @@ ADV.Engine = (function () {
   }
 
   /* ---------- 场景切换 ---------- */
+  /* 时光回廊跃迁目的地：四扇时代之门 / BOSS 之门无论来处都是「时间跳跃」；
+   * timehall 只在从外界（北新区钟楼地底）首入时演出，回廊内部互返走普通淡出。
+   * Stage3D 不可用（旧设备/冒烟环境）或用户关了震屏（减弱动态偏好）时自动落回原淡出路径。 */
+  const ERA_WARP = { era1: 1, era2: 1, era3: 1, era4: 1, bosshall: 1 };
+  const CORRIDOR_IDS = { timehall: 1, era1: 1, era2: 1, era3: 1, era4: 1, bosshall: 1, gradhall: 1 };
+  function timeWarpDest(toId) {
+    if (ERA_WARP[toId]) return true;
+    if (toId === 'timehall') return !(map && CORRIDOR_IDS[map.id]);
+    return false;
+  }
   function doTransfer(d) {
     if (fade.target === 1) return;                         // 转场进行中：重复请求直接拒绝（scene-transition 技能：请求去重，旧完成不覆盖新）
     mvBuf = null;                                          // 换图后不再衔接图前的轻点缓冲（B3 兜底）
@@ -478,6 +488,15 @@ ADV.Engine = (function () {
       ADV.UI.toast(' 与同伴挥手道别 ');
     }
     ADV.Game.busy = true;
+    // 时光回廊跃迁：3D 隧道接管转场（onMid 在隧道深处换图，onDone 复原忙碌态并落盘）
+    if (!shakeOff && ADV.Stage3D && ADV.Stage3D.warp && timeWarpDest(d.to[0]) &&
+        ADV.Stage3D.warp({
+          onMid: () => { loadMap(d.to[0], d.to[1], d.to[2], d.to[3]); },
+          onDone: () => {
+            ADV.Game.busy = false;
+            setTimeout(() => { try { ADV.Game.save(); } catch (e) {} }, 0);
+          }
+        })) { ADV.Audio.sfx('open'); return; }
     ADV.Audio.sfx('door');
     fadeTo(1, .32, () => {
       loadMap(d.to[0], d.to[1], d.to[2], d.to[3]);
@@ -1435,6 +1454,7 @@ ADV.Engine = (function () {
     addShake, toggleShake,
     get shakeOff() { return shakeOff; },
     get shakeVec() { return shakeOffset(); },            // 供冒烟测试读当前震屏偏移
-    get tintRgba() { return tintCur.slice(); }           // 供冒烟测试读当前环境色
+    get tintRgba() { return tintCur.slice(); },          // 供冒烟测试读当前环境色
+    timeWarpDest                                        // 时光回廊跃迁判定（供冒烟测试与接线检查）
   };
 })();

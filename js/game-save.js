@@ -245,7 +245,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     if (ADV.Skills) ADV.Skills.reset();                  // 五系技能从零开始
     ADV.Cal.load({ day: 1, period: 0, weather: '晴', checkedIn: false, streak: 0 });
     ADV.Engine.loadMap('homeIn', 18, 11, 'up');          // 一切从家开始
-    if (withIntro) setTimeout(() => { S._intro(); }, 80); // 序章（浏览器）
+    if (withIntro) armIntro(); // 序章（空闲门闸开演，见 game-town.js）
   }
   function continueGame() {
     const d = load();

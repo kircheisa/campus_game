@@ -382,7 +382,9 @@ ADV.Main = (function () {
         ctx.beginPath(); ctx.arc(c.x + dx, c.y + dy, r, 0, Math.PI * 2); ctx.fill();
       });
     });
-    drawSchoolSilhouette(430);
+    // 立体校园（three.js 离屏渲染后合成在天空之上、云之下）；WebGL 不可用 → 原版 2D 剪影
+    if (!(ADV.Stage3D && ADV.Stage3D.titleBackground && ADV.Stage3D.titleBackground(ctx, titleT)))
+      drawSchoolSilhouette(430);
   }
 
   function renderTitle() {
@@ -889,7 +891,7 @@ ADV.Main = (function () {
     // 游戏本体代码全部在 js/*.js 里；来源不是它们的错误（浏览器插件/用户脚本等）
     // 不写入游戏内错误框，只留控制台——避免把外部脚本的报错当成游戏故障展示
     const src = e.filename || '';
-    if (!/\/js\/[a-z]+\.js(\?|$)/i.test(src)) {
+    if (!/\/js\/[a-z0-9]+\.js(\?|$)/i.test(src)) {
       try { console.warn('[CampusAdv] 非游戏脚本的报错（已忽略，不进游戏错误框）：', e.message, src || '(无来源)'); } catch (e0) {}
       return;
     }

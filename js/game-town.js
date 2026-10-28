@@ -310,6 +310,23 @@
     return A.map(([name, done, desc]) => ({ name, done: !!done, desc }));
   }
 
+  /* —— 序章定时器：空闲才开演（guideSoon 同款门闸）——
+   * UI 窗口是单例：后来者直接顶掉先到者，被顶掉的 say/choose 的 Promise 永远无人
+   * resolve，其所属脚本即挂死（浏览器开局 80ms 内抢到一次交互 = 软锁；冒烟跨段随机挂死同源）。
+   * 代际绑定 f0：等待期间若发生 newGame/ngStart（整套旗标被换），本次序章作废不再纠缠。 */
+  function armIntro() {
+    const f0 = state.flags;
+    let tries = 0;
+    (function attempt() {
+      setTimeout(() => {
+        const f = F();
+        if (!f || f !== f0 || f.introDone) return;
+        if (ADV.Game.busy || ADV.UI.busy) { if (++tries < 40) attempt(); return; }
+        S._intro();
+      }, 80);
+    })();
+  }
+
   // —— NG+：带着友谊与图鉴重新开学 ——
   function ngStart() {
     const keep = { friends: JSON.parse(JSON.stringify(state.friends)), col: JSON.parse(JSON.stringify(F().col || {})), items: JSON.parse(JSON.stringify(F().items || {})), name: F().name || '', ngplus: true,
@@ -325,7 +342,7 @@
     // NG+ 信物（成长系统三选一，由标题菜单进入时选择；默认笔记本）
     if (ADV.Growth) ADV.Growth.reset(state.ngRelic || 'notebook');
     ADV.Engine.loadMap('homeIn', 18, 11, 'up');
-    setTimeout(() => { S._intro(); }, 80);
+    armIntro();
     save();
   }
 
