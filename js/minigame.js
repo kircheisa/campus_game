@@ -918,6 +918,7 @@ ADV.Mini = (function () {
         else if (m.ch === need) {
           act.moles[act.cur] = null; act.ci += 1;
           ADV.Audio.sfx('correct');
+          ADV.Engine.addShake(2, .18);                                    // 震屏（批次四十六）：敲中的手感
           if (act.ci >= act.words[act.wi].length) {
             act.wi += 1; act.ci = 0;
             if (act.wi >= act.words.length) { act.msg = 'WORD CLEAR! 街机被你打通啦！'; finish(true); return; }
@@ -969,6 +970,7 @@ ADV.Mini = (function () {
         }
         if (act.by > 560) {                                               // 掉球：两条命用完就结束
           act.balls -= 1;
+          ADV.Engine.addShake(3, .32);                                    // 震屏（批次四十六）：球砸出桌台的一震
           if (act.balls <= 0) { act.msg = '球用光了……敲下 ' + act.cnt + ' 块。'; finish(false); return; }
           act.phase = 'serve';
           act.msg = '球掉了！还剩 ' + act.balls + ' 条球命';

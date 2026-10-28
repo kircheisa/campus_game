@@ -7543,7 +7543,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       && srcAud108.includes('tone(6000, nextT, .03') && srcAud108.includes('loop % 4 === 1 && i >= 30'),
       '源：BGM hat 第三轨 + 变奏圈前过门 + 每 4 圈第 3 圈双轨整体升全音（C12 伪变奏）');
     ok(srcMain108.includes('function prefBlock') && srcMain108.includes('function prefBlockSoft')
-      && (srcMain108.match(/!prefBlock\(\)/g) || []).length === 7
+      && (srcMain108.match(/!prefBlock\(\)/g) || []).length === 8      // 批次四十六 KeyN 震屏开关入列（7→8）
       && (srcMain108.match(/!prefBlockSoft\(\)/g) || []).length === 1,
       '源：M/V/Q/T/F9/Tab/数字键全量模态守卫 ×7 + P 软守卫 ×1（C8：对话中仍可开关自动播放）');
     ok(srcSave108.includes("addEventListener('storage'") && srcSave108.includes('function onStorageKey')
@@ -7656,6 +7656,57 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       } catch (e) {}
       A.Game.busy = false;
       for (let i = 0; i < 300 && A.UI.busy; i++) A.UI.update(1 / 60, {});
+    }
+  }
+
+  /* ==================== [5.110] 技能对照表现三件套：世界震屏 + 时段环境色 + 转场防重入（批次四十六） ==================== */
+  console.log('\n[5.110] 震屏（限幅/归零/开关）+ 环境色（六时段平滑）+ doTransfer 请求去重');
+  {
+    let shakeSnap109 = null;
+    try {
+      // —— A. 源断言 ——
+      const eng110 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      ok(eng110.includes('function addShake') && eng110.includes('Math.min(6, Math.max')
+         && eng110.includes('function shakeOffset') && eng110.includes('cam.x + sh.x'),
+        '震屏系统：addShake 叠加限幅(≤6px) + shakeOffset 临时偏移接入相机 translate（cam 基础姿态不动）');
+      ok(eng110.includes('function toggleShake') && eng110.includes('campus_shake')
+         && eng110.includes('function periodTint') && eng110.includes('const TINTS')
+         && eng110.includes('if (fade.target === 1) return'),
+        '环境色（六时段控制点+平滑）+ campus_shake 开关 + doTransfer 转场请求去重在位');
+      const main110 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      const mini110 = fs.readFileSync(path.join(ROOT, 'js', 'minigame.js'), 'utf8');
+      ok(main110.includes("e.code === 'KeyN' && !prefBlock()") && main110.includes('ADV.Engine.toggleShake()')
+         && mini110.includes('addShake(3, .32)') && mini110.includes('addShake(2, .18)'),
+        'KeyN 震屏开关（模态中不穿透）+ 街机两触发点（打砖块掉球/地鼠敲中）在位');
+      // —— B. 行为：限幅 + 归零复位 + 无漂移 ——
+      shakeSnap109 = A.Engine.shakeOff;
+      if (A.Engine.shakeOff) A.Engine.toggleShake();      // shakeOff=true 即「关」：确保处于「开」再测
+      A.Engine.loadMap('campus', 22, 30, 'up');           // update 需要 map/player 就绪（271 行同款落点）
+      const cam0 = JSON.stringify(A.Engine.camOffset);
+      A.Engine.addShake(4, .3);
+      const v1 = A.Engine.shakeVec;
+      A.Engine.addShake(9, .05); A.Engine.addShake(9, .05);   // 连发超限冲击
+      const v2 = A.Engine.shakeVec;
+      const amp2 = Math.hypot(v2.x, v2.y);
+      A.Engine.update(0.5, { held: {}, mvT: 0, run: false, tap: null });   // 空输入形状：只推时钟不移动
+      const v3 = A.Engine.shakeVec;
+      ok(!!A.Engine && (Math.abs(v1.x) + Math.abs(v1.y)) > 0 && amp2 <= 6.01
+         && v3.x === 0 && v3.y === 0 && JSON.stringify(A.Engine.camOffset) === cam0,
+        '震屏行为：冲击产生偏移 → 连发 9px 三次仍封顶 ≤6 → 0.5s 后精确归零 → camOffset 无漂移');
+      // —— C. 行为：减弱动态开关 ——
+      A.Engine.toggleShake();                              // 关
+      A.Engine.addShake(5, .3);
+      const vOff = A.Engine.shakeVec;
+      const onBack = A.Engine.toggleShake();               // 开（还原）
+      ok(vOff.x === 0 && vOff.y === 0 && onBack === true && A.Engine.shakeOff === false,
+        '减弱动态：震屏关闭时 addShake no-op（偏移恒零），开关状态往返一致');
+    } finally {
+      try {
+        if (shakeSnap109 === true && A.Engine.shakeOff === false) A.Engine.toggleShake();   // 还原开关
+        else if (shakeSnap109 === false && A.Engine.shakeOff === true) A.Engine.toggleShake();
+        try { localStorage.setItem('campus_shake', shakeSnap109 ? '1' : '0'); } catch (e) {}
+      } catch (e) {}
+      A.Game.busy = false;
     }
   }
 

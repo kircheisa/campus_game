@@ -51,6 +51,10 @@ ADV.Main = (function () {
       const m = ADV.Audio.cycleVolume();
       ADV.UI.toast(m === 0 ? ' 🔊 音量：全开 ' : m === 3 ? ' 🌧 无 BGM（保留环境声） ' : m === 1 ? ' 🎵 仅音效（音乐·环境静音） ' : ' 🔇 已静音 ');
     }
+    if (e.code === 'KeyN' && !prefBlock()) {                                  // N：震屏开关（批次四十六；减弱动态，关后仍有闪白/音效反馈）
+      const on = ADV.Engine.toggleShake();
+      ADV.UI.toast(on ? ' 📳 震屏：开 ' : ' 📴 震屏：关（受击仍有闪白与音效反馈） ');
+    }
     if (e.code === 'KeyV' && !prefBlock()) {                                  // V：虚拟按键开关（C8 模态中不穿透）
       padPref = document.body.classList.contains('nopad');                    // 当前隐藏 → 切为显示
       try { localStorage.setItem('campus_pad_hidden', padPref ? '0' : '1'); } catch (err) {}

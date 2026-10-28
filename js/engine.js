@@ -19,6 +19,45 @@ ADV.Engine = (function () {
   let splashPts = [];              // 夏季溅水粒子（屏幕空间）
   let fade = { a: 0, target: 0, speed: 3, cb: null };
   let time = 0;
+  // 世界内震屏（screen-shake-effects 技能口径）：冲击只是相机基础姿态之上的临时偏移，结束必归零；
+  // 叠加取大不取和、总幅封顶 6px，时长/频率/方向参数分开；玩家可关（关后仍有闪白/音效反馈）
+  let shake = { t: 0, dur: 1, amp: 0, freq: 26 };
+  let shakeOff = false;
+  try { shakeOff = localStorage.getItem('campus_shake') === '0'; } catch (e) {}
+  // 时段环境色（day-night-cycle 技能口径）：只读 Cal 逻辑时段，本模块不做任何时间结算；
+  // 六时段控制点 + 每帧向目标 RGBA 平滑逼近，时段交界无跳变；alpha 全程 ≤0.2 保夜间可读性
+  let tintCur = [0, 0, 0, 0], tintTgt = [0, 0, 0, 0];
+  const TINTS = [                                   // 按 Cal.period（0 清晨 … 5 夜晚）
+    [255, 190, 120, .07],                           // 清晨：微暖
+    [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0],       // 上午/午休/放学：不着色
+    [255, 140, 60, .12],                            // 傍晚：橙
+    [25, 35, 80, .20]                               // 夜晚：深蓝（路灯辉光之上，轮廓仍可辨）
+  ];
+  function periodTint() {
+    const p = (ADV.Cal && typeof ADV.Cal.period === 'number') ? ADV.Cal.period : 0;
+    const t = TINTS[p] || TINTS[0];
+    return map && map.indoor ? [t[0], t[1], t[2], t[3] * .5] : t;   // 室内减半（屋内有灯）
+  }
+  function addShake(amp, dur, freq) {             // 世界内冲击入口：叠加取大、总幅封顶，不累加进 cam（无漂移）
+    if (shakeOff) return;
+    const s = shake, active = s.t > 0, d = dur || .3;
+    s.amp = Math.min(6, Math.max(active ? s.amp : 0, amp));
+    if (!active || d > s.t) { s.t = d; s.dur = d; }   // 仅更强事件才重起包络；否则沿当前衰减继续（交界不跳变）
+    if (freq && !active) s.freq = freq;
+  }
+  function shakeOffset() {                        // 渲染偏移：双频方向摆动 + 线性衰减包络，合成位移长恒 ≤ amp（封顶口径真实成立）
+    const s = shake;
+    if (s.t <= 0 || s.amp <= 0) return { x: 0, y: 0 };
+    const a = s.amp * (s.t / s.dur), w = time * s.freq * Math.PI * 2;
+    const dx = Math.sin(w), dy = Math.cos(w * 1.37) * .6;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: dx / len * a, y: dy / len * a };
+  }
+  function toggleShake() {                        // 减弱动态开关：关后 addShake 直接 no-op（战斗仍有闪白/音效反馈）
+    shakeOff = !shakeOff;
+    try { localStorage.setItem('campus_shake', shakeOff ? '0' : '1'); } catch (e) {}
+    return !shakeOff;
+  }
   let mapTitle = { name: '', t: 99 };   // 进场地图名大字（2.2 秒淡入淡出）
 
   // 季节过渡状态：1.5s 的 HSV 渐变遮罩，防止换季瞬间跳变
@@ -432,6 +471,7 @@ ADV.Engine = (function () {
 
   /* ---------- 场景切换 ---------- */
   function doTransfer(d) {
+    if (fade.target === 1) return;                         // 转场进行中：重复请求直接拒绝（scene-transition 技能：请求去重，旧完成不覆盖新）
     mvBuf = null;                                          // 换图后不再衔接图前的轻点缓冲（B3 兜底）
     if (ADV.Game.flags && ADV.Game.flags.party) {          // 换图与同伴道别
       ADV.Game.flags.party = '';
@@ -1002,6 +1042,12 @@ ADV.Engine = (function () {
         if (fade.cb) { const cb = fade.cb; fade.cb = null; cb(); }
       }
     }
+    // 震屏倒计时 + 环境色平滑逼近（每帧 lerp，时段交界无跳变）
+    if (shake.t > 0) shake.t -= dt;
+    {
+      const t = periodTint(), k = Math.min(1, dt * 3);
+      for (let i = 0; i < 4; i++) tintCur[i] += (t[i] - tintCur[i]) * k;
+    }
     updateParticles(dt);
     updateWeather(dt);
     // 季节过渡时间推进：在 easeOutCubic 到达 ~0.5 时重建静态画布，被彩色遮罩挡着不会跳变
@@ -1126,7 +1172,8 @@ ADV.Engine = (function () {
     g.fillStyle = map.indoor ? '#1c1a28' : '#0e1a10';
     g.fillRect(0, 0, W, H);
     g.save();
-    g.translate(-Math.round(cam.x), -Math.round(cam.y));
+    const sh = shakeOffset();                                            // 震屏：只动绘制坐标，cam 基础姿态不动（无漂移）
+    g.translate(-Math.round(cam.x + sh.x), -Math.round(cam.y + sh.y));
     g.drawImage(staticCv, 0, 0);
     if (night && !map.indoor) drawNightStreet(g);
 
@@ -1228,6 +1275,12 @@ ADV.Engine = (function () {
       g.fillRect(W / 2 - tw / 2 - 16, yy + 16, 4, 4);
       g.fillRect(W / 2 + tw / 2 + 12, yy + 16, 4, 4);
       g.restore();
+    }
+
+    // 时段环境色（清晨微暖/傍晚橙/夜晚深蓝，室内减半）：全屏叠加但 alpha ≤0.2，保夜间轮廓可读
+    if (tintCur[3] > 0.004) {
+      g.fillStyle = `rgba(${Math.round(tintCur[0])},${Math.round(tintCur[1])},${Math.round(tintCur[2])},${tintCur[3].toFixed(3)})`;
+      g.fillRect(0, 0, W, H);
     }
 
     // 场景切换黑幕
@@ -1378,6 +1431,10 @@ ADV.Engine = (function () {
     get map() { return map; },
     get player() { return player; },
     get npcs() { return npcs; },
-    get camOffset() { return { x: Math.round(cam.x), y: Math.round(cam.y) }; }   // 供冒烟测试反算点按屏幕坐标
+    get camOffset() { return { x: Math.round(cam.x), y: Math.round(cam.y) }; },   // 供冒烟测试反算点按屏幕坐标
+    addShake, toggleShake,
+    get shakeOff() { return shakeOff; },
+    get shakeVec() { return shakeOffset(); },            // 供冒烟测试读当前震屏偏移
+    get tintRgba() { return tintCur.slice(); }           // 供冒烟测试读当前环境色
   };
 })();
