@@ -7676,8 +7676,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       const main110 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
       const mini110 = fs.readFileSync(path.join(ROOT, 'js', 'minigame.js'), 'utf8');
       ok(main110.includes("e.code === 'KeyN' && !prefBlock()") && main110.includes('ADV.Engine.toggleShake()')
-         && mini110.includes('addShake(3, .32)') && mini110.includes('addShake(2, .18)'),
-        'KeyN 震屏开关（模态中不穿透）+ 街机两触发点（打砖块掉球/地鼠敲中）在位');
+         && mini110.includes('addTrauma') && !mini110.includes('ADV.Engine.addShake'),
+        'KeyN 震屏开关（模态中不穿透）+ 小游戏冲击已全部走 Mini 内建 trauma 层（engine 震屏对 mini 全屏画布不可见——批次四十七勘误迁移）');
       // —— B. 行为：限幅 + 归零复位 + 无漂移 ——
       shakeSnap109 = A.Engine.shakeOff;
       if (A.Engine.shakeOff) A.Engine.toggleShake();      // shakeOff=true 即「关」：确保处于「开」再测
@@ -7705,6 +7705,70 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
         if (shakeSnap109 === true && A.Engine.shakeOff === false) A.Engine.toggleShake();   // 还原开关
         else if (shakeSnap109 === false && A.Engine.shakeOff === true) A.Engine.toggleShake();
         try { localStorage.setItem('campus_shake', shakeSnap109 ? '1' : '0'); } catch (e) {}
+      } catch (e) {}
+      A.Game.busy = false;
+    }
+  }
+
+  /* ==================== [5.111] 小游戏果汁层（game-feel 技能）：trauma 震屏 + 粒子 + 弹出字 + 连对/收窄（批次四十七） ==================== */
+  console.log('\n[5.111] 小游戏果汁公共层（分层反馈/trauma²/瞬态回归）+ 翻卡连对奖励 + 投球连击收窄');
+  {
+    let shakeSnap111 = null, miniStarted111 = false;
+    try {
+      // —— A. 源断言：果汁公共层 + 触发面 + 丰富度两件 ——
+      const mini111 = fs.readFileSync(path.join(ROOT, 'js', 'minigame.js'), 'utf8');
+      ok(mini111.includes('function addTrauma') && mini111.includes('function burst')
+         && mini111.includes('function popText') && mini111.includes('function juiceFx')
+         && mini111.includes('function fxStep') && mini111.includes('function fxDraw')
+         && mini111.includes('ADV.Engine.shakeOff'),
+        '果汁公共层：addTrauma/burst/popText/juiceFx/fxStep/fxDraw 六件在位，且与 N 键减弱动态共用 campus_shake 开关');
+      ok(mini111.includes('trauma * trauma') && mini111.includes('Math.sin(t2 * 1.7)')
+         && mini111.includes('fxDraw(g);') && mini111.includes('g.restore();'),
+        'trauma² 位移（小冲击几乎不震）+ 平滑 sin 采样震屏 + render save/restore 配对（粒子弹出字随震层绘制）');
+      ok((mini111.match(/juiceFx\('/g) || []).length === 11,
+        '11 处触发点接线：咬钩/抓到/正是这把/穿圈/配对/砸中/交接/好刀法/巡游/地鼠/敲砖（打砖块掉球直走 addTrauma+burst+popText）');
+      ok(mini111.includes('act.flips += 2') && mini111.includes('连对 ×') && mini111.includes('act.combo = 0'),
+        '丰富度·翻卡连对：连着配对不断，第 2 连起每次奖励翻牌 +2；失手即断连归零');
+      ok(mini111.includes("- (act.hit && !act.easy ? .08 : 0)"),
+        '丰富度·投球连击收窄：上一投命中且非简易，本轮绿区缩 8%（热手更难、断连复位）');
+      // —— B. 行为：trauma 叠加封顶 → 每秒衰减精确归零（瞬态回归静止）→ 震屏中 render 不炸 ——
+      shakeSnap111 = A.Engine.shakeOff;
+      if (A.Engine.shakeOff) A.Engine.toggleShake();      // 确保震屏「开」再测
+      let miniWin111 = null;
+      RealMini.start('ball', w => { miniWin111 = w; });
+      miniStarted111 = RealMini.active;
+      const dt111 = 1 / 60;
+      ok(miniStarted111 && RealMini.traumaV === 0 && RealMini.fxN.parts === 0 && RealMini.fxN.pops === 0,
+        '小游戏启动后果汁层静止在零位（trauma=0 / 粒子=0 / 弹出字=0）');
+      RealMini.addTrauma(.5); RealMini.addTrauma(.5); RealMini.addTrauma(.9);   // 叠加不重置
+      const capped111 = RealMini.traumaV;
+      RealMini.render(miniCtx);                            // trauma=1 的震屏位移 + 粒子路径全跑一遍
+      for (let i = 0; i < 100; i++) RealMini.update(dt111, {});
+      ok(capped111 === 1 && RealMini.traumaV === 0,
+        'trauma 叠加封顶 =1 → 100 帧（1.67s）衰减后精确归零（位移随 trauma² 起伏、静止必回归）');
+      // —— C. 行为：翻卡连对走真实翻牌路径（combo 累计 → +2 步 → 失手断连） ——
+      RealMini.update(dt111, { cancel: true });            // 收掉 ball，换翻卡
+      let cardsWin111 = null;
+      RealMini.start('cards', w => { cardsWin111 = w; });
+      const cd = RealMini.dbg;
+      const byVal = {};
+      cd.grid.forEach((v, i) => { (byVal[v] = byVal[v] || []).push(i); });
+      const pairs111 = Object.values(byVal);
+      const flip111 = idx => { cd.cur = idx; RealMini.update(dt111, { ok: true }); };
+      flip111(pairs111[0][0]); flip111(pairs111[0][1]);    // 第一对：combo=1（无奖励），18→16
+      flip111(pairs111[1][0]); flip111(pairs111[1][1]);    // 第二对：combo=2 → 翻牌 +2，16→16
+      const comboHot111 = { combo: cd.combo, flips: cd.flips, pops: RealMini.fxN.pops, parts: RealMini.fxN.parts };
+      const m111a = pairs111[3][0], m111b = pairs111[4][0];   // 不同 byVal 组 = 值必不同 = 必配错（相邻索引可能是真对，不能用作配错样本）
+      flip111(m111a); flip111(m111b);                      // 故意配错：combo 断连归零，16→14
+      ok(comboHot111.combo === 2 && comboHot111.flips === 16 && comboHot111.pops >= 2 && comboHot111.parts >= 14
+         && cd.combo === 0 && cd.flips === 14,
+        '连对行为：真实翻牌路径两次配对 → combo=2 + 每次奖励 +2 步（18 起手仍 16）→ 配错断连归零并照扣步数；命中即喷粒子+弹出字');
+    } finally {
+      try {
+        if (miniStarted111 && RealMini.active) RealMini.update(1 / 60, { cancel: true });
+        if (shakeSnap111 === true && A.Engine.shakeOff === false) A.Engine.toggleShake();
+        else if (shakeSnap111 === false && A.Engine.shakeOff === true) A.Engine.toggleShake();
+        try { localStorage.setItem('campus_shake', shakeSnap111 ? '1' : '0'); } catch (e) {}
       } catch (e) {}
       A.Game.busy = false;
     }

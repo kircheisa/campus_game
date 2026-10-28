@@ -108,6 +108,7 @@ ADV.Mini = (function () {
 
   function start(kind, onDone, opt) {
     if (act) return;
+    mt = 0; trauma = 0; parts = []; pops = [];    // 果汁层归位：上一场的震动/粒子不漏进本场开场
     if (kind === 'ball') {
       const easy = !!(opt && opt.easy);
       act = {
@@ -286,6 +287,46 @@ ADV.Mini = (function () {
     if (cb) cb(!!win, stats);      // 第二参数带出成绩（如跳远最远距离）
   }
 
+  /* ---------- 果汁感公共层（game-feel 技能）：trauma 震屏 + 粒子 + 弹出字 ----------
+     反馈分层且夸张、瞬态回归静止：small=轻震+碎屑，medium=中震+爆花+弹出字；
+     位移取 trauma²（小冲击几乎不震、大冲击剧烈），与 N 键减弱动态开关共用口径 */
+  let mt = 0, trauma = 0, parts = [], pops = [];
+  function addTrauma(n) {
+    if (ADV.Engine && ADV.Engine.shakeOff) return;
+    trauma = Math.min(1, trauma + n);            // 冲击叠加不重置；每秒衰减
+  }
+  function burst(x, y, col, n, spd) {
+    for (let i = 0; i < (n || 8); i++) {
+      const a = Math.random() * Math.PI * 2, v = (spd || 150) * (.4 + Math.random() * .8);
+      parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 50, t: .45 + Math.random() * .3, col: col || '#ffd94c' });
+    }
+  }
+  function popText(x, y, str, col) { pops.push({ x, y, str, col: col || '#fff', t: .9 }); }
+  function juiceFx(tier, x, y, col, word) {
+    if (tier === 'small') { addTrauma(.13); burst(x, y, col, 6, 110); }
+    else { addTrauma(.38); burst(x, y, col, 14, 170); if (word) popText(x, y, word, col || '#fff'); }
+  }
+  function fxStep(dt) {
+    mt += dt;
+    trauma = Math.max(0, trauma - 1.2 * dt);
+    for (const q of parts) { q.t -= dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 260 * dt; }
+    parts = parts.filter(q => q.t > 0);
+    for (const q of pops) { q.t -= dt; q.y -= 34 * dt; }
+    pops = pops.filter(q => q.t > 0);
+  }
+  function fxDraw(g) {                           // 粒子 + 弹出字（随 trauma 一起被震屏 translate）
+    for (const q of parts) {
+      g.globalAlpha = Math.max(0, Math.min(1, q.t * 2.5));
+      g.fillStyle = q.col; g.fillRect(q.x - 3, q.y - 3, 6, 6);
+    }
+    for (const q of pops) {
+      g.globalAlpha = Math.max(0, Math.min(1, q.t * 1.6));
+      const sc = 1 + .5 * Math.max(0, q.t - .65);          // 弹出感：出现瞬间过冲放大后回落
+      text(g, q.str, q.x, q.y, 22 * sc, q.col);
+    }
+    g.globalAlpha = 1;
+  }
+
   /* ---------- 骑士步辅助 ---------- */
   const KNIGHT = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
   const kx = i => i % 5, ky = i => (i / 5) | 0;
@@ -392,6 +433,7 @@ ADV.Mini = (function () {
 
   function update(dt, p, held) {
     if (!act) return;
+    fxStep(dt);                                  // 果汁感公共推进（震屏衰减/粒子/弹出字）
     if (p.cancel) { finish(false); return; }
     if (act.kind === 'fish') {
       const TRACK = 320;                                   // 渔道像素高
@@ -403,6 +445,7 @@ ADV.Mini = (function () {
         act.biteT -= dt;
         if (p.ok) {                                        // 提竿刺鱼成功
           ADV.Audio.sfx('correct');
+          juiceFx('medium', 500, 300, '#7ad0ff', '咬钩!');
           act.phase = 'fight'; act.prog = .35; act.t = 22; act.dartT = 0;
           act.msg = '咬钩了！按住 Z / ● 上提渔网，别让鱼跑出网外！';
           return;
@@ -456,7 +499,8 @@ ADV.Mini = (function () {
           act.hits += act.hit ? 1 : 0;
           if (act.tries >= 3) { finish(act.hits >= 2); return; }
           act.zoneL = .25 + Math.random() * .45;
-          act.zoneR = act.zoneL + (act.easy ? .26 : .16);
+          // 连击收窄（批次四十七）：上一投命中且非简易，本轮绿区再缩 8%（热手更难、断连即复位）
+          act.zoneR = act.zoneL + (act.easy ? .26 : .16) - (act.hit && !act.easy ? .08 : 0);
           act.phase = 'aim';
           act.msg = (act.hit ? '好球！' : '差一点！') + '还有 ' + (3 - act.tries) + ' 次机会！';
         }
@@ -520,6 +564,7 @@ ADV.Mini = (function () {
       // 碰撞判定
       if (Math.hypot(act.bx - act.px, act.by - act.py) < 34) {
         act.got += 1; ADV.Audio.sfx('correct');
+        juiceFx('medium', act.bx, act.by, '#ffd94c', '抓到!');
         act.bx = 150 + Math.random() * (W - 300); act.by = 180 + Math.random() * (H - 310);
         if (act.got >= 3) { act.msg = '抓到啦！'; finish(true); return; }
         act.msg = '抓到 ' + act.got + ' / 3 只金翼球！';
@@ -537,6 +582,7 @@ ADV.Mini = (function () {
         const k = act.cur.ks[act.sel];
         if (k === act.cur.target) {
           ADV.Audio.sfx('correct');
+          juiceFx('medium', W / 2, 300, '#ffd94c', '正是这把!');
           if (act.round >= 2) { act.msg = '抓住了！'; finish(true); return; }
           act.round += 1; act.cur = act.gen();
           act.msg = '第 2 把！再听谜语！';
@@ -641,6 +687,7 @@ ADV.Mini = (function () {
           if (!r.done && prevX < r.x && act.px >= r.x && Math.abs(act.py - r.y) < 44) {
             r.done = true; act.passed += 1;
             ADV.Audio.sfx('correct');
+            juiceFx('medium', r.x, r.y, '#a8e8ff', '穿圈!');
             act.msg = '穿圈！已穿 ' + act.passed + ' / 2！';
           }
         }
@@ -670,9 +717,13 @@ ADV.Mini = (function () {
           if (act.grid[a] === act.grid[b]) {
             act.matched.add(a); act.matched.add(b); act.open = [];
             ADV.Audio.sfx('correct');
+            act.combo = (act.combo || 0) + 1;                 // 连对奖励（批次四十七）：连着配对不失误，奖励翻牌步数
+            juiceFx('medium', W / 2, 300, '#ffd94c', act.combo >= 2 ? `连对 ×${act.combo}!` : '配对!');
+            if (act.combo >= 2) { act.flips += 2; popText(W / 2, 336, '手气正旺 · 翻牌 +2', '#4ae86c'); }
             if (act.matched.size >= 12) { act.msg = '全部配对完成！'; finish(true); return; }
             act.msg = '配对成功！还剩 ' + (6 - act.matched.size / 2) + ' 对';
           } else {
+            act.combo = 0;
             act.lock = .6; ADV.Audio.sfx('wrong');
             act.msg = '不是一对……记住它们的位置！';
             if (act.flips <= 0) { act.msg = '翻牌次数用完了……'; finish(false); return; }
@@ -716,6 +767,7 @@ ADV.Mini = (function () {
         if (fo) {
           b.dead = true; fo.life = 0;
           act.hits += 1; ADV.Audio.sfx('correct');
+          juiceFx('medium', laneX(act.lane), 300, '#eaf6ff', '砸中!');
           act.msg = '正中雪人脑袋！已砸中 ' + act.hits + ' / 6';
           if (act.hits >= 6) { act.msg = '对面的雪人军团溃败啦！'; finish(true); return; }
         }
@@ -776,6 +828,7 @@ ADV.Mini = (function () {
         const hit = act.marker >= act.zoneL && act.marker <= act.zoneR;
         if (hit) {
           act.good += 1; ADV.Audio.sfx('correct');
+          juiceFx('small', W / 2, 420, '#4ae86c');
           if (act.good >= 12) { act.msg = '最后一棒冲线！全班冠军！'; finish(true); return; }
           if (act.good % 3 === 0) { act.leg += 1; act.msg = '交棒干净利落！第 ' + act.leg + ' 棒起跑！'; }
           else act.msg = '步点漂亮，又快又稳！';
@@ -793,7 +846,7 @@ ADV.Mini = (function () {
         if (p.ok) {
           act.swings += 1;
           act.lastHit = act.marker >= act.zoneL && act.marker <= act.zoneR;   // 绿区 = 一刀两断
-          if (act.lastHit) { act.hits += 1; act.speed = Math.min(1.8, act.speed + .18); ADV.Audio.sfx('dig'); }
+          if (act.lastHit) { act.hits += 1; act.speed = Math.min(1.8, act.speed + .18); ADV.Audio.sfx('dig'); juiceFx('medium', W / 2, 300, '#4ae86c', '好刀法!'); }
           else ADV.Audio.sfx('wrong');
           act.chT = .5; act.phase = 'chop';             // 落刀动画
         }
@@ -851,6 +904,7 @@ ADV.Mini = (function () {
           pt.dead = true;
           if (pt.ch === act.need) {
             act.round += 1; ADV.Audio.sfx('correct');
+        juiceFx('medium', W / 2, 320, '#ffd94c', '巡游完成!');
             if (act.round > 3) { act.msg = '好句配成！花瓣落满了书页。'; finish(true); return; }
             act.msg = '「' + act.need + '」接得妙！下一句——';
             flowerRound(act);
@@ -918,7 +972,7 @@ ADV.Mini = (function () {
         else if (m.ch === need) {
           act.moles[act.cur] = null; act.ci += 1;
           ADV.Audio.sfx('correct');
-          ADV.Engine.addShake(2, .18);                                    // 震屏（批次四十六）：敲中的手感
+          juiceFx('small', W / 2, 380, '#ffd94c');                        // 批次四十七：改走 Mini 内建震屏（engine 震屏对小游戏全屏画布不可见——勘误）
           if (act.ci >= act.words[act.wi].length) {
             act.wi += 1; act.ci = 0;
             if (act.wi >= act.words.length) { act.msg = 'WORD CLEAR! 街机被你打通啦！'; finish(true); return; }
@@ -964,13 +1018,14 @@ ADV.Mini = (function () {
             b.alive = false; act.cnt += 1;
             act.bvy = -act.bvy;
             ADV.Audio.sfx('correct');
+            juiceFx('small', act.bx, act.by, '#ffd94c');
             if (act.cnt >= 12) { act.msg = 'GAME CLEAR! 砖墙开了个大洞！'; finish(true); return; }
             break;
           }
         }
         if (act.by > 560) {                                               // 掉球：两条命用完就结束
           act.balls -= 1;
-          ADV.Engine.addShake(3, .32);                                    // 震屏（批次四十六）：球砸出桌台的一震
+          addTrauma(.5); burst(act.bx, 560, '#7ab0ff', 16, 190); popText(W / 2, 300, '球掉了…', '#9fb6e8');   // 批次四十七：改 Mini 内建（engine 震屏对 mini 画布不可见——勘误）
           if (act.balls <= 0) { act.msg = '球用光了……敲下 ' + act.cnt + ' 块。'; finish(false); return; }
           act.phase = 'serve';
           act.msg = '球掉了！还剩 ' + act.balls + ' 条球命';
@@ -1007,6 +1062,11 @@ ADV.Mini = (function () {
 
   function render(g) {
     if (!act) return;
+    g.save();
+    {   // trauma 震屏：只动视觉层，平滑 sin 采样（每帧随机偏移会像静电蜂鸣）
+      const sh = trauma * trauma, t2 = mt * 30;
+      g.translate(Math.sin(t2 * 1.7) * 10 * sh, Math.sin(t2 * 2.3) * 7 * sh);
+    }
     if (act.kind === 'fish') {
       const f = drawFrame(g, '🎣 垂钓搏鱼');
       const TRACK = 320, tx = f.x + 520, ty = f.y + 76;
@@ -1687,11 +1747,17 @@ ADV.Mini = (function () {
       text(g, act.msg, W / 2, f.y + f.h - 50, 20, '#fff');
       text(g, '←→ 移动 · Z 发球 · 落点越靠边弹得越偏 · X 退出', W / 2, f.y + f.h - 24, 15, '#aab4d4');
     }
+
+    fxDraw(g);
+    g.restore();
   }
 
   return {
     start, update, render,
     get active() { return !!act; },
-    get dbg() { return act; }      // 供冒烟测试读取内部状态（脚本化通关）
+    get dbg() { return act; },     // 供冒烟测试读取内部状态（脚本化通关）
+    get traumaV() { return trauma; },                    // 果汁层观测：当前震屏强度
+    get fxN() { return { parts: parts.length, pops: pops.length }; },   // 活粒子/弹出字数
+    addTrauma                                            // 果汁层注入口（测试与未来扩展共用）
   };
 })();
