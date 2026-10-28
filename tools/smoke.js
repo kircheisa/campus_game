@@ -4078,11 +4078,11 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Battle.update(1 / 60, { ok: true });               // 武术 → 招式列表
       A.Battle.update(1 / 60, { ok: true });               // 体术出招
       ok(A.Battle.act && A.Battle.act.pps.strike === 98, 'PP 制：出招即扣 PP（体术 99 → 98），旧冷却机制退役');
-      for (let i = 0; i < 30; i++) A.Battle.update(1 / 60, {});   // B1 节拍队列：敌方行动延迟上演，等它演完再接输入
+      for (let i = 0; i < 40; i++) A.Battle.update(1 / 60, {});   // B1 节拍+B4 顿帧：敌方行动延迟上演，等它演完再接输入
       A.Battle.update(1 / 60, { down: true });             // → 防御
       A.Battle.update(1 / 60, { ok: true });               // → 武防/魔防
       A.Battle.update(1 / 60, { ok: true });               // 武防
-      for (let i = 0; i < 30; i++) A.Battle.update(1 / 60, {});   // B1 节拍队列：敌方回应演完（结算日志已落地）
+      for (let i = 0; i < 40; i++) A.Battle.update(1 / 60, {});   // B1 节拍+B4 顿帧：敌方回应演完（结算日志已落地）
       ok(A.Battle.act && A.Battle.act.log.some(t => t.includes('看穿了它的武术招')) && A.Battle.act.log.some(t => t.includes('反震')),
          '防御博弈：武防接下武术招 → 减伤 70% 并反震敌人');
       A.Battle.update(1 / 60, { down: true });
@@ -4101,12 +4101,33 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Battle.update(1 / 60, { ok: true });               // 体术出招
       ok(A.Battle.act && A.Battle.act.beats.length === 1 && !A.Battle.act.log.some(t => t.includes('你受到')),
          '节拍队列：出招后敌方行动入拍挂起（beats×1，本帧未挨打）');
-      for (let i = 0; i < 30; i++) A.Battle.update(1 / 60, {});   // 0.42s ≈ 26 帧后敌方回应上演
+      for (let i = 0; i < 40; i++) A.Battle.update(1 / 60, {});   // 0.42s ≈ 26 拍帧 + 顿帧余量，敌方回应上演
       ok(A.Battle.act && A.Battle.act.beats.length === 0 && A.Battle.act.log.some(t => t.includes('你受到')) && A.Battle.act.turn === 2,
          '节拍队列：延迟一拍后敌方行动落地（挨打日志 + 回合数推进 + 拍队清空）');
       for (let i = 0; i < 3; i++) A.Battle.update(1 / 60, { down: true });
       A.Battle.update(1 / 60, { ok: true });               // 逃跑（random=0 必成）
       ok(r52 === false && A.Battle.active === false, '节拍队列：演毕菜单恢复可操作，全身而退收场');
+
+      // —— 战斗演出四连：进战斗揭幕 / 顿帧 / 血条追赶 / 受击后仰（C3/B4/B5/C2，C1/C4 源守护） ——
+      ok(fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8').includes('a.hitstop > 0') &&
+         fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8').includes('a.ghostE') &&
+         fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8').includes("tier === 'crit'") &&
+         fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8').includes('tr'),
+         '演出四连：源守护——顿帧冻结 / 血条残影 / 会心层级 / trauma 双轴震屏字段在位');
+      A.Battle.start('dummy', {}, res => r52 = res);       // 第三场：演出状态观察（dummy 仍 9999 血）
+      ok(A.Battle.act && A.Battle.act.intro > 0, '进战斗揭幕：开场黑幕在场（intro>0），硬切被揭幕覆盖');
+      A.Battle.update(1 / 60, { ok: true });               // 攻击 → 两栏
+      A.Battle.update(1 / 60, { ok: true });               // 武术 → 招式
+      A.Battle.update(1 / 60, { ok: true });               // 体术出招
+      ok(A.Battle.act.hitstop > 0 && A.Battle.act.eRecoil > 0 && A.Battle.act.dispE > Math.max(0, A.Battle.act.e.hp),
+         '演出四连：命中即顿帧 + 敌方后仰 + 血条显示值落后于真实血量（残影更慢）');
+      for (let i = 0; i < 45; i++) A.Battle.update(1 / 60, {});   // 演完整拍（顿帧 + 敌方回应）
+      ok(A.Battle.act.intro === 0 && Math.abs(A.Battle.act.dispE - Math.max(0, A.Battle.act.e.hp)) < .5 &&
+         A.Battle.act.hitstop <= 0 && A.Battle.act.beats.length === 0,
+         '演出四连：揭幕结束 / 血条追平真实值 / 顿帧与拍队清空');
+      for (let i = 0; i < 3; i++) A.Battle.update(1 / 60, { down: true });
+      A.Battle.update(1 / 60, { ok: true });               // 逃跑收场
+      ok(r52 === false && A.Battle.active === false, '演出四连：观察毕全身而退收场');
     } finally {
       Math.random = rnd52;
       A.Battle.ENEMIES.dummy.hp = keep52.dummy;

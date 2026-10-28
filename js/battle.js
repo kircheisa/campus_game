@@ -182,7 +182,8 @@ ADV.Battle = (function () {
           me: { name: '——', fam: null, hp: 0, hpMax: 0, pow: 0, spd: 0, shiny: false, out: true },
           skills: [], mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
           pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
-          flash: 0, shake: 0, pops: [], beats: [], turn: 1
+          flash: 0, shake: 0, pops: [], beats: [], turn: 1,
+          intro: 1, hitstop: 0, t: 0, eRecoil: 0, mRecoil: 0, dispE: foeMax, ghostE: foeMax, dispM: 0, ghostM: 0
         };
         ADV.Audio.playBgm('battle'); ADV.Audio.sfx('start');
         return;
@@ -204,6 +205,7 @@ ADV.Battle = (function () {
         mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
         pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
         flash: 0, shake: 0, pops: [], beats: [], turn: 1, edu, bondUsed: false,
+        intro: 1, hitstop: 0, t: 0, eRecoil: 0, mRecoil: 0, dispE: foeMax, ghostE: foeMax, dispM: myMax, ghostM: myMax,
         foeWeak: false, sups: {}, boosted: !!(bst.pow || bst.spd)
       };
       for (const m of act.skills) act.pps[m.key] = m.pp;
@@ -242,9 +244,11 @@ ADV.Battle = (function () {
       skills: skillList(), pps: {}, guard: null, shield: 0, boost: 0, crit: 0,
       tries: 0, wuCount: 0, moCount: 0, lastPow: 0,
       turn: 1, photos: (opts.photoMode ? (ADV.Collect ? ADV.Collect.ids('photos') : []) : null),
-      photoIdx: 0, flash: 0, shake: 0, pops: [], beats: []          // pops：伤害/治疗飘字；beats：回合节拍队列（B1）
+      photoIdx: 0, flash: 0, shake: 0, pops: [], beats: [],          // pops：伤害/治疗飘字；beats：回合节拍队列（B1）
+      intro: 1, hitstop: 0, t: 0, eRecoil: 0, mRecoil: 0             // C3 揭幕 / B4 顿帧 / 战斗时钟 / C2 受击后仰
     };
     for (const m of act.skills) act.pps[m.key] = m.pp;
+    act.dispE = act.ghostE = e.hp; act.dispP = act.ghostP = act.php;   // B5 血条追赶：显示值/残影值起步于真实值
     if (!act.phpMax) act.phpMax = act.php;
     /* P-B3 援护技：带着随行伙伴（且它体力还过三成）上场，濒危时它会扑出来咬一口——每场一次 */
     const bf = ADV.Game.flags, budE = bf && bf.buddy ? ADV.Collect.critter(bf.buddy.id) : null;
@@ -290,8 +294,8 @@ ADV.Battle = (function () {
     if (cb) cb(outcome === 'win');
   }
 
-  // 伤害/治疗飘字（t 秒内上飘渐隐）
-  function pop(txt, col, x, y) { act.pops.push({ txt, col, x, y, t: 0 }); }
+  // 伤害/治疗飘字（t 秒内上飘渐隐；tier='crit' 走会心层级：更大更久，C4）
+  function pop(txt, col, x, y, tier) { act.pops.push({ txt, col, x, y, t: 0, tier }); }
 
   /* B1 战斗节拍队列：{fn, delay} 顺序上演——玩家结算即时落地，敌方行动延迟一拍跟进，
      给玩家「我先出手 → 看对方回应」的呼吸感，也为一拍一顿/震屏等演出留出插槽 */
@@ -344,8 +348,10 @@ ADV.Battle = (function () {
       e.guard = null;
     }
     d = Math.max(1, Math.round(d));
-    e.hp -= d; a.flash = .3; a.shake = .3;
-    pop('-' + d, crit ? '#ffd94c' : sk.col, W / 2 + 40, 150);
+    e.hp -= d;
+    a.hitstop = crit ? .09 : .05; a.eRecoil = .28;      // B4 顿帧（会心加倍）+ C2 敌方后仰
+    a.flash = crit ? .5 : .3; a.shake = crit ? .5 : .3;  // C4 会心白闪与震屏加码
+    pop('-' + d, crit ? '#ffd94c' : sk.col, W / 2 + 40, 150, crit ? 'crit' : null);
     a.log.unshift(`${crit ? '会心一击！' : ''}✦ ${sk.name}！对${e.name}造成 ${d} 点伤害！`);
   }
 
@@ -395,6 +401,7 @@ ADV.Battle = (function () {
     a.e.hp -= d;
     a.php = Math.min(a.phpMax, a.php + 8);
     a.flash = .5; a.shake = .5;
+    a.hitstop = .09; a.eRecoil = .3;                     // B4 + C2：回忆攻击是重演出，顿帧加倍
     pop('-' + d, '#8ad0ff', W / 2 + 40, 150);
     pop('+8', '#4ae86c', 150, 500);
     a.log.unshift(`📷 打出回忆「${nm}」！\n温暖的记忆化作光芒，造成 ${d} 点伤害，回复 8 点体力！`);
@@ -424,20 +431,21 @@ ADV.Battle = (function () {
       const cut = d; d = Math.max(1, Math.round(d * f));
       if (f < .5) {
         a.log.unshift(`你看穿了它的${cat === 'wu' ? '武术' : '魔法'}招！伤害大幅减少。`);
-        if (a.guard === 'wu') { const r = Math.ceil(cut * .25 * (1 - f)); e.hp -= r; pop('-' + r, '#e8a03a', W / 2 + 40, 150); a.log.unshift(`反震！${e.name}受到 ${r} 点反伤！`); }
+        if (a.guard === 'wu') { const r = Math.ceil(cut * .25 * (1 - f)); e.hp -= r; a.eRecoil = .28; pop('-' + r, '#e8a03a', W / 2 + 40, 150); a.log.unshift(`反震！${e.name}受到 ${r} 点反伤！`); }
         else { const h = Math.ceil(cut * .25 * (1 - f)); a.php = Math.min(a.phpMax, a.php + h); pop('+' + h, '#4ae86c', 150, 500); a.log.unshift(`吸星！回复了 ${h} 点体力。`); }
       }
       a.guard = null;
     }
     if (a.shield > 0) { d = Math.ceil(d / 2); a.shield--; }
     a.php -= d;
-    pop('-' + d, '#ff5a5a', 150, 500);
+    a.hitstop = crit ? .09 : .05; a.mRecoil = .28;       // B4 + C2 我方受击后仰
+    pop('-' + d, '#ff5a5a', 150, 500, crit ? 'crit' : null);
     a.log.unshift(`${e.name}的${cat === 'mo' ? '魔法' : '攻击'}！你受到 ${d} 点伤害。${crit ? '（会心！）' : ''}`);
     tryAssist();
     // 高速敌人概率二连
     const twice = e.spd >= 8 && Math.random() < .3;
     if (twice) { let d2 = Math.ceil(calcDamage(atk, 10, a.pdef, cat) / 2); if (a.shield > 0) { d2 = Math.ceil(d2 / 2); a.shield--; } a.php -= d2; pop('-' + d2, '#ff5a5a', 190, 520); a.log.unshift('它的速度太快，又补了一击！'); tryAssist(); }
-    a.shake = .4;
+    a.shake = crit ? .55 : .4;                           // C1 trauma 模型：会心烈度加码
   }
   /* P-B3 援护技：体力过四成且随行伙伴在场时，第一次被打到濒危线，它扑出来咬一口 + 帮你回一口气 */
   function tryAssist() {
@@ -450,6 +458,7 @@ ADV.Battle = (function () {
     const h = 6;
     a.php = Math.min(a.phpMax, a.php + h);
     a.flash = .4; a.shake = .4;
+    a.hitstop = .05; a.eRecoil = .28;
     pop('-' + d, '#f0b45a', W / 2 + 40, 150);
     pop('+' + h, '#4ae86c', 150, 500);
     a.log.unshift(`🐾 千钧一发——${a.aid.name}从你身后扑了出来！${e2name()}受到 ${d} 点伤害，还替你挡下了心慌（+${h}）。`);
@@ -471,6 +480,7 @@ ADV.Battle = (function () {
       let d = petDamage(e.pow, foeMove.pow, me.pow, eff);
       if (a.petGuard) { d = Math.max(1, Math.ceil(d * (a.edu ? a.edu.guardFac : .5))); a.log.unshift(`${me.name}鼓劲蓄力，稳稳架住了这一击！（伤害减半）`); }
       me.hp -= d;
+      a.hitstop = .05; a.mRecoil = .28;                  // B4 + C2 我方小伙伴受击
       pop('-' + d, '#ff5a5a', 150, 500);
       a.log.unshift(`野生的${e.name}使出冲撞！${me.name}受到 ${d} 点伤害。${eff > 1 ? '（被克制…）' : ''}`);
       a.shake = .35;
@@ -484,7 +494,8 @@ ADV.Battle = (function () {
       if (crit) d = Math.max(1, Math.round(d * 1.5));
       e.hp -= d;
       a.flash = .35;
-      pop('-' + d, sk.col || '#ffd94c', W / 2 + 40, 150);
+      a.hitstop = crit ? .09 : .05; a.eRecoil = .28;     // B4 + C2 野生侧受击
+      pop('-' + d, sk.col || '#ffd94c', W / 2 + 40, 150, crit ? 'crit' : null);
       a.log.unshift(`${me.name}使出${sk.name}！${e.name}受到 ${d} 点伤害！${crit ? '（会心一击！）' : ''}${eff > 1 ? '（属性相克，效果绝佳！）' : eff < 1 ? '（被克制，效果不佳…）' : ''}`);
     };
     /* 吴老师支援指令（三期A）：咒语从观众席飞进赛场——各一次，耗掉玩家本回合 */
@@ -571,11 +582,26 @@ ADV.Battle = (function () {
   function update(dt, p) {
     if (!act) return;
     const a = act;
-    if (a.flash > 0) a.flash -= dt;
-    if (a.shake > 0) a.shake -= dt;
-    for (let i = a.pops.length - 1; i >= 0; i--) {       // 飘字：1.05 秒上飘渐隐
-      a.pops[i].t += dt;
-      if (a.pops[i].t > 1.05) a.pops.splice(i, 1);
+    /* B4 顿帧：命中后 2-5 帧动画定格（闪白/震屏/飘字/血条/后仰全部停住），
+       但输入照常读取——顿帧短到人类无感，不能吞掉玩家的连续操作 */
+    const frozen = a.hitstop > 0;
+    if (frozen) a.hitstop -= dt;
+    else {
+      a.t += dt;
+      if (a.intro > 0) a.intro = Math.max(0, a.intro - dt * 3);   // C3 进战斗揭幕：约 0.33s 黑幕淡出
+      if (a.flash > 0) a.flash -= dt;
+      if (a.shake > 0) a.shake -= dt;
+      if (a.eRecoil > 0) a.eRecoil -= dt;
+      if (a.mRecoil > 0) a.mRecoil -= dt;
+      /* B5 血条追赶：显示值快追、残影值慢追——伤害先看残影红条再缩到真实值 */
+      const chase = (cur, target, sp) => cur + (target - cur) * Math.min(1, dt * sp);
+      a.dispE = chase(a.dispE, Math.max(0, a.e.hp), 7); a.ghostE = chase(a.ghostE, Math.max(0, a.e.hp), 2.2);
+      if (a.petMode) { a.dispM = chase(a.dispM, Math.max(0, a.me.hp), 7); a.ghostM = chase(a.ghostM, Math.max(0, a.me.hp), 2.2); }
+      else { a.dispP = chase(a.dispP, Math.max(0, a.php), 7); a.ghostP = chase(a.ghostP, Math.max(0, a.php), 2.2); }
+      for (let i = a.pops.length - 1; i >= 0; i--) {       // 飘字：普通 1.05 秒 / 会心 1.4 秒上飘渐隐（C4）
+        a.pops[i].t += dt;
+        if (a.pops[i].t > (a.pops[i].tier === 'crit' ? 1.4 : 1.05)) a.pops.splice(i, 1);
+      }
     }
     a.log = a.log.slice(0, 4);                           // 日志每帧裁剪（节拍上演期也保持 4 行窗口）
     if (p.cancel) { finish(a.petMode ? 'fled' : 'lose'); return; }
@@ -743,8 +769,12 @@ ADV.Battle = (function () {
     }
   }
 
-  function bar(g, x, y, w, h, r, max, col) {
+  function bar(g, x, y, w, h, r, max, col, ghost) {
     g.fillStyle = '#1a1c30'; g.fillRect(x - 2, y - 2, w + 4, h + 4);
+    if (ghost != null && ghost > r) {                    // B5 残影：刚掉血的旧值以淡红条慢速跟进
+      g.fillStyle = 'rgba(255,110,110,.5)';
+      g.fillRect(x, y, Math.max(0, w * Math.min(1, Math.max(0, ghost) / max)), h);
+    }
     g.fillStyle = col; g.fillRect(x, y, Math.max(0, w * Math.max(0, r) / max), h);
     g.strokeStyle = '#d8c078'; g.lineWidth = 2; g.strokeRect(x - 2, y - 2, w + 4, h + 4);
   }
@@ -761,21 +791,26 @@ ADV.Battle = (function () {
     if (!act) return;
     const a = act, e = a.e;
     g.fillStyle = 'rgba(10,8,26,.82)'; g.fillRect(0, 0, W, H);
-    const sh = a.shake > 0 ? Math.sin(a.shake * 40) * 4 : 0;
-    g.save(); g.translate(sh, 0);
+    /* C1 trauma 震屏：烈度²（随 shake 倒计时自然归零），双轴异频正弦 */
+    const tr = a.shake > 0 ? Math.min(1, a.shake / .5) ** 2 : 0;
+    g.save(); g.translate(Math.sin(a.t * 47) * 7 * tr, Math.cos(a.t * 39) * 4 * tr);
     const bob = Math.sin(performance.now() / 400) * 4;
+    /* C2 受击后仰：正弦半周回弹 + 挤压，只动绘制坐标不动判定 */
+    const rk = a.eRecoil > 0 ? Math.sin((1 - a.eRecoil / .28) * Math.PI) : 0;
+    const mk = a.mRecoil > 0 ? Math.sin((1 - a.mRecoil / .28) * Math.PI) : 0;
     if (a.petMode) {
       // 敌方：野生小伙伴（放大 + 呼吸）
-      drawCritter(g, e, false, W / 2, 210 + bob, 5);
+      drawCritter(g, e, false, W / 2 + rk * 8, 210 + bob, 5 * (1 - .06 * rk));
       // 我方：随行伙伴（左下；无伙伴战只画野生侧）
-      if (!a.me.out) drawCritter(g, a.me, a.me.shiny, 170, 350 - bob * .6, 4);
+      if (!a.me.out) drawCritter(g, a.me, a.me.shiny, 170 - mk * 8, 350 - bob * .6, 4 * (1 - .06 * mk));
       if (a.flash > 0) { g.globalAlpha = a.flash; g.fillStyle = '#fff'; g.fillRect(W / 2 - 110, 150, 220, 160); g.globalAlpha = 1; }
     } else {
-      // 敌人立绘（放大行走图）
+      // 敌人立绘（放大行走图；后仰右移 + 横压纵拉挤压）
       const pal = ADV.Sprites.PALETTES[e.pal] || ADV.Sprites.PALETTES.studentC;
       const sheet = ADV.Sprites.makeCharSheet(pal);
       g.imageSmoothingEnabled = false;
-      g.drawImage(sheet, 32, 0, 32, 44, W / 2 - 96, 130 + bob, 192, 264);
+      const w2 = 192 * (1 - .08 * rk), h2 = 264 * (1 + .06 * rk);
+      g.drawImage(sheet, 32, 0, 32, 44, W / 2 - w2 / 2 + rk * 12, 130 + bob + 264 - h2, w2, h2);
       if (a.flash > 0) { g.globalAlpha = a.flash; g.fillStyle = '#fff'; g.fillRect(W / 2 - 120, 110, 240, 300); g.globalAlpha = 1; }
     }
     g.restore();
@@ -783,7 +818,7 @@ ADV.Battle = (function () {
     if (a.petMode) {
       text(g, `野生的${e.name}`, W / 2, 60, 28, '#ffe9a8');
       text(g, e.intro, W / 2, 92, 14, '#8a94c0');
-      bar(g, W / 2 - 160, 112, 320, 16, e.hp, e.hpMax, '#ff8a3a');
+      bar(g, W / 2 - 160, 112, 320, 16, a.dispE, e.hpMax, '#ff8a3a', a.ghostE);
       text(g, `${Math.max(0, e.hp)}/${e.hpMax}`, W / 2 + 210, 110, 15, '#cfe0ff', 'left');
       if (a.weary) text(g, '😳 喘着粗气', W / 2 - 210, 110, 14, '#ffd94c', 'right');
       // 克制直觉（蒲老师·克制环讲堂）：常显本场属性优劣
@@ -797,7 +832,7 @@ ADV.Battle = (function () {
       }
     } else {
       text(g, e.name + (e.boss ? '  ☠ BOSS' : ''), W / 2, 60, 30, e.boss ? '#ff8a6a' : '#ffe9a8');
-      bar(g, W / 2 - 160, 100, 320, 16, e.hp, e.hpMax, e.boss ? '#e85a5a' : '#ff8a3a');
+      bar(g, W / 2 - 160, 100, 320, 16, a.dispE, e.hpMax, e.boss ? '#e85a5a' : '#ff8a3a', a.ghostE);
       text(g, `${Math.max(0, e.hp)}/${e.hpMax}`, W / 2 + 210, 98, 15, '#cfe0ff', 'left');
     }
     // 我方信息（置于日志窗上方；触屏时左缘与对话框同一安全值，避开虚拟方向盘）
@@ -810,12 +845,12 @@ ADV.Battle = (function () {
         text(g, '可以直接丢球 / 喂诱饵试试运气', lx, 404, 13, '#667', 'left');
       } else {
         text(g, a.me.name + (a.me.shiny ? ' ✨' : ''), lx, 382, 20, '#fff', 'left');
-        bar(g, lx, 408, Math.min(200, lw), 14, a.me.hp, a.me.hpMax, '#4ae86c');
+        bar(g, lx, 408, Math.min(200, lw), 14, a.dispM, a.me.hpMax, '#4ae86c', a.ghostM);
         text(g, `体力 ${Math.max(0, a.me.hp)}/${a.me.hpMax}`, lx, 428, 14, '#8a94c0', 'left');
       }
     } else {
       text(g, '你', lx, 392, 22, '#fff', 'left');
-      bar(g, lx, 420, Math.min(200, lw), 14, a.php, a.phpMax, '#4ae86c');
+      bar(g, lx, 420, Math.min(200, lw), 14, a.dispP, a.phpMax, '#4ae86c', a.ghostP);
       text(g, `体力 ${Math.max(0, a.php)}/${a.phpMax}`, lx, 440, 14, '#8a94c0', 'left');
     }
     text(g, `回合 ${a.turn}`, lx, 458, 13, '#8a94c0', 'left');
@@ -896,16 +931,19 @@ ADV.Battle = (function () {
       l.split('\n').forEach((line, j) => text(g, line.slice(0, logLen), lx + 16, 490 + i * 30 + j * 15, 13, '#e8ecff', 'left'));
     });
     g.globalAlpha = 1;
-    // 伤害/治疗飘字（前 0.12 秒弹跳放大，随后上飘渐隐）
+    // 伤害/治疗飘字（前 0.12 秒弹跳放大，随后上飘渐隐；会心走放大层级 C4）
     for (const p of a.pops) {
       const t = p.t;
-      const sc = t < .12 ? 1 + (1 - t / .12) * .6 : 1;
-      const a2 = t < .75 ? 1 : Math.max(0, 1 - (t - .75) / .3);
+      const crit = p.tier === 'crit';
+      const life = crit ? 1.4 : 1.05, hold = crit ? .95 : .75;
+      let sc = t < .12 ? 1 + (1 - t / .12) * .6 : 1;
+      if (crit) sc *= 2.2 - Math.min(1, t / .3) * 1.2;   // 起始 2.2 倍，0.3 秒缓落到普通层级
+      const a2 = t < hold ? 1 : Math.max(0, 1 - (t - hold) / (life - hold));
       g.save();
       g.globalAlpha = a2;
       g.translate(p.x, p.y - Math.max(0, t - .12) * 44);
       g.scale(sc, sc);
-      g.font = 'bold 24px "Microsoft YaHei", "PingFang SC", sans-serif';
+      g.font = `bold ${crit ? 27 : 24}px "Microsoft YaHei", "PingFang SC", sans-serif`;
       g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineWidth = 4; g.lineJoin = 'round';
       g.strokeStyle = 'rgba(20,10,30,.85)';
@@ -913,6 +951,17 @@ ADV.Battle = (function () {
       g.fillStyle = p.col;
       g.fillText(p.txt, 0, 0);
       g.restore();
+    }
+    // C3 进战斗揭幕：黑幕淡出压轴绘制（盖住硬切；约 0.33 秒）
+    if (a.intro > 0) {
+      g.fillStyle = `rgba(8,8,16,${Math.min(1, a.intro).toFixed(3)})`;
+      g.fillRect(0, 0, W, H);
+      g.globalAlpha = a.intro * .35;                     // 揭幕时两道金纹掠过，添一点入场仪式感
+      g.fillStyle = '#d8c078';
+      const sweep = (1 - a.intro) * (W + 400);
+      g.save(); g.translate(-200 + sweep, H * .4); g.rotate(-.3); g.fillRect(0, -10, 90, 20); g.restore();
+      g.save(); g.translate(-420 + sweep, H * .68); g.rotate(-.3); g.fillRect(0, -10, 140, 20); g.restore();
+      g.globalAlpha = 1;
     }
   }
 
