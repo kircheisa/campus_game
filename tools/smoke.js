@@ -4078,9 +4078,11 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Battle.update(1 / 60, { ok: true });               // 武术 → 招式列表
       A.Battle.update(1 / 60, { ok: true });               // 体术出招
       ok(A.Battle.act && A.Battle.act.pps.strike === 98, 'PP 制：出招即扣 PP（体术 99 → 98），旧冷却机制退役');
+      for (let i = 0; i < 30; i++) A.Battle.update(1 / 60, {});   // B1 节拍队列：敌方行动延迟上演，等它演完再接输入
       A.Battle.update(1 / 60, { down: true });             // → 防御
       A.Battle.update(1 / 60, { ok: true });               // → 武防/魔防
       A.Battle.update(1 / 60, { ok: true });               // 武防
+      for (let i = 0; i < 30; i++) A.Battle.update(1 / 60, {});   // B1 节拍队列：敌方回应演完（结算日志已落地）
       ok(A.Battle.act && A.Battle.act.log.some(t => t.includes('看穿了它的武术招')) && A.Battle.act.log.some(t => t.includes('反震')),
          '防御博弈：武防接下武术招 → 减伤 70% 并反震敌人');
       A.Battle.update(1 / 60, { down: true });
@@ -4088,6 +4090,23 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Battle.update(1 / 60, { down: true });             // → 逃跑
       A.Battle.update(1 / 60, { ok: true });
       ok(r52 === false && A.Battle.active === false, '逃跑：按速度差与尝试次数判定 → 本回合全身而退（cb(false)）');
+
+      // —— B1 战斗节拍队列：敌方行动入拍延迟上演，不再与玩家结算挤同一帧 ——
+      ok(fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8').includes('if (a.beats.length) { pumpBeats(dt); return; }') &&
+         fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8').includes('}, .42);'),
+         '节拍队列：源守护——节拍门挂起菜单输入 + 敌方回应延迟 0.42s 入拍');
+      A.Battle.start('dummy', {}, res => r52 = res);       // 第二场：观察节拍时序（dummy 仍 9999 血）
+      A.Battle.update(1 / 60, { ok: true });               // 攻击 → 两栏
+      A.Battle.update(1 / 60, { ok: true });               // 武术 → 招式
+      A.Battle.update(1 / 60, { ok: true });               // 体术出招
+      ok(A.Battle.act && A.Battle.act.beats.length === 1 && !A.Battle.act.log.some(t => t.includes('你受到')),
+         '节拍队列：出招后敌方行动入拍挂起（beats×1，本帧未挨打）');
+      for (let i = 0; i < 30; i++) A.Battle.update(1 / 60, {});   // 0.42s ≈ 26 帧后敌方回应上演
+      ok(A.Battle.act && A.Battle.act.beats.length === 0 && A.Battle.act.log.some(t => t.includes('你受到')) && A.Battle.act.turn === 2,
+         '节拍队列：延迟一拍后敌方行动落地（挨打日志 + 回合数推进 + 拍队清空）');
+      for (let i = 0; i < 3; i++) A.Battle.update(1 / 60, { down: true });
+      A.Battle.update(1 / 60, { ok: true });               // 逃跑（random=0 必成）
+      ok(r52 === false && A.Battle.active === false, '节拍队列：演毕菜单恢复可操作，全身而退收场');
     } finally {
       Math.random = rnd52;
       A.Battle.ENEMIES.dummy.hp = keep52.dummy;

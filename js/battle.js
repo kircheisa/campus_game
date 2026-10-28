@@ -182,7 +182,7 @@ ADV.Battle = (function () {
           me: { name: '——', fam: null, hp: 0, hpMax: 0, pow: 0, spd: 0, shiny: false, out: true },
           skills: [], mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
           pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
-          flash: 0, shake: 0, pops: [], turn: 1
+          flash: 0, shake: 0, pops: [], beats: [], turn: 1
         };
         ADV.Audio.playBgm('battle'); ADV.Audio.sfx('start');
         return;
@@ -203,7 +203,7 @@ ADV.Battle = (function () {
         skills: petMoves(myCr.fam),
         mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
         pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
-        flash: 0, shake: 0, pops: [], turn: 1, edu, bondUsed: false,
+        flash: 0, shake: 0, pops: [], beats: [], turn: 1, edu, bondUsed: false,
         foeWeak: false, sups: {}, boosted: !!(bst.pow || bst.spd)
       };
       for (const m of act.skills) act.pps[m.key] = m.pp;
@@ -242,7 +242,7 @@ ADV.Battle = (function () {
       skills: skillList(), pps: {}, guard: null, shield: 0, boost: 0, crit: 0,
       tries: 0, wuCount: 0, moCount: 0, lastPow: 0,
       turn: 1, photos: (opts.photoMode ? (ADV.Collect ? ADV.Collect.ids('photos') : []) : null),
-      photoIdx: 0, flash: 0, shake: 0, pops: []          // pops：伤害/治疗飘字
+      photoIdx: 0, flash: 0, shake: 0, pops: [], beats: []          // pops：伤害/治疗飘字；beats：回合节拍队列（B1）
     };
     for (const m of act.skills) act.pps[m.key] = m.pp;
     if (!act.phpMax) act.phpMax = act.php;
@@ -292,6 +292,22 @@ ADV.Battle = (function () {
 
   // 伤害/治疗飘字（t 秒内上飘渐隐）
   function pop(txt, col, x, y) { act.pops.push({ txt, col, x, y, t: 0 }); }
+
+  /* B1 战斗节拍队列：{fn, delay} 顺序上演——玩家结算即时落地，敌方行动延迟一拍跟进，
+     给玩家「我先出手 → 看对方回应」的呼吸感，也为一拍一顿/震屏等演出留出插槽 */
+  function beat(fn, delay) { act.beats.push({ fn, delay }); }
+  function pumpBeats(dt) {
+    const a = act;
+    while (a && a.beats.length) {
+      const b = a.beats[0];
+      b.delay -= dt;
+      if (b.delay > 0) return;
+      a.beats.shift();
+      b.fn();
+      if (!act) return;                                  // 这一拍打出了胜负：finish 已收场
+      dt = 0;                                            // 同帧只补执行零延迟的后续拍
+    }
+  }
 
   /* ---------- 敌方读招 AI：残血或我方上回合大威力后，按出招倾向猜拳防御 ---------- */
   function enemyIntent() {
@@ -561,7 +577,9 @@ ADV.Battle = (function () {
       a.pops[i].t += dt;
       if (a.pops[i].t > 1.05) a.pops.splice(i, 1);
     }
+    a.log = a.log.slice(0, 4);                           // 日志每帧裁剪（节拍上演期也保持 4 行窗口）
     if (p.cancel) { finish(a.petMode ? 'fled' : 'lose'); return; }
+    if (a.beats.length) { pumpBeats(dt); return; }       // 节拍上演中：敌方行动延迟结算，菜单输入暂不读取（B1）
 
     const items = a.petMode ? petItems()
       : (ADV.Collect ? ADV.Collect.giftables().filter(it => it.battle && !it.pet) : []);
@@ -577,19 +595,25 @@ ADV.Battle = (function () {
     if (p.down) { a.sel = (a.sel + 1) % Math.max(1, nSub); ADV.Audio.sfx('cursor'); }
     if (a.mode === 'cat' && (p.left || p.right)) { a.catSel = 1 - a.catSel; ADV.Audio.sfx('cursor'); }
 
-    const afterPlayer = () => {                          // 玩家结算 → 敌方 → 回合推进（普通战）
+    const foeBeat = intent => beat(() => {               // 敌方行动延迟一拍上演，演完接胜负检查与回合推进（B1）
+      enemyTurn(intent);
+      if (act && !endCheck()) a.turn++;
+    }, .42);
+    const afterPlayer = () => {                          // 玩家结算即时落地 → 敌方入拍 → 回合推进挂到拍尾
       if (endCheck()) return true;
-      enemyTurn(a.enemyIntentDone ? null : a.eIntent);
+      const intent = a.enemyIntentDone ? null : a.eIntent;
       a.eIntent = null; a.enemyIntentDone = false; a.playerAttacked = false;
-      if (endCheck()) return true;
-      a.turn++;
+      foeBeat(intent);
       return false;
     };
 
     if (a.mode === 'menu') {
       // BOSS 回忆攻击（C 键 pose）
       if (a.photos && a.photoIdx < a.photos.length && p.pose) {
-        if (photoStrike()) { if (endCheck()) return; enemyTurn('atk'); if (endCheck()) return; a.turn++; }
+        if (photoStrike()) {
+          if (endCheck()) return;
+          foeBeat('atk');
+        }
         return;
       }
       if (p.ok) {
@@ -713,13 +737,10 @@ ADV.Battle = (function () {
         a.items = items;                                 // playerAct('item') 按索引取道具
         playerAct('item', a.items.indexOf(it));
         if (endCheck()) return;
-        enemyTurn('atk');
-        if (endCheck()) return;
-        a.turn++;
+        foeBeat('atk');
         a.mode = 'menu'; a.sel = 0;
       }
     }
-    a.log = a.log.slice(0, 4);
   }
 
   function bar(g, x, y, w, h, r, max, col) {
