@@ -9,6 +9,9 @@ ADV.UI = (function () {
   const FONT = (s, w) => `${w || 'bold'} ${s}px "Microsoft YaHei", "PingFang SC", sans-serif`;
 
   let active = null;      // 当前激活窗口 {type:...}
+  let winQueue = [];      // 窗口串行队列：已有窗口在放时，后来的 say/choose 排队而非顶掉
+                          // （UI 窗口是单例，被顶掉者的 Promise 永无人 resolve、所属脚本挂死——
+                          //   序章 80ms 竞态同族风险的根本防线，见项目记录五十八/五十九）
   const toasts = [];      // [{text, t}] 小提示队列，最多 3 条堆叠
   let itemAnim = null;
 
@@ -208,24 +211,38 @@ ADV.UI = (function () {
     try { localStorage.setItem('campus_autoplay', autoPlay ? '1' : '0'); } catch (e) {}
     return autoPlay;
   }
+  /* ---------- 窗口串行：开窗请求统一走此口——空闲立即开，忙则排队；
+   * 每个窗口收尾（active 置 null）的路径都要接力 pumpWin，队列才续得上 ---------- */
+  function openWin(make) {
+    if (!active) { make(); return; }
+    winQueue.push(make);
+  }
+  function pumpWin() {
+    if (active || !winQueue.length) return;
+    const make = winQueue.shift();
+    make();
+  }
+
   function say(opt) {
     return new Promise(res => {
-      const name = opt.name || '';
-      const pv = (name && ADV.Maps && ADV.Maps.portraitOf) ? ADV.Maps.portraitOf(name) : null;
-      active = {
-        type: 'say', res,
-        name,
-        pv,                   // 说话人头像规格（可空）
-        raw: opt.text,        // 原文留存：T 键切字号时按新档重排（rewrapActive）
-        lines: [], pages: [], page: 0,
-        shown: 0, done: false, t: 0
-      };
-      autoT = 0;
-      const g = ctx2d;
-      const lines = wrap(g, opt.text, msgTextW(pv), tsz(21));
-      // 每页最多 3 行
-      for (let i = 0; i < lines.length; i += 3) active.pages.push(lines.slice(i, i + 3));
-      pushHistory(name, opt.text);        // 进对话历史，供 L 键回看
+      openWin(() => {
+        const name = opt.name || '';
+        const pv = (name && ADV.Maps && ADV.Maps.portraitOf) ? ADV.Maps.portraitOf(name) : null;
+        active = {
+          type: 'say', res,
+          name,
+          pv,                   // 说话人头像规格（可空）
+          raw: opt.text,        // 原文留存：T 键切字号时按新档重排（rewrapActive）
+          lines: [], pages: [], page: 0,
+          shown: 0, done: false, t: 0
+        };
+        autoT = 0;
+        const g = ctx2d;
+        const lines = wrap(g, opt.text, msgTextW(pv), tsz(21));
+        // 每页最多 3 行
+        for (let i = 0; i < lines.length; i += 3) active.pages.push(lines.slice(i, i + 3));
+        pushHistory(name, opt.text);        // 进对话历史，供 L 键回看
+      });
     });
   }
 
@@ -235,29 +252,31 @@ ADV.UI = (function () {
   function choose(options, opt) {
     opt = opt || {};
     return new Promise(res => {
-      active = {
-        type: 'choose', res,
-        options: options.slice(),
-        index: opt.defaultIndex || 0,
-        cancelIndex: opt.cancelIndex != null ? opt.cancelIndex : -1,
-        caption: opt.caption || null,
-        capPages: [], capPage: 0, capDone: !opt.caption, capPv: null,
-        sc: 0, t: 0,
-        w: 0
-      };
-      const g = ctx2d;
-      let maxW = 60;
-      g.font = FONT(tsz(20));
-      options.forEach(o => maxW = Math.max(maxW, g.measureText(o).width));
-      active.w = Math.min(maxW + 90, W - (safePad + 10) - 24);
-      if (active.caption) {
-        const cn = active.caption.name || '';
-        pushHistory(cn, active.caption.text);
-        active.capRaw = active.caption.text;               // 原文留存：切字号重排用
-        active.capPv = (cn && ADV.Maps && ADV.Maps.portraitOf) ? ADV.Maps.portraitOf(cn) : null;
-        const lines = wrap(g, active.caption.text, msgW() - 60 - (active.capPv ? 62 : 0), tsz(21));
-        for (let i = 0; i < lines.length; i += 3) active.capPages.push(lines.slice(i, i + 3));
-      }
+      openWin(() => {
+        active = {
+          type: 'choose', res,
+          options: options.slice(),
+          index: opt.defaultIndex || 0,
+          cancelIndex: opt.cancelIndex != null ? opt.cancelIndex : -1,
+          caption: opt.caption || null,
+          capPages: [], capPage: 0, capDone: !opt.caption, capPv: null,
+          sc: 0, t: 0,
+          w: 0
+        };
+        const g = ctx2d;
+        let maxW = 60;
+        g.font = FONT(tsz(20));
+        options.forEach(o => maxW = Math.max(maxW, g.measureText(o).width));
+        active.w = Math.min(maxW + 90, W - (safePad + 10) - 24);
+        if (active.caption) {
+          const cn = active.caption.name || '';
+          pushHistory(cn, active.caption.text);
+          active.capRaw = active.caption.text;               // 原文留存：切字号重排用
+          active.capPv = (cn && ADV.Maps && ADV.Maps.portraitOf) ? ADV.Maps.portraitOf(cn) : null;
+          const lines = wrap(g, active.caption.text, msgW() - 60 - (active.capPv ? 62 : 0), tsz(21));
+          for (let i = 0; i < lines.length; i += 3) active.capPages.push(lines.slice(i, i + 3));
+        }
+      });
     });
   }
   /* 光标移动后把滚动起点 sc 夹回可视窗口 */
@@ -332,9 +351,9 @@ ADV.UI = (function () {
       if (press.down) { active.index = (active.index + 1) % n; clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
       if (press.pageup) { active.index = Math.max(0, active.index - CHOOSE_VIEW); clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
       if (press.pagedown) { active.index = Math.min(n - 1, active.index + CHOOSE_VIEW); clampChooseScroll(active); ADV.Audio.sfx('cursor'); }
-      if (press.ok) { const i = active.index; const r = active.res; active = null; ADV.Audio.sfx('ok'); r(i); }
+      if (press.ok) { const i = active.index; const r = active.res; active = null; ADV.Audio.sfx('ok'); r(i); pumpWin(); }
       else if (press.cancel && active.cancelIndex >= 0) {
-        const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i);
+        const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i); pumpWin();
       }
     } else if (itemAnim) {
       if (press.ok && itemAnim.t > .5) { const r = itemAnim.res; itemAnim = null; ADV.Audio.sfx('ok'); r(); }
@@ -348,7 +367,7 @@ ADV.UI = (function () {
     if (!a.done) { a.shown = 999; a.done = true; }
     else {
       a.page++;
-      if (a.page >= a.pages.length) { const r = a.res; active = null; r(); }
+      if (a.page >= a.pages.length) { const r = a.res; active = null; r(); pumpWin(); }
       else { a.shown = 0; a.done = false; }
     }
     autoT = 0;
@@ -514,7 +533,7 @@ ADV.UI = (function () {
       const gm = chooseGeom(active);
       const inWin = px >= gm.x && px <= gm.x + gm.w && py >= gm.y && py <= gm.y + gm.h;
       if (!inWin) {                                                      // 窗外 = 取消（若有取消位）
-        if (active.cancelIndex >= 0) { const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i); }
+        if (active.cancelIndex >= 0) { const r = active.res; const i = active.cancelIndex; active = null; ADV.Audio.sfx('cancel'); r(i); pumpWin(); }
         return true;
       }
       if (py <= gm.y + 20 && active.sc > 0) { active.sc--; ADV.Audio.sfx('cursor'); return true; }                                       // ▲（窄带 C11：不再吃掉第一行点击）

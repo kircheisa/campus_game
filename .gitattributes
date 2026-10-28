@@ -1,0 +1,11 @@
+# 行尾统一 LF：Windows autocrlf 在 rebase/checkout 冲突路径会把工作区重写为 CRLF，
+# 曾致冒烟中所有含 \n 字面匹配的源断言集体假红（2026-10-29 实录，见 docs/体验优化清单.md）。
+# eol=lf 强制所有平台检出为 LF，从根上消除行尾漂移。
+* text=auto eol=lf
+
+# 二进制例外（防 text 规则误伤）
+*.rar binary
+*.png binary
+*.webm binary
+*.lnk binary
+*.ico binary

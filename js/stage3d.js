@@ -15,9 +15,20 @@ ADV.Stage3D = (function () {
   let probed = false, probeOk = false;
   let titleR = null;           // 标题背景离屏渲染器（常驻一个；preserveDrawingBuffer 供 drawImage）
   let titleScene = null, titleCam = null, clockHands = null, flagMesh = null;
+  let titleStill = false;      // 减弱动态模式下定机位单帧已渲染（之后只 drawImage 不再渲染）
   let warpActive = false;
+  let reduced = null;          // 系统级「减弱动态」偏好（prefers-reduced-motion），一次读取缓存
+  let slowN = 0, lastTB = 0;   // 标题 3D 帧率自适应：连续慢帧计数 / 上次调用时刻（秒）
 
   function lib() { return window.THREE || null; }
+
+  function prefersReduced() {
+    if (reduced == null) {
+      try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+      catch (e) { reduced = false; }
+    }
+    return reduced;
+  }
 
   function probe() {
     if (probed) return probeOk;
@@ -90,7 +101,9 @@ ADV.Stage3D = (function () {
     return s;
   }
 
-  /* 每帧由标题画面绘制路径调用；返回 false = WebGL 不可用（调用方画原 2D 剪影） */
+  /* 每帧由标题画面绘制路径调用；返回 false = WebGL 不可用（调用方画原 2D 剪影）。
+   * 减弱动态（系统偏好）：定机位渲染一帧后只贴图，不再有环绕运动；
+   * 帧率自适应：调用间隔连续 150 帧 > 40ms（低端设备持续低帧）→ 本会话回退 2D 剪影。 */
   function titleBackground(g, t) {
     if (dead || !probe()) return false;
     const T = lib();
@@ -100,20 +113,34 @@ ADV.Stage3D = (function () {
         titleR.setSize(W, H, false);
         titleScene = buildTitle(T);
         titleCam = new T.PerspectiveCamera(50, W / H, .1, 400);
+        titleStill = false;
       }
-      const a = t * .07 + .6;                        // 慢速环绕（约 90 秒一圈，气口极缓）
-      titleCam.position.set(Math.sin(a) * 52, 15 + Math.sin(t * .11) * 1.6, Math.cos(a) * 52);
-      titleCam.lookAt(0, 4, 0);
-      if (clockHands) {
-        clockHands.min.rotation.z = -t * .1;         // 指针缓走：时光回廊的暗示
-        clockHands.hour.rotation.z = -t * .008 - 2.1;
+      const still = prefersReduced();
+      if (!still) {
+        const a = t * .07 + .6;                        // 慢速环绕（约 90 秒一圈，气口极缓）
+        titleCam.position.set(Math.sin(a) * 52, 15 + Math.sin(t * .11) * 1.6, Math.cos(a) * 52);
+        titleCam.lookAt(0, 4, 0);
+        if (clockHands) {
+          clockHands.min.rotation.z = -t * .1;         // 指针缓走：时光回廊的暗示
+          clockHands.hour.rotation.z = -t * .008 - 2.1;
+        }
+        if (flagMesh) flagMesh.rotation.y = Math.sin(t * 2.2) * .18;
+        titleR.render(titleScene, titleCam);
+        const d = t - lastTB; lastTB = t;
+        slowN = d > 0.04 ? slowN + 1 : 0;
+        if (slowN > 150) {                             // 持续低帧：回退 2D，别让标题拖垮整机
+          throw new Error('stage3d title slow-frame fallback');
+        }
+      } else if (!titleStill) {                        // 定机位：一帧定格，静止不违「减弱动态」
+        titleCam.position.set(Math.sin(1.2) * 52, 15, Math.cos(1.2) * 52);
+        titleCam.lookAt(0, 4, 0);
+        titleR.render(titleScene, titleCam);
+        titleStill = true;
       }
-      if (flagMesh) flagMesh.rotation.y = Math.sin(t * 2.2) * .18;
-      titleR.render(titleScene, titleCam);
       g.drawImage(titleR.domElement, 0, 0, W, H);
       return true;
     } catch (e) {
-      dead = true;                                   // 中途异常：本会话回退 2D 剪影
+      dead = true;                                   // 中途异常/持续低帧：本会话回退 2D 剪影
       try { if (titleR) titleR.dispose(); } catch (e1) {}
       titleR = null;
       return false;
@@ -124,7 +151,8 @@ ADV.Stage3D = (function () {
    * 覆盖画布贴着 #game 实际位置摆放；自带 rAF 与兜底定时器，保证 onMid/onDone 必达；
    * Z/X/Esc/回车/空格可跳过（跳到淡出段）；结束即销毁画布、几何、材质与 WebGL 上下文。 */
   function warp(opt) {
-    if (dead || warpActive || !probe()) return false;
+    // 系统级「减弱动态」偏好：跃迁是大动态演出，直接旁路（调用方落回普通淡出）
+    if (dead || warpActive || prefersReduced() || !probe()) return false;
     const T = lib();
     const gameCv = document.getElementById && document.getElementById('game');
     if (!gameCv || !gameCv.getBoundingClientRect) return false;

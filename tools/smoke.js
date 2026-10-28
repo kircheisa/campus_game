@@ -7828,6 +7828,57 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.113] 窗口串行队列 + 立体演出无障碍/自适应 + 行尾守护 ==================== */
+  console.log('\n[5.113] 窗口串行队列（P1 竞态根修）+ 立体演出层跟随减弱动态/帧率自适应 + eol=lf');
+  {
+    // —— A. 源断言：ui.js 队列接线 ——
+    const ui113 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+    ok(ui113.includes('function openWin') && ui113.includes('let winQueue')
+       && (ui113.match(/pumpWin\(\)/g) || []).length >= 5,      // 定义 + 四处收尾接力
+      '窗口串行：openWin/winQueue/pumpWin 在位，四处窗口收尾路径全部接力泵队列');
+    ok((ui113.match(/openWin\(\(\) =>/g) || []).length === 2,
+      '窗口串行：say/choose 开窗统一走 openWin（忙则排队而非顶掉，被顶者 Promise 永挂的根修）');
+    // —— B. 行为：两个 say 排队——前者不被顶掉，收尾后接力后者，完成顺序 1→2 ——
+    {
+      const qKeep113 = pressQueue; pressQueue = [];
+      const seq113 = [];
+      const p1 = A.UI.say({ text: '第一条' }).then(() => seq113.push(1));
+      const p2 = A.UI.say({ text: '第二条' }).then(() => seq113.push(2));
+      A.UI.update(1 / 60, { ok: true }); A.UI.update(1 / 60, { ok: true });   // 补全+翻页 → 关第一条
+      for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r));   // 排干微任务
+      ok(seq113.length === 1, '窗口串行：第一个 say 正常关闭（后到者排队，没有顶掉它）');
+      A.UI.update(1 / 60, { ok: true }); A.UI.update(1 / 60, { ok: true });   // 接力开第二条并关闭
+      for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r));
+      ok(seq113.join(',') === '1,2', '窗口串行：排队窗口在前者收尾后自动接力开窗并完成（顺序 1→2）');
+      pressQueue = qKeep113;
+    }
+    // —— C. 行为（原 bug 形态）：choose 在放、后台 say 排队——选择不受影响，say 随后自动开 ——
+    {
+      const qKeep113c = pressQueue;
+      let pick113 = -1, said113 = false;
+      const pc113 = A.UI.choose(['甲', '乙', '丙'], {}).then(i => { pick113 = i; });
+      const ps113 = A.UI.say({ text: '后台插话' }).then(() => { said113 = true; });
+      A.UI.update(1 / 60, { down: true });          // 移到「乙」
+      A.UI.update(1 / 60, { ok: true });            // 选定 → choose 收尾 → 队列接力开 say
+      for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r));
+      ok(pick113 === 1 && !said113, '窗口串行：choose 选择照常（后到 say 排队，未顶掉选项窗）');
+      A.UI.update(1 / 60, { ok: true }); A.UI.update(1 / 60, { ok: true });
+      for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r));
+      ok(said113 && pick113 === 1, '窗口串行：排队的 say 在 choose 收尾后自动接力并完成');
+      pressQueue = qKeep113c;
+    }
+    // —— D. 立体演出：无障碍与自适应 源断言 ——
+    const st113 = fs.readFileSync(path.join(ROOT, 'js', 'stage3d.js'), 'utf8');
+    ok(st113.includes('prefers-reduced-motion') && st113.includes('prefersReduced()'),
+      '立体演出：跟随系统减弱动态——跃迁旁路（落回普通淡出）+ 标题定机位单帧定格');
+    ok(st113.includes('slowN') && st113.includes('slow-frame fallback'),
+      '立体演出：标题 3D 帧率自适应——调用间隔连续 150 帧 > 40ms 本会话回退 2D 剪影');
+    // —— E. 行尾守护：.gitattributes 强制 eol=lf（CRLF 假红根治） ——
+    ok(fs.existsSync(path.join(ROOT, '.gitattributes'))
+       && fs.readFileSync(path.join(ROOT, '.gitattributes'), 'utf8').includes('eol=lf'),
+      '行尾守护：.gitattributes 强制 eol=lf——rebase/checkout 不再把工作区写成 CRLF');
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
