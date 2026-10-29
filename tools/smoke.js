@@ -8256,6 +8256,59 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.121] 批次六十七：批后巡检三小件 ====================
+   * 重复收服撞见异色 → 放归礼 3→6 / 收购台性子上架（好斗/胆小标签）/
+   * 成长页脚注补伙伴升级帮助行——源守护 + 定桩行为双验。 */
+  console.log('\n[5.121] 批次六十七：异色放归礼翻倍 + 收购台性子标签 + 成长页帮助行');
+  {
+    const rnd121 = Math.random, stub121 = A.Battle, say121 = A.UI.say, toast121 = A.UI.toast;
+    const F121 = A.Game.flags;
+    const prev121 = { gold: F121.gold, buddy: F121.buddy, wildHp: F121.wildHp, catchTotal: F121.catchTotal,
+                      insects: F121.col && F121.col.insects };
+    const cal121 = A.Cal.dump();
+    const db121 = A.Collect.DB.critters;
+    try {
+      // —— 源守护 ——
+      const rSrc121 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const uSrc121 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      ok(rSrc121.includes('const rel = wildShiny ? 6 : 3') && rSrc121.includes('还是金色个体！')
+         && rSrc121.includes('放归礼翻倍'),
+        '源：异色放归礼——重复收服撞见金色个体金 3→6，toast/心迹都点明（普通个体口径不变）');
+      ok(rSrc121.includes("h.temper === '好斗' ? '（好斗）'") && rSrc121.includes("'（胆小）'")
+         && uSrc121.includes('伙伴并肩出战也能升级'),
+        '源：收购台行挂（好斗/胆小）性子标签；成长页脚注补「伙伴并肩出战也能升级」帮助行');
+
+      // —— 行为：重复收服异色乌龟 → 放归 +6（Math.random=.01 定桩：深浅稀客必中、异色必中） ——
+      A.Collect.DB.critters = [A.Collect.critter('c6')];
+      const said121 = [], toasts121 = [];
+      A.UI.say = o => { said121.push(o.text || ''); return Promise.resolve(); };
+      A.UI.toast = m => { toasts121.push(String(m || '')); };
+      A.Battle = { ...stub121, start: (k, o, cb) => cb({ outcome: 'caught', myHp: 7, foeHp: 3 }) };
+      A.Cal.load({ day: 52, period: 2, weather: '晴', checkedIn: true, streak: 1 });
+      F121.buddy = null; F121.wildHp = null;
+      F121.col.insects = { c6: { s: 0, d: 1 } };           // 乌龟已在册：走重复个体（放归）分支
+      Math.random = () => .01;
+      const g121 = F121.gold;
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(F121.gold === g121 + 6 && toasts121.some(t => t.includes('金色个体'))
+         && said121.some(t => t.includes('金光')),
+        '行为：重复收服异色乌龟 → 放归礼 6 金——野外「金光」预告先行，toast 点明金色个体');
+      F121.col.insects.c6.temper = '好斗';
+      ok(A.Collect.heldCritters().some(h => h.id === 'c6' && h.temper === '好斗' && h.body === 'normal'),
+        '行为：个体性子透出——入册 temper 经 heldCritters 回读（未记性子默认「沉着」），收购台行可直接挂标签');
+    } finally {
+      Math.random = rnd121;
+      A.Battle = stub121;
+      A.UI.say = say121;
+      A.UI.toast = toast121;
+      A.Collect.DB.critters = db121;
+      A.Cal.load(cal121);
+      F121.gold = prev121.gold; F121.buddy = prev121.buddy;
+      F121.wildHp = prev121.wildHp; F121.catchTotal = prev121.catchTotal;
+      if (F121.col) F121.col.insects = prev121.insects;
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

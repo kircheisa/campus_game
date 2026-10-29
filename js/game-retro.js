@@ -354,9 +354,10 @@ E().playAction(E().player, 'laugh', 1.6);
       ADV.Audio.sfx('ok');
       await say({ text: `球在草叶间「咔哒」一收紧——\n收服成功！${cr.name}安安稳稳住了进去。` });
       if (CO.has('critters', cr.id)) {
-        f.gold = (f.gold || 0) + 3;
-        UI().toast(` 🎉 收服成功！图鉴已有它——放归草丛，金币 +3 `);
-        logEvent(`草丛遭遇中收服了${cr.name}（已入册，放归）`);
+        const rel = wildShiny ? 6 : 3;                 // 批次六十七：撞见金色个体，图鉴已有也值得多给一笔放归礼
+        f.gold = (f.gold || 0) + rel;
+        UI().toast(` 🎉 收服成功！图鉴已有它${wildShiny ? '（还是金色个体！）' : ''}——放归草丛，金币 +${rel} `);
+        logEvent(`草丛遭遇中收服了${cr.name}${wildShiny ? '（金色异色，放归礼翻倍）' : '（已入册，放归）'}`);
       } else {
         CO.gainCritter(cr.id, wildShiny, { body: wild.body, temper: wild.temper });
         logEvent(`草丛遭遇中收服了${cr.name}${wildShiny ? '（金色异色！）' : ''}`);
@@ -478,7 +479,8 @@ E().playAction(E().player, 'laugh', 1.6);
           const p = CO.sellPrice(h.cr, h.shiny);
           const rear = CO.critterRearing(h.id, ADV.Cal.day);   // 饲养倒计时：防止手滑卖掉临进化的幼体
           const bodyTag = h.body === 'big' ? '（大个）' : h.body === 'small' ? '（小不点）' : '';   // 批次六十六：个体体型标签
-          return `${h.cr.name}${h.shiny ? '✨' : ''}${bodyTag}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
+          const temperTag = h.temper === '好斗' ? '（好斗）' : h.temper === '胆小' ? '（胆小）' : '';   // 批次六十七：性子上架——好斗伤高、胆小好捕，买前看清楚
+          return `${h.cr.name}${h.shiny ? '✨' : ''}${bodyTag}${temperTag}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
         }).concat(['还是不卖了']);
         const i = await choose(opts, { caption: { name: '阿橘', text: '图鉴收录过的可以寄养到我这，\n按稀有度给收购价——异色翻三倍！' } });
         if (i < 0 || i >= held.length) continue;

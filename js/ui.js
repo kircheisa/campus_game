@@ -742,7 +742,7 @@ ADV.UI = (function () {
         text(g, r.slice(0, 26), x + 40, y + h - 84 + i * 18, 12, '#cfe0ff', undefined, 'normal');
       });
     } catch (e) {}
-    text(g, '答题/战斗/剧情/收集都会成长 · 五维解锁场景互动', x + w / 2, y + h - 12, 12, '#8a94c0', 'center', 'normal');
+    text(g, '答题/战斗/剧情/收集都会成长 · 五维解锁场景互动 · 伙伴并肩出战也能升级（每日有上限，满 Lv5 开战先制）', x + w / 2, y + h - 12, 12, '#8a94c0', 'center', 'normal');
   }
   /* ---------- 技能页：农/矿/渔/战/交 五系专精（星露谷式） ---------- */
   function renderSkills(g, x, y, w, h) {
