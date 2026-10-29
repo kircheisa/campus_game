@@ -632,13 +632,16 @@
       if (!cr) { f.buddy = null; return; }
       const bond = f.buddyBond || 0;
       const stage = bond >= 60 ? 3 : bond >= 30 ? 2 : bond >= 1 ? 1 : 0;
+      /* 批次六十六 A：伙伴等级可见化——并肩同行攒下的 Lv/经验与亲密度并列展示 */
+      const lv = f.buddyLv || 1;
+      const lvLine = `伙伴 Lv${lv}${lv >= 5 ? '（满级）' : ''} · 经验 ${f.buddyExp || 0}/${ADV.Battle.bondNeed(lv)} · 亲密度 ${bond}/100`;
       const a = await choose(['摸摸头', '喂点吃的', '说说悄悄话', '道别（解除随行）', '就这样吧'], {
         cancelIndex: 4,                                     // X/ESC = 就这样吧，随时收起选项
         caption: { name: cr.name,
-                   text: stage === 3 ? '它把下巴搁在你的鞋面上，\n尾巴摇成了小风扇。\n（亲密度加护全开：战中每回合回体力 · 濒死稳住一次）'
-                       : stage === 2 ? '它绕着你的脚踝转圈，\n时不时抬头看你一眼。\n（亲密度加护：战中每回合回 1 体力）'
-                       : stage === 1 ? '它蹲坐在你脚边，\n耳朵朝你的方向偏着。'
-                       : `它安安静静待在你的影子里。\n亲密度 ${bond}/100` } });
+                   text: stage === 3 ? `它把下巴搁在你的鞋面上，\n尾巴摇成了小风扇。\n（亲密度加护全开：战中每回合回体力 · 濒死稳住一次）\n（${lvLine}）`
+                       : stage === 2 ? `它绕着你的脚踝转圈，\n时不时抬头看你一眼。\n（亲密度加护：战中每回合回 1 体力）\n（${lvLine}）`
+                       : stage === 1 ? `它蹲坐在你脚边，\n耳朵朝你的方向偏着。\n（${lvLine}）`
+                       : `它安安静静待在你的影子里。\n${lvLine}` } });
       if (a === 4 || a === -1) return;
       if (a === 0) {                                      // 摸摸头：每日一次 +3
         if (f.buddyPetDay === C.day) { await say({ name: cr.name, text: '（它舒服地眯起眼睛，往旁边挪了半步——\n今天已经摸过头啦）' }); continue; }
@@ -672,6 +675,7 @@
       const bye = await choose(['真的要道别', '再想想']);
       if (bye !== 0) continue;
       f.buddy = null;
+      f.buddyLv = 1; f.buddyExp = 0; f.buddyExpGot = 0; f.buddyExpDay = 0;   // 批次六十六：等级随这段同行一并毕业
       ent.hidden = true; ent.followT = 0;
       ADV.Audio.sfx('cancel');
       ADV.UI.toast(` 与${cr.name}挥手道别，它一溜烟跑远了 `);

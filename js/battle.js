@@ -124,10 +124,25 @@ ADV.Battle = (function () {
   /* 捕捉（GBA 思想移植）：HP 磨得越白越好抓；M=目标满血 H=当前血
    * tame：阿橘「轻声细语」驯兽技巧的固定加成（s12.3），进乘区、同受 .92 封顶 */
   const BALL_BONUS = [1.25, 1.6, 2.2];                   // 树叶/藤编/月光
-  function catchChance(hpRatio, ballTier, weary, fed, tame) {
+  /* 第 6 参 scared（批次六十六）：对手被打怂了 → 捕获 ×1.15，与 weary 叠乘、同受 .92 封顶 */
+  function catchChance(hpRatio, ballTier, weary, fed, tame, scared) {
     const H = Math.min(1, Math.max(0, hpRatio));
     const ball = BALL_BONUS[ballTier] || 1.25;
-    return Math.min(.92, (3 - 2 * H) / 3 * .6 * ball * (1 + (weary ? .5 : 0) + Math.min(fed || 0, 2) * .1 + (tame || 0)));
+    return Math.min(.92, (3 - 2 * H) / 3 * .6 * ball * (1 + (weary ? .5 : 0) + Math.min(fed || 0, 2) * .1 + (tame || 0)) * (scared ? 1.15 : 1));
+  }
+  /* 批次六十六 A：伙伴等级——随行小伙伴跟你并肩作战会变强（Lv1-5，道别即毕业）
+   * need = lv×4（4/8/12/16，升满共 40）；perks：Lv2 体力+6 / Lv3 力量+1 / Lv4 速度+1 / Lv5 体力+8 + 开场「心有灵犀」 */
+  function bondNeed(lv) { return (lv || 1) * 4; }
+  function bondPerks(lv) {
+    const v = lv || 1;
+    return { hp: (v >= 2 ? 6 : 0) + (v >= 5 ? 8 : 0), pow: v >= 3 ? 1 : 0, spd: v >= 4 ? 1 : 0 };
+  }
+  /* 批次六十六 B：天气地形乘区（双面生效）——雨天水系 ×1.2 / 晴天虫系 ×1.2 / 雾天兽系 ×1.2 */
+  function famWeatherMul(fam, weather) {
+    if ((weather === '小雨' || weather === '暴雨') && fam === '水') return 1.2;
+    if (weather === '晴' && fam === '虫') return 1.2;
+    if (weather === '雾' && fam === '兽') return 1.2;
+    return 1;
   }
   /* 宠物战伤害：力差主导 + 招式威力，克制乘区 */
   function petDamage(myPow, movePow, foePow, eff, rnd) {
@@ -174,21 +189,27 @@ ADV.Battle = (function () {
       const SK = ADV.Skills;
       const bud = opts.buddy;
       const myCr = bud ? ADV.Collect.critter(bud.id) : null;
-      const foeMax = cr.hp * 6 + 20;
+      /* 批次六十六 C：野外个体差异（opts.foeMod）——体型/性情数值修正，遭遇时由 rollWild 打包传入 */
+      const fm = opts.foeMod || {};
+      const foeMax = Math.max(1, Math.round((cr.hp * 6 + 20) * (fm.hpMul || 1)));
       if (!myCr) {                                         // 没伙伴助战：仍可进场丢球 / 喂诱饵（野生侧不攻击）
         act = {
           petMode: true, onDone, opts: { ...opts, noBuddy: true },
-          e: { name: cr.name, fam: cr.fam, hp: foeMax, hpMax: foeMax, pow: cr.pow, spd: cr.spd, bait: cr.bait || [], intro: `${cr.fam}系 · 稀有${'★'.repeat(cr.rar || 1)}` },
+          e: { name: cr.name, fam: cr.fam, hp: foeMax, hpMax: foeMax, pow: cr.pow + (fm.powAdd || 0), spd: cr.spd + (fm.spdAdd || 0), dmgMul: fm.dmgMul || 1, scared: false, fleeIn: 0, bait: cr.bait || [], intro: `${cr.fam}系 · 稀有${'★'.repeat(cr.rar || 1)}` },
           me: { name: '——', fam: null, hp: 0, hpMax: 0, pow: 0, spd: 0, shiny: false, out: true },
           skills: [], mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
           pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
           flash: 0, shake: 0, pops: [], beats: [], turn: 1,
           intro: 1, hitstop: 0, t: 0, eRecoil: 0, mRecoil: 0, dispE: foeMax, ghostE: foeMax, dispM: 0, ghostM: 0
         };
+        if (opts.shinyHint) act.log.unshift('✨ 它的鳞片闪着金光——是罕见的异色个体！');
         ADV.Audio.playBgm('battle'); ADV.Audio.sfx('start');
         return;
       }
-      const myMax = myCr.pow * 6 + 20 + (SK ? SK.duelHp() : 0);
+      /* 批次六十六 A：伙伴等级 perk 进面板——Lv2 体力+6 / Lv3 力量+1 / Lv4 速度+1 / Lv5 体力+8 */
+      const bLv = (ADV.Game && ADV.Game.flags && ADV.Game.flags.buddyLv) || 1;
+      const bPerk = bondPerks(bLv);
+      const myMax = myCr.pow * 6 + 20 + (SK ? SK.duelHp() : 0) + bPerk.hp;
       const nd = s => (ADV.Mistake ? ADV.Mistake.unlocked(s) : 0);
       const edu = petBonus({ english: nd('english'), chinese: nd('chinese'), math: nd('math'), science: nd('science') });
       /* A2 亲密度对战化：buddyBond 进战斗——≥30 每回合回 1 体力；≥60 首次被击倒稳住剩 1HP */
@@ -196,11 +217,12 @@ ADV.Battle = (function () {
       edu.bond = bb >= 60 ? 2 : bb >= 30 ? 1 : 0;
       const bst = buddyBoost();
       const hasSup = petSupport().length > 0;
+      const weather = ADV.Cal ? ADV.Cal.weather : '';
       act = {
         petMode: true, onDone, opts,
-        e: { name: cr.name, fam: cr.fam, hp: foeMax, hpMax: foeMax, pow: cr.pow, spd: cr.spd, bait: cr.bait || [], intro: `${cr.fam}系 · 稀有${'★'.repeat(cr.rar || 1)}` },
+        e: { name: cr.name, fam: cr.fam, hp: foeMax, hpMax: foeMax, pow: cr.pow + (fm.powAdd || 0), spd: cr.spd + (fm.spdAdd || 0), dmgMul: fm.dmgMul || 1, scared: false, fleeIn: 0, bait: cr.bait || [], intro: `${cr.fam}系 · 稀有${'★'.repeat(cr.rar || 1)}` },
         me: { name: myCr.name, fam: myCr.fam, hp: Math.min(myMax, Math.max(0, bud.hp == null ? myMax : bud.hp)), hpMax: myMax,
-              pow: myCr.pow + bst.pow, spd: myCr.spd + bst.spd + (SK ? SK.duelSpd() : 0) + edu.spdAdd, shiny: !!bud.shiny },
+              pow: myCr.pow + bst.pow + bPerk.pow, spd: myCr.spd + bst.spd + bPerk.spd + (SK ? SK.duelSpd() : 0) + edu.spdAdd, shiny: !!bud.shiny },
         skills: petMoves(myCr.fam),
         mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
         pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
@@ -210,6 +232,9 @@ ADV.Battle = (function () {
       };
       for (const m of act.skills) act.pps[m.key] = m.pp;
       petSupport().forEach(s => { act.sups[s.key] = 1; });      // 支援咒语每场各一次
+      if (opts.shinyHint) act.log.unshift('✨ 它的鳞片闪着金光——是罕见的异色个体！');
+      if (famWeatherMul(myCr.fam, weather) > 1 || famWeatherMul(cr.fam, weather) > 1)
+        act.log.unshift(`☁ ${weather}的天象正帮着${famWeatherMul(myCr.fam, weather) > 1 ? myCr.fam : cr.fam}系——招式威力提升！`);
       const eduTips = [];
       if (edu.spdAdd) eduTips.push('英语+速度');
       if (edu.critCh > .05) eduTips.push('数学+会心');
@@ -219,7 +244,14 @@ ADV.Battle = (function () {
       if (edu.bond >= 2) eduTips.push('倒下前稳住一次');
       if (hasSup) eduTips.push('吴老师支援咒语已备好（菜单·支援）');
       if (act.boosted) eduTips.push('进化催化之力涌动着');
+      if (bLv >= 2) eduTips.push(`并肩同行至 Lv${bLv}`);
       if (eduTips.length) act.log.unshift(`📖 课堂知识在支持着${myCr.name}！（${eduTips.join(' / ')}）`);
+      if (bLv >= 5) {                                           // 心有灵犀：满级伙伴先发制人，敌方入场即伤一成
+        const cut = Math.max(1, Math.round(act.e.hp * .1));
+        act.e.hp = Math.max(1, act.e.hp - cut);
+        act.dispE = act.e.hp; act.ghostE = act.e.hp;
+        act.log.unshift(`心有灵犀！${myCr.name}抢先进击——${cr.name}入场就伤了 ${cut} 点！`);
+      }
       ADV.Audio.playBgm('battle'); ADV.Audio.sfx('start');
       return;
     }
@@ -470,6 +502,7 @@ ADV.Battle = (function () {
     const a = act, me = a.me, e = a.e;
     if (a.opts.noBuddy) return;                          // 无伙伴战：野生侧不攻击（只剩丢球 / 喂食 / 溜走）
     const foeMove = { name: '冲撞', pow: a.foeWeak ? 5 : 8 };
+    const wNow = ADV.Cal ? ADV.Cal.weather : '';         // 批次六十六 B：天气乘区随回合实时读天
     let myAct = myAction;                                // {type:'move',sk} / {type:'support',key} / {type:'item'} / {type:'flee'} 已在别处处理
     const myFirst = me.spd >= e.spd;
     const seq = myFirst ? ['me', 'foe'] : ['foe', 'me'];
@@ -477,7 +510,8 @@ ADV.Battle = (function () {
     const foeStrike = () => {
       if (e.hp <= 0 || me.hp <= 0) return;
       const eff = famAdv(e.fam, me.fam);
-      let d = petDamage(e.pow, foeMove.pow, me.pow, eff);
+      let d = Math.max(1, Math.round(petDamage(e.pow, foeMove.pow, me.pow, eff)
+        * famWeatherMul(e.fam, wNow) * (e.dmgMul || 1) * (e.scared ? .8 : 1)));
       if (a.petGuard) { d = Math.max(1, Math.ceil(d * (a.edu ? a.edu.guardFac : .5))); a.log.unshift(`${me.name}鼓劲蓄力，稳稳架住了这一击！（伤害减半）`); }
       me.hp -= d;
       a.hitstop = .05; a.mRecoil = .28;                  // B4 + C2 我方小伙伴受击
@@ -488,7 +522,7 @@ ADV.Battle = (function () {
     const myStrike = sk => {
       if (e.hp <= 0 || me.hp <= 0) return;
       const eff = famAdv(me.fam, e.fam);
-      let d = petDamage(me.pow, sk.pow, e.pow, eff);
+      let d = Math.max(1, Math.round(petDamage(me.pow, sk.pow, e.pow, eff) * famWeatherMul(me.fam, wNow)));
       if (a.cheer) { d = Math.round(d * (a.edu ? a.edu.cheerMul : 1.35)); }
       const crit = !!(a.edu && a.edu.critCh > 0 && Math.random() < a.edu.critCh);   // 数学节点：会心 ×1.5
       if (crit) d = Math.max(1, Math.round(d * 1.5));
@@ -545,11 +579,25 @@ ADV.Battle = (function () {
       a.weary = true;
       a.log.unshift(`它喘着粗气，没了战意——正是丢球的好时机！`);
     }
+    /* 批次六十六 B：被打怂了（≤25% 一次性）——攻势转弱、捕获更易 */
+    if (e.hp > 0 && e.hp <= e.hpMax * .25 && !e.scared) {
+      e.scared = true;
+      a.log.unshift(`${e.name}抖了一下——它被打怕了！（攻势减弱，更好捕获）`);
+    }
+    /* 批次六十六 B：高速敌撤退倒计时（确定性三回合）——速度占优的对手残血时会瞅准空档溜走 */
+    if (e.fleeIn > 0) {
+      e.fleeIn--;
+      if (e.fleeIn <= 0) { a.log.unshift(`${e.name}瞅准空档，一溜烟钻回了草丛深处！`); a.fled = true; }
+    } else if (e.hp > 0 && e.hp <= e.hpMax * .3 && e.spd > me.spd) {
+      e.fleeIn = 3;
+      a.log.unshift(`${e.name}盯着草丛外的出口，脚下开始挪动……（3 回合内不收服它就要溜了）`);
+    }
   }
 
   function endCheck() {
     const a = act;
     if (a.petMode) {
+      if (a.fled) { finish('fled'); return true; }       // 批次六十六 B：高速敌撤退倒计时走人
       if (a.e.hp <= 0) { a.log.unshift(`${a.e.name}逃回了草丛深处！`); finish('win'); return true; }
       if (a.me.hp <= 0) {
         /* 亲密度 ≥60：首次被击倒时羁绊稳住它，剩 1HP（整场一次） */
@@ -745,7 +793,8 @@ ADV.Battle = (function () {
             ADV.Collect.useItem(it.id);
             ADV.Audio.sfx('water');
             const tame = (ADV.Game.flags.tame && ADV.Game.flags.tame.soft) ? .1 : 0;   // 阿橘「轻声细语」：捕捉 +10%
-            const chance = catchChance(a.e.hp / a.e.hpMax, it.tier, a.weary, a.fed, tame);
+            const chance = Math.min(.92, catchChance(a.e.hp / a.e.hpMax, it.tier, a.weary, a.fed, tame, a.e.scared)
+              * ((a.opts.foeMod && a.opts.foeMod.catchMul) || 1));   // 批次六十六：怂了 ×1.15 + 胆小个体 ×1.1，同受封顶
             if (Math.random() < chance) { a.log.unshift(`球口「咔哒」收紧——收服成功！`); finish('caught'); return; }
             a.log.unshift(`${it.name}被弹开了！差一点！`);
             if (a.opts.noBuddy) {                          // 没伙伴镇场：野生随时可能直接跑掉
@@ -925,7 +974,8 @@ ADV.Battle = (function () {
         let extra = a.petMode && it.kind === 'ball' ? '（丢！）' : '';
         if (a.petMode && it.kind === 'ball' && ADV.Game.flags.tame && ADV.Game.flags.tame.eye) {
           const tame = ADV.Game.flags.tame.soft ? .1 : 0;    // 察言观色：选中球时估算捕捉率
-          const ch = catchChance(e.hp / e.hpMax, it.tier, a.weary, a.fed, tame);
+          const ch = Math.min(.92, catchChance(e.hp / e.hpMax, it.tier, a.weary, a.fed, tame, e.scared)
+            * ((a.opts.foeMod && a.opts.foeMod.catchMul) || 1));   // 批次六十六：估算同吃怂了/胆小乘区
           extra = `（捕捉率约 ${Math.round(ch * 100)}%）`;
         }
         text(g, `${it.name} ×${ADV.Collect.count(it.id)}${extra}`, mx + 40, cy, 17, '#fff', 'left');
@@ -990,6 +1040,7 @@ ADV.Battle = (function () {
     start, update, render, ENEMIES, MOVES, petMoves, layoutRects, skillList,
     calcDamage, fleeChance, catchChance, petDamage, famAdv, petBonus,
     petSupport, assistPower, buddyBoost,
+    bondNeed, bondPerks, famWeatherMul,               // 批次六十六：伙伴等级 / 天气乘区（纯函数，冒烟可直测）
     get active() { return !!act; },
     get act() { return act; }      // 供测试观察内部状态（飘字等）
   };

@@ -68,7 +68,8 @@ A.Main = { startEnding: noop };       // main.js 不参与冒烟测试，祭坛�
 const RealMini = A.Mini;                   // 真实小游戏引擎（[5.14] 确定性通关用）
 A.Mini = { start: (kind, cb) => cb(true), active: false };   // 小游戏直接判胜，测奖励链路
 const RealBattle = A.Battle;               // 真实战斗引擎（skillList 等纯函数供 [5.98] 检查）
-A.Battle = { start: (k, o, cb) => cb(true), active: false, ENEMIES: { shadowM: {} }, skillList: RealBattle.skillList };  // 战斗判胜
+A.Battle = { start: (k, o, cb) => cb(true), active: false, ENEMIES: { shadowM: {} }, skillList: RealBattle.skillList,
+             bondNeed: l => l * 4, bondPerks: () => ({ hp: 0, pow: 0, spd: 0 }) };  // 战斗判胜（纯函数镜像真实契约，供 wildBattle/_buddy 消费）
 A.AI.enabled = false;                 // 测试环境走离线题库
 // 阅读器：测试流程里自动“抄两句 + 合上书”，避免等待玩家输入
 const realBooksStart = A.Books.start;
@@ -3077,6 +3078,7 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
         A.Battle = stubW;                                   // 还原判胜桩，后续测试不受影响
         F33.buddy = savedBuddy; F33.wildHp = null;
         F33.col.insects = {};                               // 还原图鉴与随行，避免污染后续伙伴段
+        delete F33.buddyLv; delete F33.buddyExp; delete F33.buddyExpGot; delete F33.buddyExpDay;   // [5.120] 新旗标一并清理
         choosePick = null;
       }
     } finally { choosePick = null; }
@@ -4176,7 +4178,9 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     const BattleStub53 = A.Battle;
     vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8'), { filename: 'battle.js' });
     const rnd53 = Math.random;
+    const cal53 = A.Cal.dump();
     try {
+      A.Cal.load({ ...cal53, weather: '多云' });           // [5.120] 天气乘区中性化：保精确伤害断言（多云无任何系加成）
       // —— 宠物招式表：三系专属招 ——
       const pm53 = A.Battle.petMoves('虫');
       ok(pm53.length === 3 && pm53[0].key === 'tackle' && pm53[0].pp === 99 &&
@@ -4266,6 +4270,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
          '无伙伴战：脱身战报 {outcome:fled}，乌龟毫发无损回草丛');
     } finally {
       Math.random = rnd53;
+      A.Cal.load(cal53);
       A.Battle = BattleStub53;                             // 还原判胜桩
     }
   }
@@ -4371,7 +4376,9 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     const rnd55 = Math.random;
     const F55 = A.Game.flags;
     const prev55 = { kp: F55.kp, insects: F55.col.insects, gold: F55.gold, tame: F55.tame };
+    const cal55 = A.Cal.dump();
     try {
+      A.Cal.load({ ...cal55, weather: '多云' });           // [5.120] 天气乘区中性化：会心 48 精确断言不受天气扰动
       // —— petBonus 纯函数：四维加成与封顶 ——
       const pb55 = A.Battle.petBonus;
       const z55 = pb55({});
@@ -4427,6 +4434,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
          '成就：知识驯兽师入册，条件 = 知识树 15 节点且图鉴 10 种（与状态实时吻合）');
     } finally {
       Math.random = rnd55;
+      A.Cal.load(cal55);
       A.Battle = BattleStub55;                             // 还原判胜桩
       choosePick = null;
       if (prev55.kp === undefined) delete F55.kp; else F55.kp = prev55.kp;
@@ -4443,7 +4451,9 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     const rnd56 = Math.random;
     const F56 = A.Game.flags;
     const prevBond56 = F56.buddyBond;
+    const cal56 = A.Cal.dump();
     try {
+      A.Cal.load({ ...cal56, weather: '多云' });           // [5.120] 天气乘区中性化：35/19 精确断言不受天气扰动
       // —— 战一：亲密度 45 → bond 1，每回合末回 1 体力 ——
       F56.buddyBond = 45;
       Math.random = () => .5;
@@ -4473,6 +4483,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       ok(r56b && r56b.outcome === 'fled', '亲密度战二：取消键溜走收尾');
     } finally {
       Math.random = rnd56;
+      A.Cal.load(cal56);
       A.Battle = BattleStub56;                             // 还原判胜桩
       choosePick = null;
       if (prevBond56 === undefined) delete F56.buddyBond; else F56.buddyBond = prevBond56;
@@ -8125,6 +8136,124 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
          && cli119.includes('§D 口径核对') && !cli119.includes('NaN'),
         '行为：CLI 报告可打印——四节齐全、无 NaN（tools/econ.js 直跑即出报告）');
     } catch (e) { ok(false, '[5.119] 异常：' + e.message); }
+  }
+
+  /* ==================== [5.120] 批次六十六：宠物成长与遭遇差异性 ====================
+   * A 伙伴等级线（bondNeed/bondPerks + 心有灵犀）· B 战斗深度（天气乘区/怂了/撤退倒计时）
+   * · C 遭遇差异（rollWild 个体 roll / 异色预 roll / 坏天气稀有率）——
+   * 纯函数直测 + 重载真实 battle.js 驱动画布战；随机数全注入，确定性可复现。 */
+  console.log('\n[5.120] 批次六十六：宠物成长线（伙伴等级）+ 战斗深度（天气/怂了/撤退倒计时）+ 遭遇差异性');
+  {
+    const BattleStub120 = A.Battle;
+    vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8'), { filename: 'battle.js' });
+    const rnd120 = Math.random;
+    const F120 = A.Game.flags;
+    const prev120 = { buddyLv: F120.buddyLv, buddyExp: F120.buddyExp, buddyExpGot: F120.buddyExpGot,
+                      buddyExpDay: F120.buddyExpDay, buddyBond: F120.buddyBond, buddyBoost: F120.buddyBoost,
+                      kp: F120.kp, buddy: F120.buddy };
+    const cal120 = A.Cal.dump();
+    try {
+      // —— 源守护：四文件挂钩齐全 ——
+      const bSrc120 = fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8');
+      const cSrc120 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      const rSrc120 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const qSrc120 = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
+      ok(bSrc120.includes('opts.foeMod') && bSrc120.includes('famWeatherMul') && bSrc120.includes('心有灵犀')
+         && bSrc120.includes('a.fled') && bSrc120.includes('bondPerks(bLv)'),
+        '源：battle.js 五挂钩在盘——foeMod 面板修正 / 天气乘区 / 心有灵犀开场 / 撤退倒计时 / 伙伴等级 perk');
+      ok(cSrc120.includes('function rollWild') && cSrc120.includes("a < .15 ? 'big'") && cSrc120.includes("b < .35 ? '好斗'")
+         && cSrc120.includes('e0.body = extra.body') && cSrc120.includes('body: (e && e.body)'),
+        '源：rollWild 个体 roll 边界（体型 15/30 · 性情 35/65）+ 差异入册只增不改 + heldCritters 透出');
+      ok(rSrc120.includes('wetWild ? .7 : .6') && rSrc120.includes('wetWild ? .28 : .2') && rSrc120.includes('CO.rollWild(cr)')
+         && rSrc120.includes('wildShiny') && rSrc120.includes('buddyExpGot') && rSrc120.includes('鳞片闪过一道金光'),
+        '源：遭遇重构——雨雾稀有率 .7/.28 + 个体 roll + 异色遭遇时预 roll（金光预告）+ 战后经验日上限簿记');
+      ok(qSrc120.includes('f.buddyLv = 1') && qSrc120.includes('伙伴 Lv') && qSrc120.includes('ADV.Battle.bondNeed(lv)'),
+        '源：道别即毕业（Lv/经验/日上限四旗标重置）+ 互动菜单亮出 Lv·经验·亲密度');
+
+      // —— 纯函数：天气乘区全表 ——
+      ok(A.Battle.famWeatherMul('水', '小雨') === 1.2 && A.Battle.famWeatherMul('水', '暴雨') === 1.2
+         && A.Battle.famWeatherMul('虫', '晴') === 1.2 && A.Battle.famWeatherMul('兽', '雾') === 1.2
+         && A.Battle.famWeatherMul('水', '晴') === 1 && A.Battle.famWeatherMul('虫', '多云') === 1
+         && A.Battle.famWeatherMul('兽', '雪') === 1 && A.Battle.famWeatherMul('水', '星空') === 1,
+        '天气乘区全表：雨双档水 ×1.2 / 晴虫 ×1.2 / 雾兽 ×1.2，其余天气一律中性 ×1（双面生效）');
+
+      // —— 纯函数：伙伴等级曲线与 perk 表 ——
+      ok([1, 2, 3, 4, 5].map(A.Battle.bondNeed).join(',') === '4,8,12,16,20'
+         && A.Battle.bondPerks(1).hp === 0 && A.Battle.bondPerks(2).hp === 6 && A.Battle.bondPerks(2).pow === 0
+         && A.Battle.bondPerks(3).pow === 1 && A.Battle.bondPerks(4).spd === 1
+         && A.Battle.bondPerks(5).hp === 14 && A.Battle.bondPerks(5).pow === 1 && A.Battle.bondPerks(5).spd === 1,
+        '伙伴等级表：need = Lv×4（4/8/12/16/20 升满共 40），perk Lv2 体+6 → Lv3 力+1 → Lv4 速+1 → Lv5 体+8（合计 +14/1/1）');
+
+      // —— 纯函数：rollWild 注入 rnd 即确定性 ——
+      const wA120 = A.Collect.rollWild(A.Collect.critter('c6'), .1, .2);
+      const wB120 = A.Collect.rollWild(A.Collect.critter('c6'), .2, .4);
+      const wC120 = A.Collect.rollWild(A.Collect.critter('c6'), .5, .9);
+      ok(wA120.body === 'big' && wA120.temper === '好斗' && wA120.powAdd === 1 && wA120.hpMul === 1.1 && wA120.dmgMul === 1.1,
+        'rollWild：大个×好斗（力+1 · 体×1.1 · 伤×1.1）——随机数注入即确定性复现');
+      ok(wB120.body === 'small' && wB120.temper === '胆小' && wB120.spdAdd === 1 && wB120.hpMul === .9 && wB120.catchMul === 1.1,
+        'rollWild：小不点×胆小（速+1 · 体×0.9 · 捕获×1.1）');
+      ok(wC120.body === 'normal' && wC120.temper === '沉着' && wC120.powAdd === 0 && wC120.hpMul === 1
+         && wC120.dmgMul === 1 && wC120.catchMul === 1,
+        'rollWild：普通×沉着全中性——七成个体不带数值修正');
+
+      // —— 怂了捕获乘区（与 weary 叠乘、封顶不破） ——
+      const cc120 = A.Battle.catchChance;
+      ok(cc120(.2, 0, false, 0, 0, true) > cc120(.2, 0, false, 0, 0, false) && cc120(0, 2, true, 2, 0, true) === .92,
+        '怂了捕获乘区：被打怕 ×1.15 与疲惫 +50% 叠乘，.92 封顶不被突破');
+
+      // —— 画布战一：Lv5 心有灵犀 + 异色预告 + foeMod 进面板 ——
+      F120.buddyBond = 0; F120.buddyBoost = null; F120.kp = {}; F120.buddy = { id: 'i8', shiny: false };
+      F120.buddyLv = 5; F120.buddyExp = 0;
+      A.Cal.load({ ...cal120, weather: '多云' });            // 中性天：数值全按基线算
+      Math.random = () => .5;
+      let r120a = null;
+      A.Battle.start('c6', { petMode: true, buddy: { id: 'i8', shiny: false, hp: 20 },
+        foeMod: { powAdd: 0, hpMul: 1.1, spdAdd: 0, dmgMul: 1, catchMul: 1 }, shinyHint: true }, res => r120a = res);
+      ok(A.Battle.act.e.hpMax === Math.round(92 * 1.1) && A.Battle.act.e.hp === Math.round(92 * 1.1) - Math.max(1, Math.round(92 * 1.1 * .1))
+         && A.Battle.act.log.some(t => t.includes('心有灵犀')) && A.Battle.act.log.some(t => t.includes('金光')),
+        'Lv5 心有灵犀 + 异色预告：大个体力 ×1.1 取整 101 入场即被先制削一成（→ 91），金光个体亮「鳞片闪着金光」');
+      ok(A.Battle.act.me.hpMax === A.Collect.critter('i8').pow * 6 + 20 + (A.Skills ? A.Skills.duelHp() : 0) + 14
+         && A.Battle.act.me.pow === A.Collect.critter('i8').pow + 1
+         && A.Battle.act.me.spd === A.Collect.critter('i8').spd + 1 + (A.Skills ? A.Skills.duelSpd() : 0),
+        '伙伴等级 perk 消费：Lv5 = 体力+14 / 力量+1 / 速度+1 全进战斗面板（与知识树、催化叠加不互斥）');
+      A.Battle.update(1 / 60, { cancel: true });             // 溜走收尾
+
+      // —— 画布战二：怂了点亮 + 高速敌撤退倒计时（确定性三拍走人） ——
+      F120.buddyLv = 1;
+      let r120b = null;
+      A.Battle.start('c6', { petMode: true, buddy: { id: 'i8', shiny: false, hp: null },
+        foeMod: { powAdd: 1, hpMul: 1.1, spdAdd: 9, dmgMul: 1.1, catchMul: 1.1 } }, res => r120b = res);
+      ok(A.Battle.act.e.pow === A.Collect.critter('c6').pow + 1 && A.Battle.act.e.spd === A.Collect.critter('c6').spd + 9,
+        'foeMod 入场：好斗大个 = 敌力 +1、敌速 +9（速度反超 → 撤退倒计时资格成立）');
+      let snap120b = '';
+      for (let i = 0; i < 4 && A.Battle.active; i++) {
+        A.Battle.act.e.hp = 55; A.Battle.act.me.hp = A.Battle.act.me.hpMax;   // 测试驭手：控血让「怂了/倒计时」逐回合推进
+        A.Battle.update(1 / 60, { ok: true });               // 招式 → 列表
+        A.Battle.update(1 / 60, { ok: true });               // 冲撞（敌力+1 → 32 伤，55 → 23 落进怂了区间）
+        if (A.Battle.active) snap120b = A.Battle.act.log.join('|');
+      }
+      ok(r120b && r120b.outcome === 'fled' && r120b.foeHp > 0
+         && snap120b.includes('被打怕') && snap120b.includes('盯着草丛外的出口'),
+        '怂了 + 撤退倒计时：低血 ≤25% 一次性「被打怕」+ 三拍倒计时亮出，高速敌数完 → 带着血确定性溜走（{outcome:fled}，不掷骰）');
+
+      // —— 画布战三：天气乘区实战（晴 → 虫系 ×1.2） ——
+      A.Cal.load({ ...cal120, weather: '晴' });
+      let r120c = null;
+      A.Battle.start('c6', { petMode: true, buddy: { id: 'i8', shiny: false, hp: 20 } }, res => r120c = res);
+      A.Battle.update(1 / 60, { ok: true });                 // 招式 → 列表
+      A.Battle.update(1 / 60, { ok: true });                 // 冲撞：35 × 1.2 = 42
+      ok(A.Battle.act.e.hp === 92 - 42 && A.Battle.act.log.some(t => t.includes('天象')),
+        '天气乘区实战：晴天虫系 ×1.2（35 → 42），入场日志亮出「天象正帮着虫系」');
+      A.Battle.update(1 / 60, { cancel: true });
+    } finally {
+      Math.random = rnd120;
+      A.Cal.load(cal120);
+      A.Battle = BattleStub120;                              // 还原判胜桩
+      choosePick = null;
+      Object.keys(prev120).forEach(k => {
+        if (prev120[k] === undefined) delete F120[k]; else F120[k] = prev120[k];
+      });
+    }
   }
 
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);

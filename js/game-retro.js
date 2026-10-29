@@ -287,27 +287,64 @@ E().playAction(E().player, 'laugh', 1.6);
   /* —— 野外草丛遭遇战：走进高草惊动野生小伙伴 → 画布宠物战（s11）
    *   招式磨血 / 丢球收服 / 喂诱饵 / 逃跑全在画布里完成，出画后只做簿记 —— */
   const BALLS = ['critBall', 'goodBall', 'ultraBall'];
+  /* 批次六十六 A：随行伙伴战后经验——日上限 +6、Lv5 封顶冻结；升级瞬间 toast 亮出 perk。
+   * need = lv×4（ADV.Battle.bondNeed）；经验只属于「这段同行」，道别即毕业（game-quest 道别处重置） */
+  function gainBondExp(n, budCr) {
+    const f = F(), C = ADV.Cal;
+    if (!n || !f.buddy) return;
+    let lv = f.buddyLv || 1;
+    if (lv >= 5) return;                                 // 满级：不再积累
+    if ((f.buddyExpDay || 0) !== C.day) { f.buddyExpDay = C.day; f.buddyExpGot = 0; }
+    if ((f.buddyExpGot || 0) >= 6) return;               // 今日陪练够了，静默封顶
+    const got = Math.min(n, 6 - (f.buddyExpGot || 0));
+    f.buddyExpGot = (f.buddyExpGot || 0) + got;
+    f.buddyExp = (f.buddyExp || 0) + got;
+    const budName = budCr ? budCr.name : '伙伴';
+    while (lv < 5 && f.buddyExp >= ADV.Battle.bondNeed(lv)) {
+      f.buddyExp -= ADV.Battle.bondNeed(lv);
+      lv++; f.buddyLv = lv;
+      const p = ADV.Battle.bondPerks(lv);
+      UI().toast(` 🎉 ${budName}升到了 Lv${lv}！(${p.hp ? `体力+${p.hp}` : ''}${p.pow ? ' 力量+1' : ''}${p.spd ? ' 速度+1' : ''}) `);
+      logEvent(`${budName} 升到了 Lv${lv}（并肩同行的见证）`);
+    }
+  }
   S.wildBattle = async (zone) => {
     const f = F(), C = ADV.Cal, CO = ADV.Collect;
     // 出没池：本图出没 + 时段/季节/天气吻合 + 非传说（传说只留给窝点的仪式感）；tier1 深草易出稀有
     const pool = CO.critterList().filter(c => c.where === zone.map && CO.whenOk(c.id) && c.rar < 3);
     const hi = pool.filter(c => c.rar === 2), lo = pool.filter(c => c.rar === 1);
     if (!lo.length && !hi.length) return;
-    const wantHi = zone.tier ? Math.random() < .6 : Math.random() < .2;
+    /* 批次六十六 C：坏天气（雨雾）稀有出没率上调——天气从过滤条件变成可追逐的出货窗口 */
+    const wetWild = C.weather === '小雨' || C.weather === '暴雨' || C.weather === '雾';
+    const wantHi = zone.tier ? Math.random() < (wetWild ? .7 : .6) : Math.random() < (wetWild ? .28 : .2);
     const cr = (wantHi && hi.length) ? hi[(Math.random() * hi.length) | 0]
              : lo.length ? lo[(Math.random() * lo.length) | 0] : hi[(Math.random() * hi.length) | 0];
+    /* 批次六十六 C：个体差异 roll（体型×性情）+ 异色预 roll——金光在进画布前就预告，收服时兑现 */
+    const wild = CO.rollWild(cr);
+    const wildShiny = CO.rollShiny(CO.shinyMult());
     // 伙伴体力续航：跨天回满，战斗间保留（精灵口粮 / 面对伙伴按 Z 喂吃的可回满）
     const budCr = f.buddy ? CO.critter(f.buddy.id) : null;
     const fullHp = budCr ? budCr.pow * 6 + 20 : 0;
     if ((f.wildHpDay || 0) !== C.day) { f.wildHpDay = C.day; f.wildHp = null; }
     if (f.wildHp == null) f.wildHp = fullHp;
     ADV.Audio.sfx('start');
-    await say({ text: `草丛哗啦一响——\n野生的「${cr.name}」（${cr.fam}系）跳了出来！` });
+    /* 演出分级：稀有 / 体型 / 性情 / 异色各一行白描——进画布前就读出这一只的份量 */
+    const flavors = [];
+    if (cr.rar >= 2) flavors.push('草丛骚动得厉害——来者不善！');
+    if (wild.body === 'big') flavors.push('它比同族大出一圈，肌肉隆起。');
+    else if (wild.body === 'small') flavors.push('它是只蹦蹦跳跳的小不点。');
+    if (wild.temper === '好斗') flavors.push('它龇着牙，一副随时要扑上来的架势。');
+    else if (wild.temper === '胆小') flavors.push('它缩着身子往后挪，警惕地盯着你。');
+    if (wildShiny) flavors.push('✨ 阳光斜过草叶——它的鳞片闪过一道金光！');
+    await say({ text: `草丛哗啦一响——\n野生的「${cr.name}」（${cr.fam}系）跳了出来！\n${flavors.join('\n')}` });
     // —— 画布宠物战：胜/负/溜/收服四出口（旧存档布尔桩 true=收服 / false=溜走） ——
     const res = await new Promise(done =>
-      ADV.Battle.start(cr.id, { petMode: true, buddy: f.buddy ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp } : null }, done));
+      ADV.Battle.start(cr.id, { petMode: true, buddy: f.buddy ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp } : null,
+                                foeMod: wild, shinyHint: wildShiny }, done));
     const outcome = (res && typeof res === 'object') ? res.outcome : (res ? 'caught' : 'fled');
     if (res && typeof res === 'object') f.wildHp = Math.max(0, res.myHp);   // 战斗间保留伙伴体力
+    if (f.buddy && budCr) gainBondExp(                                     // 批次六十六 A：随行伙伴战后攒经验（收服新种 +3 / 放归 +2 / 胜 +3 / 败溜 +1）
+      outcome === 'caught' ? (CO.has('critters', cr.id) ? 2 : 3) : outcome === 'win' ? 3 : 1, budCr);
     if (f.tame && f.tame.aid && f.wildHp > 0 && fullHp > 0) {               // 阿橘「战后急救」：自行恢复三成
       f.wildHp = Math.min(fullHp, f.wildHp + Math.ceil(fullHp * .3));
       UI().toast(` 🩹 战后急救——${budCr.name}的体力恢复到了 ${f.wildHp}/${fullHp} `);
@@ -321,14 +358,13 @@ E().playAction(E().player, 'laugh', 1.6);
         UI().toast(` 🎉 收服成功！图鉴已有它——放归草丛，金币 +3 `);
         logEvent(`草丛遭遇中收服了${cr.name}（已入册，放归）`);
       } else {
-        const shiny = CO.rollShiny(CO.shinyMult());
-        CO.gainCritter(cr.id, shiny);
-        logEvent(`草丛遭遇中收服了${cr.name}${shiny ? '（金色异色！）' : ''}`);
+        CO.gainCritter(cr.id, wildShiny, { body: wild.body, temper: wild.temper });
+        logEvent(`草丛遭遇中收服了${cr.name}${wildShiny ? '（金色异色！）' : ''}`);
         if (!f.buddy) {                                // 身边没伙伴：新收服的可邀随行
           const inv = await choose([`让${cr.name}跟着你走`, '放它回草丛深处'],
             { caption: { name: `野生的${cr.name}`, text: '球里的小家伙探出脑袋望着你——\n要邀它结伴同行吗？' } });
           if (inv === 0) {
-            f.buddy = { id: cr.id, shiny: shiny ? 1 : 0 };
+            f.buddy = { id: cr.id, shiny: wildShiny ? 1 : 0 };
             f.wildHp = CO.critter(cr.id).pow * 6 + 20; f.wildHpDay = C.day;
             ADV.Engine.spawnBuddy();
             UI().toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
@@ -441,7 +477,8 @@ E().playAction(E().player, 'laugh', 1.6);
         const opts = held.map(h => {
           const p = CO.sellPrice(h.cr, h.shiny);
           const rear = CO.critterRearing(h.id, ADV.Cal.day);   // 饲养倒计时：防止手滑卖掉临进化的幼体
-          return `${h.cr.name}${h.shiny ? '✨' : ''}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
+          const bodyTag = h.body === 'big' ? '（大个）' : h.body === 'small' ? '（小不点）' : '';   // 批次六十六：个体体型标签
+          return `${h.cr.name}${h.shiny ? '✨' : ''}${bodyTag}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
         }).concat(['还是不卖了']);
         const i = await choose(opts, { caption: { name: '阿橘', text: '图鉴收录过的可以寄养到我这，\n按稀有度给收购价——异色翻三倍！' } });
         if (i < 0 || i >= held.length) continue;

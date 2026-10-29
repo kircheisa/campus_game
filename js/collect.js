@@ -473,10 +473,28 @@ ADV.Collect = (function () {
     const e = (col()[catKey(cat)] || {})[id];
     return !!e && typeof e === 'object' && !!e.s;
   }
-  function gainCritter(id, shiny) {
+  /* 批次六十六 C：野外个体差异 roll——体型（大个 15% / 小不点 15%）× 性情（好斗 35% / 胆小 30% / 沉着 35%）
+   * 纯函数：r1/r2 注入即确定性（冒烟可复现）；返回修正打包进 Battle opts.foeMod，body/temper 收服后入册 */
+  function rollWild(cr, r1, r2) {
+    const a = r1 == null ? Math.random() : r1, b = r2 == null ? Math.random() : r2;
+    const body = a < .15 ? 'big' : a < .30 ? 'small' : 'normal';
+    const temper = b < .35 ? '好斗' : b < .65 ? '胆小' : '沉着';
+    return {
+      body, temper,
+      powAdd: body === 'big' ? 1 : 0,
+      spdAdd: body === 'small' ? 1 : body === 'big' ? -1 : 0,
+      hpMul: body === 'big' ? 1.1 : body === 'small' ? .9 : 1,
+      dmgMul: temper === '好斗' ? 1.1 : temper === '胆小' ? .9 : 1,
+      catchMul: temper === '胆小' ? 1.1 : 1,
+    };
+  }
+  function gainCritter(id, shiny, extra) {
     const k = col()['insects'] || (col()['insects'] = {});
     if (k[id]) return false;
-    k[id] = { s: shiny ? 1 : 0, d: ADV.Cal ? ADV.Cal.day : 0 };   // s=异色位 d=入手日（饲养计时起点）
+    const e0 = { s: shiny ? 1 : 0, d: ADV.Cal ? ADV.Cal.day : 0 };   // s=异色位 d=入手日（饲养计时起点）
+    if (extra && extra.body && extra.body !== 'normal') e0.body = extra.body;     // 批次六十六：个体差异只增不改
+    if (extra && extra.temper && extra.temper !== '沉着') e0.temper = extra.temper;
+    k[id] = e0;
     const cr = critter(id);
     ADV.UI.toast(shiny ? ` ✨ 金色异色个体！${cr ? cr.name : id} 入手！ ` : ` 收藏入手：${cr ? cr.name : id} `);
     if (cr && cr.evolve) ADV.UI.toast(` （把它放进院子水缸养着，${cr.evolve.days} 天后也许会有变化……） `);
@@ -595,7 +613,8 @@ ADV.Collect = (function () {
       const cr = critter(id);
       if (!cr) return null;
       const e = k[id];
-      return { id, cr, shiny: !!(e && e.s), gone: !!(e && e.gone) };
+      return { id, cr, shiny: !!(e && e.s), gone: !!(e && e.gone),
+               body: (e && e.body) || 'normal', temper: (e && e.temper) || '沉着' };   // 批次六十六：个体差异透出
     }).filter(Boolean);
   }
   /* 购入：金币不足拒绝；新种直接入册；已收录的等于「接回家」（清 gone，
@@ -714,6 +733,7 @@ ADV.Collect = (function () {
 
   return { DB, CATS, ITEMS, has, gain, info, ids, catCount, totalOf, progress, whenOk,
            critter, critterList, needOk, rollShiny, isShiny, gainCritter, hatchCritter, shinyCount,
+           rollWild,                                          // 批次六十六：野外个体差异 roll（纯函数）
            netTier, cageTier, shinyMult,
            applyEvolve, critterRearing,
            critterPrice, sellPrice, critterEntry, heldCritters, buyCritter, sellCritter, petShelf,
