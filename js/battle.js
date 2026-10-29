@@ -64,14 +64,40 @@ ADV.Battle = (function () {
   ];
   const CAT_LABEL = { wu: '武术', mo: '咒语' };
 
-  /* ---------- 宠物招式表（petMode） ---------- */
+  /* ---------- 宠物招式表（petMode） ----------
+   * 普通攻击（base，PP ∞）与技能分层；技能按系别配招、随伙伴等级解锁
+   * （Lv1 系别招+战术位 / Lv2 续航位 / Lv4 大招位）——升级既有新招可学；
+   * 野怪对手共用同一张表（foeMoves 取 Lv2 档、去掉鼓劲），双方都有得选 */
   const FAM_MOVE = { 虫: ['虫鸣乱舞', '#a8e88a'], 水: ['水花射击', '#8ad0ff'], 兽: ['猛扑', '#f0b45a'] };
-  function petMoves(fam) {
-    return [
-      { key: 'tackle', name: '冲撞', kind: 'atk', pow: 8, pp: 99, col: '#e8ecff', base: true },
-      { key: 'famAtk', name: (FAM_MOVE[fam] || ['猛扑'])[0], col: (FAM_MOVE[fam] || [0, '#f0b45a'])[1], kind: 'atk', pow: 10, pp: 4 },
-      { key: 'cheer', name: '鼓劲', kind: 'cheer', pp: 2, col: '#ff8ab0' }
-    ];
+  const PET_MOVES = [
+    // —— 普通攻击：不耗 PP、常驻保底 ——
+    { key: 'tackle', name: '冲撞', kind: 'atk', pow: 8, pp: 99, col: '#e8ecff', base: true, lv: 1 },
+    // —— Lv1：系别招 + 鼓劲 + 战术位 ——
+    { key: 'famAtk', name: '猛扑', kind: 'atk', pow: 10, pp: 4, col: '#f0b45a', lv: 1 },
+    { key: 'cheer', name: '鼓劲', kind: 'cheer', pp: 2, col: '#ff8ab0', lv: 1 },
+    { key: 'silk', name: '蚕丝缠缚', fam: '虫', kind: 'weaken', pp: 3, col: '#d8e87a', lv: 1 },
+    { key: 'foam', name: '泡沫护体', fam: '水', kind: 'guard', pp: 3, col: '#8ad8e8', lv: 1 },
+    { key: 'growl', name: '低吼威吓', fam: '兽', kind: 'weaken', pp: 3, col: '#e8a07a', lv: 1 },
+    // —— Lv2：续航位（各系一件，回三成体力） ——
+    { key: 'shed', name: '蜕皮回气', fam: '虫', kind: 'heal', pct: 32, pp: 3, col: '#a8e88a', lv: 2 },
+    { key: 'mist', name: '细雨滋养', fam: '水', kind: 'heal', pct: 32, pp: 3, col: '#8ad0ff', lv: 2 },
+    { key: 'lick', name: '舔舐伤口', fam: '兽', kind: 'heal', pct: 32, pp: 3, col: '#f0b45a', lv: 2 },
+    // —— Lv4：大招位（虫/水重击，兽双连） ——
+    { key: 'butter', name: '蝶舞冲锋', fam: '虫', kind: 'atk', pow: 15, pp: 3, col: '#e8c0ff', lv: 4 },
+    { key: 'rapids', name: '激流突进', fam: '水', kind: 'atk', pow: 15, pp: 3, col: '#5ab8ff', lv: 4 },
+    { key: 'fury', name: '狂抓连击', fam: '兽', kind: 'multi', pow: 7, hits: 2, pp: 3, col: '#ff8a5a', lv: 4 },
+  ];
+  function petMoves(fam, lv) {
+    const L = lv || (ADV.Game && ADV.Game.flags && ADV.Game.flags.buddyLv) || 1;
+    return PET_MOVES
+      .filter(m => (!m.fam || m.fam === fam) && (m.lv || 1) <= L)
+      .map(m => m.key === 'famAtk'
+        ? Object.assign({}, m, { name: (FAM_MOVE[fam] || ['猛扑'])[0], col: (FAM_MOVE[fam] || [0, '#f0b45a'])[1] })
+        : m);
+  }
+  /* 野怪对手招组：同表取 Lv2 档、去掉鼓劲（野性打法更直接） */
+  function foeMoves(fam) {
+    return petMoves(fam, 2).filter(m => m.kind !== 'cheer');
   }
   /* 三系克制：虫克水 → 水克兽 → 兽克虫（循环 ×1.5，被克 0.75，同系 1） */
   const FAM_ADV = { '虫水': 1.5, '水兽': 1.5, '兽虫': 1.5 };
@@ -228,9 +254,11 @@ ADV.Battle = (function () {
         pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
         flash: 0, shake: 0, pops: [], beats: [], turn: 1, edu, bondUsed: false,
         intro: 1, hitstop: 0, t: 0, eRecoil: 0, mRecoil: 0, dispE: foeMax, ghostE: foeMax, dispM: myMax, ghostM: myMax,
-        foeWeak: false, sups: {}, boosted: !!(bst.pow || bst.spd)
+        foeWeak: false, sups: {}, boosted: !!(bst.pow || bst.spd),
+        foeSkills: foeMoves(cr.fam), ePps: {}, meAtkDown: 0, foeAtkDown: 0
       };
       for (const m of act.skills) act.pps[m.key] = m.pp;
+      for (const m of act.foeSkills) act.ePps[m.key] = m.pp;   // 野怪技能 PP：耗尽退回普攻
       petSupport().forEach(s => { act.sups[s.key] = 1; });      // 支援咒语每场各一次
       if (opts.shinyHint) act.log.unshift('✨ 它的鳞片闪着金光——是罕见的异色个体！');
       if (famWeatherMul(myCr.fam, weather) > 1 || famWeatherMul(cr.fam, weather) > 1)
@@ -501,22 +529,60 @@ ADV.Battle = (function () {
   function petRound(myAction) {
     const a = act, me = a.me, e = a.e;
     if (a.opts.noBuddy) return;                          // 无伙伴战：野生侧不攻击（只剩丢球 / 喂食 / 溜走）
-    const foeMove = { name: '冲撞', pow: a.foeWeak ? 5 : 8 };
     const wNow = ADV.Cal ? ADV.Cal.weather : '';         // 批次六十六 B：天气乘区随回合实时读天
     let myAct = myAction;                                // {type:'move',sk} / {type:'support',key} / {type:'item'} / {type:'flee'} 已在别处处理
     const myFirst = me.spd >= e.spd;
     const seq = myFirst ? ['me', 'foe'] : ['foe', 'me'];
-    // 敌方行动
+    /* 野怪选招：残血七成回气、三成上战术位、常态主打系别招——PP 见底退回普攻 */
+    const pickFoeMove = () => {
+      const can = k => a.foeSkills.find(m => m.key === k && (a.ePps[m.key] || 0) > 0);
+      const heal = can('shed') || can('mist') || can('lick');
+      if (heal && e.hp <= e.hpMax * .45 && Math.random() < .7) return heal;
+      const tac = a.foeSkills.filter(m => (m.kind === 'weaken' || m.kind === 'guard') && (a.ePps[m.key] || 0) > 0);
+      if (tac.length && Math.random() < .3) return tac[(Math.random() * tac.length) | 0];
+      const famM = can('famAtk');
+      if (famM && Math.random() < .75) return famM;
+      return a.foeSkills.find(m => m.base) || { name: '冲撞', kind: 'atk', pow: 8 };
+    };
+    // 敌方行动（技能驱动：攻/缠缚/护体/回气各有其招）
     const foeStrike = () => {
       if (e.hp <= 0 || me.hp <= 0) return;
+      const mv = pickFoeMove();
+      if (mv.key && a.ePps) a.ePps[mv.key]--;
+      if (mv.kind === 'heal') {
+        const h = Math.ceil(e.hpMax * (mv.pct || 30) / 100);
+        e.hp = Math.min(e.hpMax, e.hp + h);
+        a.log.unshift(`野生的${e.name}使出${mv.name}，回了 ${h} 点体力！`);
+        pop('+' + h, '#4ae86c', W / 2 + 40, 150);
+        return;
+      }
+      if (mv.kind === 'weaken') {
+        a.meAtkDown = 2;
+        a.log.unshift(`野生的${e.name}使出${mv.name}！${me.name}的力道被压制了。（2 回合攻击 -25%）`);
+        pop('攻击↓', '#b98af5', 150, 500);
+        return;
+      }
+      if (mv.kind === 'guard') {
+        e.guardP = true;
+        a.log.unshift(`野生的${e.name}使出${mv.name}——周身裹上了一层防护！`);
+        pop('防护!', '#8ad8e8', W / 2 + 40, 150);
+        return;
+      }
       const eff = famAdv(e.fam, me.fam);
-      let d = Math.max(1, Math.round(petDamage(e.pow, foeMove.pow, me.pow, eff)
-        * famWeatherMul(e.fam, wNow) * (e.dmgMul || 1) * (e.scared ? .8 : 1)));
-      if (a.petGuard) { d = Math.max(1, Math.ceil(d * (a.edu ? a.edu.guardFac : .5))); a.log.unshift(`${me.name}鼓劲蓄力，稳稳架住了这一击！（伤害减半）`); }
+      const mpow = a.foeWeak ? 5 : (mv.pow || 8);         // 被缚影咒拖住：出招乏力
+      let d = Math.max(1, Math.round(petDamage(e.pow, mpow, me.pow, eff)
+        * famWeatherMul(e.fam, wNow) * (e.dmgMul || 1) * (e.scared ? .8 : 1)
+        * (a.foeAtkDown > 0 ? .75 : 1)));
+      if (a.foeAtkDown > 0) a.foeAtkDown--;               // 被我方缠缚/威吓：输出 -25%，出手即耗一层
+      if (a.petGuard) {
+        d = Math.max(1, Math.ceil(d * (a.edu ? a.edu.guardFac : .5)));
+        a.log.unshift(`${me.name}稳稳架住了${mv.name}！（伤害减半）`);
+        a.petGuard = false;                               // 守护接下一击即消耗（修旧版一次性永久生效）
+      }
       me.hp -= d;
       a.hitstop = .05; a.mRecoil = .28;                  // B4 + C2 我方小伙伴受击
       pop('-' + d, '#ff5a5a', 150, 500);
-      a.log.unshift(`野生的${e.name}使出冲撞！${me.name}受到 ${d} 点伤害。${eff > 1 ? '（被克制…）' : ''}`);
+      a.log.unshift(`野生的${e.name}使出${mv.name}！${me.name}受到 ${d} 点伤害。${eff > 1 ? '（被克制…）' : ''}`);
       a.shake = .35;
     };
     const myStrike = sk => {
@@ -526,11 +592,14 @@ ADV.Battle = (function () {
       if (a.cheer) { d = Math.round(d * (a.edu ? a.edu.cheerMul : 1.35)); }
       const crit = !!(a.edu && a.edu.critCh > 0 && Math.random() < a.edu.critCh);   // 数学节点：会心 ×1.5
       if (crit) d = Math.max(1, Math.round(d * 1.5));
+      if (a.meAtkDown > 0) d = Math.max(1, Math.round(d * .75));   // 被压制：力道 -25%
+      if (e.guardP) { d = Math.max(1, Math.ceil(d * .5)); e.guardP = false; a.log.unshift(`野生的${e.name}的防护架住了这一击！（伤害减半）`); }
       e.hp -= d;
       a.flash = .35;
       a.hitstop = crit ? .09 : .05; a.eRecoil = .28;     // B4 + C2 野生侧受击
       pop('-' + d, sk.col || '#ffd94c', W / 2 + 40, 150, crit ? 'crit' : null);
       a.log.unshift(`${me.name}使出${sk.name}！${e.name}受到 ${d} 点伤害！${crit ? '（会心一击！）' : ''}${eff > 1 ? '（属性相克，效果绝佳！）' : eff < 1 ? '（被克制，效果不佳…）' : ''}`);
+      if (a.meAtkDown > 0) a.meAtkDown--;                 // 出手即耗一层压制
     };
     /* 吴老师支援指令（三期A）：咒语从观众席飞进赛场——各一次，耗掉玩家本回合 */
     const doSupport = key => {
@@ -560,6 +629,26 @@ ADV.Battle = (function () {
             a.petGuard = true; a.cheer = true;
             a.log.unshift(`${me.name}鼓足了劲——下回合的攻击会更痛！（本回合防御提升）`);
             pop('鼓劲!', '#ff8ab0', 150, 500);
+          } else if (sk.kind === 'heal') {                // Lv2 续航位：回三成体力
+            const h = Math.ceil(me.hpMax * (sk.pct || 30) / 100);
+            me.hp = Math.min(me.hpMax, me.hp + h);
+            a.log.unshift(`${me.name}使出${sk.name}——深深回了口气，体力 +${h}！`);
+            pop('+' + h, '#4ae86c', 150, 500);
+          } else if (sk.kind === 'weaken') {              // Lv1 战术位：敌方 2 回合输出 -25%
+            a.foeAtkDown = 2;
+            a.log.unshift(`${me.name}使出${sk.name}！野生的${e.name}攻势被拖住了。（2 回合伤害 -25%）`);
+            pop('攻势↓', '#b98af5', W / 2 + 40, 150);
+          } else if (sk.kind === 'guard') {               // Lv1 战术位：下一击减半
+            a.petGuard = true;
+            a.log.unshift(`${me.name}使出${sk.name}——摆出绵密的防护！（下一击伤害减半）`);
+            pop('防护!', '#8ad8e8', 150, 500);
+          } else if (sk.kind === 'multi') {               // Lv4 兽系大招：连击
+            a.playerAttacked = true;
+            for (let hi = 0; hi < (sk.hits || 2); hi++) {
+              if (e.hp <= 0 || me.hp <= 0) break;
+              myStrike(Object.assign({}, sk, { name: hi ? sk.name + '·续击' : sk.name }));
+            }
+            a.cheer = false;
           } else {
             a.playerAttacked = true;
             myStrike(sk);
@@ -957,8 +1046,8 @@ ADV.Battle = (function () {
         const dim = pp <= 0;
         if (i === a.sel) text(g, '▶', mx + 16, cy, 16, '#ffe9a8');
         const mark = a.petMode && sk.kind === 'atk' ? (famAdv(a.me.fam, e.fam) > 1 ? ' ↑' : famAdv(a.me.fam, e.fam) < 1 ? ' ↓' : ' －') : '';
-        text(g, `${sk.name}${sk.kind === 'atk' && sk.pow ? ' 威力' + sk.pow : ''}${mark}（PP ${pp}${sk.pp >= 99 ? '+' : '/ ' + sk.pp}）`,
-          mx + 40, cy, 17, dim ? '#667' : '#fff', 'left');
+        text(g, `${sk.base ? '【普攻】' : ''}${sk.name}${sk.kind === 'atk' && sk.pow ? ' 威力' + sk.pow : ''}${mark}（PP ${pp}${sk.pp >= 99 ? '+' : '/ ' + sk.pp}）`,
+          mx + 40, cy, 17, dim ? '#667' : sk.base ? '#cfe0ff' : '#fff', 'left');
       });
       text(g, a.petMode ? 'Z 使用 · X 返回' : 'Z 使用 · X 返回招式栏', mx + mw - 16, my + mh - 24, 13, '#8a94c0', 'right');
     } else if (a.mode === 'support') {
@@ -1041,7 +1130,7 @@ ADV.Battle = (function () {
   }
 
   return {
-    start, update, render, ENEMIES, MOVES, petMoves, layoutRects, skillList,
+    start, update, render, ENEMIES, MOVES, petMoves, foeMoves, PET_MOVES, layoutRects, skillList,
     calcDamage, fleeChance, catchChance, petDamage, famAdv, petBonus,
     petSupport, assistPower, buddyBoost,
     bondNeed, bondPerks, famWeatherMul,               // 批次六十六：伙伴等级 / 天气乘区（纯函数，冒烟可直测）

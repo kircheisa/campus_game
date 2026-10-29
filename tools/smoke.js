@@ -4183,10 +4183,11 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     try {
       A.Cal.load({ ...cal53, weather: '多云' });           // [5.120] 天气乘区中性化：保精确伤害断言（多云无任何系加成）
       // —— 宠物招式表：三系专属招 ——
-      const pm53 = A.Battle.petMoves('虫');
-      ok(pm53.length === 3 && pm53[0].key === 'tackle' && pm53[0].pp === 99 &&
-         pm53[1].name === '虫鸣乱舞' && pm53[1].pp === 4 && pm53[2].name === '鼓劲' && pm53[2].pp === 2,
-         '宠物招式：冲撞（保底）+ 系专属招（虫鸣乱舞）+ 鼓劲（PP 99/4/2）');
+      const pm53 = A.Battle.petMoves('虫', 1);
+      ok(pm53.length === 4 && pm53[0].key === 'tackle' && pm53[0].pp === 99 && pm53[0].base === true &&
+         pm53[1].name === '虫鸣乱舞' && pm53[1].pp === 4 && pm53[2].name === '鼓劲' && pm53[2].pp === 2 &&
+         pm53[3].name === '蚕丝缠缚' && pm53[3].kind === 'weaken',
+         '宠物招式：普攻冲撞（保底 PP∞）+ 系专属招（虫鸣乱舞）+ 鼓劲 + Lv1 战术位蚕丝缠缚（99/4/2/3）');
       ok(A.Battle.petMoves('水')[1].name === '水花射击' && A.Battle.petMoves('兽')[1].name === '猛扑',
          '宠物招式：水系水花射击 / 兽系猛扑——招式随伙伴属性变换');
 
@@ -4222,15 +4223,16 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
          '画布 petMode：宠物招式独立 PP 账本（99/4/2）');
       A.Battle.update(1 / 60, { ok: true });               // 招式 → 列表
       A.Battle.update(1 / 60, { ok: true });               // 冲撞
-      ok(A.Battle.act.e.hp === foeMax53 - 35 && A.Battle.act.me.hp === 18 &&
-         A.Battle.act.log.some(t => t.includes('效果绝佳')),
-         '宠物回合：速度定序各一动——虫招打水系效果绝佳（92 → 57），反吃一击（20 → 18）');
+      ok(A.Battle.act.e.hp === foeMax53 - 35 && A.Battle.act.me.hp === 16 &&
+         A.Battle.act.log.some(t => t.includes('效果绝佳')) && A.Battle.act.log.some(t => t.includes('水花射击')),
+         '宠物回合：速度定序各一动——虫招打水系效果绝佳（92 → 57），反吃水花射击（20 → 16）');
       A.Battle.update(1 / 60, { ok: true });               // 招式 → 技能列表
       A.Battle.update(1 / 60, { down: true });
       A.Battle.update(1 / 60, { down: true });             // 列表第 3 项 = 鼓劲
       A.Battle.update(1 / 60, { ok: true });
-      ok(A.Battle.act.cheer === true && A.Battle.act.petGuard === true && A.Battle.act.me.hp === 17,
-         '鼓劲：下回合攻击 ×1.35，本回合架住敌方冲撞（伤害减半，18 → 17）');
+      ok(A.Battle.act.cheer === true && A.Battle.act.petGuard === false && A.Battle.act.me.hp === 14 &&
+         A.Battle.act.log.some(t => t.includes('架住')),
+         '鼓劲：下回合攻击 ×1.35，守护接一击即消耗（水花 4 → 减半 2，16 → 14）');
       A.Battle.render(makeCtx(makeCanvas()));
       ok(true, '画布 petMode：双立绘 + 血条渲染不崩');
       A.Battle.update(1 / 60, { down: true });             // → 道具
@@ -4243,8 +4245,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Battle.update(1 / 60, { down: true });             // 回到菜单 → 道具
       A.Battle.update(1 / 60, { ok: true });               // 打开道具栏
       A.Battle.update(1 / 60, { ok: true });               // 再丢 → 必中
-      ok(r53 && r53.outcome === 'caught' && r53.myHp === 16 && r53.foeHp === 57 && A.Battle.active === false,
-         '捕捉实战：终有一捕——cb 收到完整战报 {outcome:caught, myHp:16, foeHp:57}');
+      ok(r53 && r53.outcome === 'caught' && r53.myHp === 10 && r53.foeHp === 57 && A.Battle.active === false,
+         '捕捉实战：终有一捕——cb 收到完整战报 {outcome:caught, myHp:10, foeHp:57}（弹球回合吃满水花 4 点——守护已消耗，旧版 16 是永不消耗 bug 的口径）');
       Math.random = () => .5;                              // 还原 0.5 判定（拒绝 / 35% 溜走都走「留下」侧）
 
       // —— 无伙伴也能进场：丢球 / 溜走（野生侧不攻击） ——
@@ -4466,7 +4468,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Battle.update(1 / 60, { ok: true });               // 招式 → 技能列表
       A.Battle.update(1 / 60, { ok: true });               // 冲撞：rnd .5 → 23×1.5×1.0 = 35（无会心）
       ok(A.Battle.act.e.hp === foeMax56 - 35, '冲撞 35 伤害命中（rnd 0.5 → 随机乘区 1.0）');
-      ok(A.Battle.act.me.hp === 19, '回合末亲密度回气：被反击 -2 → 18，羁绊回气 +1 → 19');
+      ok(A.Battle.act.me.hp === 17, '回合末亲密度回气：被水花射击 -4 → 16，羁绊回气 +1 → 17');
       A.Battle.update(1 / 60, { cancel: true });           // 溜走收尾
       ok(r56 && r56.outcome === 'fled', '亲密度战一：取消键溜走收尾');
 
@@ -4795,8 +4797,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       ok(A.Battle.act.sups.guardS === 1 && A.Battle.act.sups.bolt === 1, '支援指令：入场时各支援一次可用');
       A.Battle.act.mode = 'support';
       A.Battle.update(1 / 60, { ok: true });               // 使用第一项：星之盾
-      ok(A.Battle.act.sups.guardS === 0 && A.Battle.act.petGuard === true,
-         '支援指令：星之盾生效（守护架势 + 本场消耗登记）');
+      ok(A.Battle.act.sups.guardS === 0 && A.Battle.act.log.some(t => t.includes('架住')),
+         '支援指令：星之盾生效并接下敌方一击（sups 消耗登记 + 守护按击消耗——旧版断言 petGuard 恒真即永不消耗 bug）');
       A.Battle.update(1 / 60, { cancel: true });
       F63.buddyBoost = { pow: 1, spd: 1 };
       const crPow63 = A.Collect.critter('i1').pow;
@@ -8476,8 +8478,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
          && cSrc124.includes('function rosterList') && cSrc124.includes('rosterDrop(id);')
          && cSrc124.includes('rosterDrop(giveId);'),
         '源：名册核在 collect——寄存/装载/候选列表；卖出与换走的落册点同步除名（rosterDrop）');
-      ok(gSrc124.includes('petRoster: {}') && gSrc124.includes('battlePick: false'),
-        '源：blankFlags 只增补空——petRoster 空表 + 战前派宠默认关（旧档自动补）');
+      ok(gSrc124.includes('petRoster: {}') && gSrc124.includes('battlePick: true'),
+        '源：blankFlags 只增补空——petRoster 空表 + 战前派宠默认开（批次七十四：遭遇先问派谁，旧档自动补 true）');
       ok(rSrc124.includes('f.battlePick') && rSrc124.includes("'不派伙伴（自己上）'")
          && rSrc124.includes("'换它上阵'") && rSrc124.includes("'战前派宠：开'"),
         '源：遭遇战派宠菜单（默认关、可换可不派）+ 阿橘柜台「换它上阵」与开关项——老六项索引不动');
@@ -8493,6 +8495,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       const colRef124 = A.Game.flags.col || (A.Game.flags.col = {});
       const ins124 = colRef124.insects || (colRef124.insects = {});
       ins124.c6 = { s: 0, d: 52 }; ins124.c7 = { s: 0, d: 52 }; ins124.c8 = { s: 0, d: 52 };
+      F124.petRoster = {};                                // 战前派宠默认开后，前段流程可能已写过名册——本段自清，构造纯旧档场景
       A.Collect.rosterEnsure();
       ok(F124.petRoster.c6 && F124.petRoster.c6.lv === 3 && F124.petRoster.c6.bond === 44,
         '行为：旧档迁移——现随行 Lv3/亲密 44 一次性寄存入册（rosterEnsure 幂等）');
@@ -8632,6 +8635,63 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       if (prevIns) { ins125.c6 = prevIns.c6; ins125.c7 = prevIns.c7;
         ['c6', 'c7'].forEach(k => { if (prevIns[k] === undefined) delete ins125[k]; }); }
       else if (ins125 === undefined) delete colRef125.insects;
+    }
+  }
+
+  /* ==================== [5.126] 宠物对战深化：普攻/技能分层 + 系别招式扩充（双方）+ 战前派宠默认开 ==================== */
+  console.log('\n[5.126] 宠物对战深化：PET_MOVES 注册表 / 等级解锁 / 野怪技能组 / 战前派宠默认开');
+  {
+    const BattleStub114 = A.Battle;
+    vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8'), { filename: 'battle.js' });
+    const F114 = A.Game.flags;
+    const keep114 = { buddyLv: F114.buddyLv, buddyExp: F114.buddyExp, buddy: F114.buddy, wildHp: F114.wildHp };
+    const rnd114 = Math.random;
+    try {
+      // —— A. 招式分层与系别差异（纯函数：显式 lv 参，不受旗标环境影响） ——
+      const w1 = A.Battle.petMoves('水', 1);
+      ok(w1.length === 4 && w1[1].name === '水花射击' && w1[3].name === '泡沫护体' && w1[3].kind === 'guard',
+        '招式分层：水系 Lv1 = 普攻 + 水花射击 + 鼓劲 + 泡沫护体（战术位各系不同——虫缠缚/水护体/兽威吓）');
+      const b1 = A.Battle.petMoves('兽', 1), b4 = A.Battle.petMoves('兽', 4);
+      ok(b1.length === 4 && b1.every(m => m.name !== '狂抓连击') && b4.length === 6 &&
+         b4.some(m => m.name === '低吼威吓' && m.kind === 'weaken') &&
+         b4.some(m => m.name === '舔舐伤口' && m.kind === 'heal') &&
+         b4.some(m => m.name === '狂抓连击' && m.kind === 'multi' && m.hits === 2),
+        '等级解锁：Lv4 解锁大招位（兽系狂抓连击两连击 / 虫蝶舞冲锋 / 水激流突进），Lv2 解锁续航回气');
+      // —— B. 野怪对手技能组：同表 Lv2 档、去鼓劲、带续航 ——
+      const fw = A.Battle.foeMoves('水');
+      ok(fw.length === 4 && !fw.some(m => m.kind === 'cheer') &&
+         fw.some(m => m.name === '细雨滋养' && m.kind === 'heal') && fw.some(m => m.base),
+        '野怪技能组：同表取 Lv2 档、去掉鼓劲——普攻/系别招/护体/回气俱全（残血 AI 会回气）');
+      // —— C. 实战：Lv2 续航位蜕皮回气（驱车对局，rnd .5 定桩） ——
+      F114.buddyLv = 2;
+      Math.random = () => .5;
+      A.Battle.start('c6', { petMode: true, buddy: { id: 'i8', shiny: false, hp: 5 } }, () => {});
+      const myMax114 = A.Battle.act.me.hpMax;
+      const skills114 = A.Battle.act.skills.map(s => s.name);
+      ok(skills114.length === 5 && skills114.includes('蜕皮回气') && A.Battle.act.foeSkills.length === 4,
+        '实战入场：Lv2 伙伴带 5 招（含蜕皮回气），野怪对手 4 招技能组就位（ePps 独立账本）');
+      A.Battle.update(1 / 60, { ok: true });               // 招式 → 技能列表
+      A.Battle.update(1 / 60, { down: true });
+      A.Battle.update(1 / 60, { down: true });
+      A.Battle.update(1 / 60, { down: true });
+      A.Battle.update(1 / 60, { down: true });             // 列表第 5 项 = 蜕皮回气
+      A.Battle.update(1 / 60, { ok: true });               // 使用：回 32% 体力，再吃水花射击
+      const healed114 = Math.ceil(myMax114 * .32);
+      ok(A.Battle.act.me.hp === 5 + healed114 - 4 &&
+         A.Battle.act.log.some(t => t.includes('蜕皮回气')) && A.Battle.act.log.some(t => t.includes('水花射击')),
+        `续航位实战：蜕皮回气 +${healed114}（32% 上限取整），反吃野怪水花射击 -4（5 → ${5 + healed114 - 4}）`);
+      A.Battle.update(1 / 60, { cancel: true });           // 溜走收尾
+      // —— D. 分层标识与技能接线（源断言） ——
+      const bSrc114 = fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8');
+      ok(bSrc114.includes('【普攻】') && bSrc114.includes("sk.kind === 'weaken'") &&
+         bSrc114.includes("sk.kind === 'guard'") && bSrc114.includes("sk.kind === 'multi'") &&
+         bSrc114.includes('pickFoeMove') && A.Battle.PET_MOVES.length === 12,
+        '技能接线：菜单普攻【普攻】标识 + 我方 weaken/guard/multi 分支 + 野怪 pickFoeMove 选招 AI；注册表 12 条');
+    } finally {
+      Math.random = rnd114;
+      A.Battle = BattleStub114;
+      F114.buddyLv = keep114.buddyLv; F114.buddyExp = keep114.buddyExp;
+      F114.buddy = keep114.buddy; F114.wildHp = keep114.wildHp;
     }
   }
 

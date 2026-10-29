@@ -60,7 +60,7 @@ window.ADV = window.ADV || {};
     farmQuest: false, farmDone: false, catches: 0,
     radioDay: 0, radioCount: 0, toy: {}, cardWins: 0,
     tok: 0, arcadePoster: false,                        // S4 街机角：代币余额 / 限定霓虹海报（日锁 brickDay·arcadeCardDay 惯例不进 blankFlags）
-    petRoster: {}, battlePick: false,                   // 批次七十：伙伴名册（按物种各记成长）/ 战前派宠开关（默认关=随行自动上阵）
+    petRoster: {}, battlePick: true,                    // 批次七十：伙伴名册（按物种各记成长）/ 战前派宠（批次七十四默认开：遭遇野生的先问派谁、随行打头；阿橘柜台可关回随行自动上阵）
     sportsDay: 0, sportsMedal: 0, sportsGold: false, sportsChamp: false, jumpBest: 0, gymWeek: 0,
     melonBest: 0, bugWins: 0,                           // 西瓜割最多连斩 / 斗虫擂台胜场
     hotbarIdx: 0,                                       // 工具热键栏当前槽位（0 = 手部）
