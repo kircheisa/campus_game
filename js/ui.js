@@ -565,7 +565,7 @@ ADV.UI = (function () {
       const tx = x + 444 + si * 70, ty = y + 18;
       if (px >= tx - 8 && px <= tx + 58 && py >= ty - 4 && py <= ty + 20) return { t: 'tab', ti: gr.tabs[si] };
     }
-    if (tab === 0 || tab === 1 || tab === 5) {                           // 好友/任务/背包页滚动箭头（B15：触屏也能翻长列表）
+    if (tab === 0 || tab === 1 || tab === 5 || tab === 12) {             // 好友/任务/背包/名册页滚动箭头（B15：触屏也能翻长列表；名册批次七十一）
       const cy2 = y + 70, ch2 = h - 84;
       if (px >= x + w - 50 && px <= x + w - 18) {
         if (py >= cy2 + 70 && py <= cy2 + 104) return { t: 'fup' };
@@ -584,7 +584,7 @@ ADV.UI = (function () {
     { name: '生活', tabs: [1, 2] },
     { name: '收藏', tabs: [3, 4, 5, 6] },
     { name: '学习', tabs: [7, 8] },
-    { name: '成长', tabs: [9, 10, 11] }
+    { name: '成长', tabs: [9, 10, 11, 12] }
   ];
   const TAB_META = [
     { label: '好友', group: '关系', hint: '认识的人与故事' },
@@ -598,7 +598,8 @@ ADV.UI = (function () {
     { label: '研习', group: '学习', hint: '知识树与错题本' },
     { label: '成就', group: '成长', hint: '一路上完成的大事' },
     { label: '成长', group: '成长', hint: '等级、五维与大事记' },
-    { label: '技能', group: '成长', hint: '五系技能与专精加成' }
+    { label: '技能', group: '成长', hint: '五系技能与专精加成' },
+    { label: '名册', group: '成长', hint: '小伙伴名册与各自成长' }
   ];
   const GROUP_COLOR = { '关系': '#ff9ec2', '生活': '#ffd36f', '收藏': '#8fe3c8', '学习': '#8ab4ff', '成长': '#c8a6ff' };
   function journalMove(tab, key) {
@@ -682,6 +683,7 @@ ADV.UI = (function () {
     else if (tab === 9 && ADV.Game && ADV.Game.achievements) renderAchv(g, x, cy + 60, w, ch - 80);
     else if (tab === 10 && ADV.Growth) renderGrowth(g, x, cy + 60, w, ch - 80);
     else if (tab === 11 && ADV.Skills) renderSkills(g, x, cy, w, ch);
+    else if (tab === 12 && ADV.Collect) renderRoster(g, x, cy, w, ch);   // 批次七十一：伙伴名册一览
   }
   /* ---------- 成长页：五维雷达 + 等级称号 + 大事记 ---------- */
   function renderGrowth(g, x, y, w, h) {
@@ -990,7 +992,8 @@ ADV.UI = (function () {
       text(g, `${label}  ${n}/${list.length}`, x + 40, fy, 15, fcolor, undefined, 'left');
       fy += 20;
       list.forEach((cr, i) => {
-        const cx = x + 40 + (i % 3) * 214, cy2 = fy + ((i / 3) | 0) * 23;
+        // 批次七十一：3 列版在图鉴扩到 48 种后整块溢出窗口（末行兽系与三条注脚画出窗外）——收 4 列窄行全量收回窗内
+        const cx = x + 40 + (i % 4) * 160, cy2 = fy + ((i / 4) | 0) * 19;
         let s, color, alpha = 1;
         if (!co.needOk(cr)) { s = `🔒 攒${cr.need}种现身`; color = '#5f6690'; alpha = .9; }
         else if (!co.has('critters', cr.id)) { s = `？？？ ${cr.hint.slice(0, 8)}`; color = '#6a739c'; alpha = .8; }
@@ -1004,7 +1007,7 @@ ADV.UI = (function () {
         text(g, s, cx, cy2, 12, color, undefined, 'left');
         g.globalAlpha = 1;
       });
-      fy += Math.ceil(list.length / 3) * 23 + 6;
+      fy += Math.ceil(list.length / 4) * 19 + 4;
     });
     // 称号里程碑进度（10/20/30/40 只 + 传说三只）
     const F = ADV.Game.flags;
@@ -1013,7 +1016,44 @@ ADV.UI = (function () {
     const trio = ['i18', 'c12', 'm12'].map(id => co.has('critters', id) ? '✔' : '·').join('');
     text(g, `🏅 称号：${miles}  ｜  传说研究员 ${F.legendTrio ? '✔ 已获得' : trio + ' 三传说'}`, x + 40, fy + 2, 12, '#c8b6ff', undefined, 'left');
     text(g, '🫙 水缸饲养：毛毛虫·蝌蚪·奶狗养在院子里，几天后会悄悄变化（望月犬只有养出来）', x + 40, fy + 20, 12, '#8a94c0', undefined, 'left');
-    text(g, '🏠 精灵小筑：小镇南街买球和口粮，珍稀架每日换新，草丛遭遇即开画布对战', x + 40, fy + 38, 12, '#8a94c0', undefined, 'left');
+    text(g, '🏠 精灵小筑：小镇南街买球和口粮，珍稀架每日换新，草丛遭遇即开画布对战；名册见「成长 → 名册」页', x + 40, fy + 38, 12, '#8a94c0', undefined, 'left');
+  }
+  /* ---------- 名册页（批次七十一）：伙伴名册一览——每只小伙伴的成长各归各 ----------
+   * 数据走 CO.rosterList()（随行打头、随行读工作区实时真值）；等级/经验条/亲密度/
+   * 随行·休整·待命状态一页看全；页脚固定两行名册口径（换它上阵不丢级 / 战前派宠 / 除名）。 */
+  function renderRoster(g, x, y, w, h) {
+    const list = ADV.Collect.rosterList();
+    const bud = list.find(c => c.buddy);
+    text(g, `🐾 伙伴名册  ${list.length} 只`, x + 40, y + 12, 20, '#ffe9a8', undefined, 'left');
+    text(g, bud ? `随行中：${bud.cr.name} Lv${bud.lv}${bud.rest ? '（休整）' : ''}` : '还没有随行伙伴——去草丛或精灵小筑认识一只吧',
+      x + w - 40, y + 16, 14, bud ? '#ffd94c' : '#8a94c0', 'right', 'normal');
+    if (!list.length) {
+      text(g, '名册还空着——收服、孵蛋或小筑接回的小伙伴都会记在这里，各自成长', x + w / 2, y + 150, 15, '#8890b0', 'center');
+    } else {
+      const vis = 10;
+      listScroll = Math.max(0, Math.min(listScroll, Math.max(0, list.length - vis)));
+      const start = listScroll;
+      list.slice(start, start + vis).forEach((m, i) => {
+        const ry = y + 52 + i * 34;
+        const maxed = m.lv >= 5;
+        const need = (ADV.Battle && ADV.Battle.bondNeed) ? ADV.Battle.bondNeed(m.lv) : m.lv * 4;
+        const tag = m.body === 'big' ? '（大个）' : m.body === 'small' ? '（小不点）' : '';
+        const st = m.buddy ? (m.rest ? '💤 在家休整' : '🐾 随行中') : '待命';
+        text(g, `${m.cr.name}${m.shiny ? ' ✨' : ''}${tag}`, x + 40, ry, 16, m.buddy ? '#ffd94c' : m.shiny ? '#ffd94c' : '#fff', undefined, 'left');
+        text(g, `Lv.${m.lv}${maxed ? '（满级）' : ''} · 亲密度 ${m.bond} · ${st}`, x + w - 40, ry + 2, 12, m.buddy ? '#ffd94c' : '#8a94c0', 'right', 'normal');
+        g.fillStyle = '#1a1c30'; g.fillRect(x + 40, ry + 22, 200, 8);          // 本级经验条（need = lv×4，Lv5 封顶）
+        g.fillStyle = maxed ? '#ffd36f' : '#7ab0ff';
+        g.fillRect(x + 40, ry + 22, 200 * (maxed ? 1 : Math.min(1, m.exp / need)), 8);
+        text(g, maxed ? '并肩见证已满' : `经验 ${m.exp}/${need}`, x + 252, ry + 18, 11, '#8a94c0', undefined, 'left');
+      });
+      if (list.length > vis) {                               // 滚动指示（PgUp/PgDn 与触屏 ▲▼ 与背包页同源）
+        text(g, '▲', x + w - 34, y + 82, 15, listScroll > 0 ? '#ffe9a8' : '#5a6288', 'center');
+        text(g, '▼', x + w - 34, y + h - 50, 15, listScroll < list.length - vis ? '#ffe9a8' : '#5a6288', 'center');
+        text(g, `${start + 1}-${Math.min(start + vis, list.length)}/${list.length} 只 · ${pageHint()}翻看`, x + w - 44, y + h - 30, 12, '#8a94c0', 'right', 'normal');
+      }
+    }
+    text(g, '名册按物种各记成长——精灵小筑柜台「换它上阵」随时换宠，等级亲密度各归各', x + 40, y + h - 48, 12, '#8a94c0', undefined, 'left');
+    text(g, '柜台可开「战前派宠」，遭遇战开打前点名上阵；道别/卖出/换走即从名册除名', x + 40, y + h - 28, 12, '#8a94c0', undefined, 'left');
   }
   function renderBag(g, x, y, w, h) {
     text(g, '💰 金币：' + (ADV.Game.flags.gold || 0), x + 40, y + 70, 20, '#ffd94c');

@@ -3840,7 +3840,8 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     A.UI.renderJournal(makeCtx(makeCanvas()), A.Game.friends, A.Game.BOND, 11);
     ok(true, '手册「技能」页（五系面板+专精总览）渲染正常');
     const meta49 = A.UI.TAB_META;
-    ok(meta49.length === 12 && meta49[11].label === '技能', '手册：第 12 页签「技能」挂进成长组');
+    ok(meta49.length === 13 && meta49[11].label === '技能' && meta49[12].label === '名册',
+      '手册：第 12 页签「技能」+ 第 13 页签「名册」（批次七十一）挂进成长组');
 
     // —— 存档持久化：dump → load 往返 ——
     SK49.reset();
@@ -8548,6 +8549,89 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       F2.petRoster = p.petRoster; F2.battlePick = p.battlePick; F2.tame = p.tame; F2.gold = p.gold;
       ik124.c6 = prevIk.c6; ik124.c7 = prevIk.c7; ik124.c8 = prevIk.c8;
       ['c6', 'c7', 'c8'].forEach(k => { if (prevIk[k] === undefined) delete ik124[k]; });
+    }
+  }
+
+  /* ==================== [5.125] 批次七十一：名册一览页 + 生物图鉴页溢出修复 ====================
+   * 手册成长组新增「名册」页（tab 12）——rosterList 补 exp 字段，等级/经验条/亲密/随行状态
+   * 一页看全，页脚两行名册口径（换它上阵不丢级 / 战前派宠 / 除名）＝帮助行落地；
+   * 生物图鉴页 3 列版在 48 种后整块溢出窗口（末行兽系+三条注脚画出窗外）——收 4 列窄行收回。
+   * 源守护 + 渲染行为双验。 */
+  console.log('\n[5.125] 批次七十一：名册一览页 + 生物图鉴页溢出修复');
+  {
+    const stub125 = A.Battle, say125 = A.UI.say, toast125 = A.UI.toast;
+    const F125 = A.Game.flags;
+    const prev125 = { buddy: F125.buddy, buddyLv: F125.buddyLv, buddyExp: F125.buddyExp,
+                      buddyExpGot: F125.buddyExpGot, buddyExpDay: F125.buddyExpDay,
+                      buddyBond: F125.buddyBond, buddyWalkDay: F125.buddyWalkDay,
+                      wildHp: F125.wildHp, wildHpDay: F125.wildHpDay,
+                      petRoster: F125.petRoster ? JSON.parse(JSON.stringify(F125.petRoster)) : undefined };
+    const cal125 = A.Cal.dump();
+    const db125 = A.Collect.DB.critters;
+    const colRef125 = A.Game.flags.col || (A.Game.flags.col = {});
+    const ins125 = colRef125.insects;
+    const prevIns = ins125 ? { c6: ins125.c6, c7: ins125.c7 } : null;
+    try {
+      // —— 源守护 ——
+      const uSrc125 = fs.readFileSync(path.join(ROOT, 'js', 'ui.js'), 'utf8');
+      const cSrc125 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      ok(uSrc125.includes("'成长', tabs: [9, 10, 11, 12]") && uSrc125.includes('function renderRoster')
+         && uSrc125.includes('tab === 12 && ADV.Collect) renderRoster')
+         && uSrc125.includes('tab === 0 || tab === 1 || tab === 5 || tab === 12'),
+        '源：手册成长组挂第 4 子页「名册」（tab 12）——路由/触屏翻页热区同步');
+      ok(uSrc125.includes('(i % 4) * 160') && uSrc125.includes('((i / 4) | 0) * 19')
+         && uSrc125.includes('Math.ceil(list.length / 4) * 19 + 4'),
+        '源：生物图鉴页 4 列窄行（48 种后 3 列版溢出窗口的隐性 bug 收回窗内）');
+      ok(cSrc125.includes('exp: isBud ? (F.buddyExpGot || 0)'),
+        '源：rosterList 补本级经验进度字段（随行读工作区实时真值，名册页经验条原料）');
+      ok(uSrc125.includes('换它上阵」随时换宠') && uSrc125.includes('战前派宠」，遭遇战开打前点名上阵')
+         && uSrc125.includes('名册见「成长 → 名册」页'),
+        '源：名册页脚两行口径帮助行 + 图鉴页小筑注脚挂名册指引（手册帮助行补名册口径）');
+
+      // —— 行为 A：图鉴页 4 列版渲染不炸（全 48 种真实 DB）——
+      A.UI.renderJournal(makeCtx(makeCanvas()), A.Game.friends, A.Game.BOND, 4);
+      ok(true, '行为：生物图鉴页（48 种 · 4 列收紧后）渲染正常不炸');
+
+      // —— 行为 B：名册页渲染（有册/空册）+ rosterList exp 字段 ——
+      ok(A.UI.TAB_META.length === 13 && A.UI.TAB_META[12].label === '名册',
+        '行为：TAB_META 第 13 页签「名册」就位（journalMove/触屏命中走泛型遍历零额外接线）');
+      A.Collect.DB.critters = [A.Collect.critter('c6'), A.Collect.critter('c7')];
+      A.Cal.load({ day: 52, period: 2, weather: '晴', checkedIn: true, streak: 1 });
+      F125.buddy = { id: 'c6', shiny: 0, body: 'big', rest: false };
+      F125.buddyLv = 3; F125.buddyExp = 2; F125.buddyExpGot = 2; F125.buddyBond = 44;
+      F125.wildHp = 25; F125.wildHpDay = 52;
+      const insW125 = colRef125.insects || (colRef125.insects = {});
+      insW125.c6 = { s: 0, d: 52 }; insW125.c7 = { s: 0, d: 52 };
+      F125.petRoster = {};
+      A.Collect.rosterEnsure();
+      F125.petRoster.c7 = { lv: 2, exp: 5, expGot: 1, expDay: 52, bond: 10, walkDay: null,
+                            hp: 20, hpDay: 52, body: 'small', shiny: true };
+      const rl125 = A.Collect.rosterList();
+      ok(rl125.length === 2 && rl125[0].buddy && rl125[0].id === 'c6' && rl125[0].exp === 2
+         && rl125[0].lv === 3 && rl125[0].bond === 44
+         && rl125[1].id === 'c7' && rl125[1].exp === 1 && rl125[1].lv === 2 && rl125[1].shiny === true,
+        '行为：rosterList 随行打头、exp 各归各——c6 读工作区 2/亲密 44，c7 读名册条目 1/Lv2/异色');
+      A.UI.renderJournal(makeCtx(makeCanvas()), A.Game.friends, A.Game.BOND, 12);
+      ok(true, '行为：名册页（两只 · 大个随行 + 小不点异色待命）渲染正常不炸');
+      const keepIns125 = colRef125.insects;
+      colRef125.insects = {};
+      A.UI.renderJournal(makeCtx(makeCanvas()), A.Game.friends, A.Game.BOND, 12);
+      ok(true, '行为：名册页空册分支（无随行无在手）渲染正常不炸——引导行兜底');
+      colRef125.insects = keepIns125;
+    } finally {
+      A.Battle = stub125;
+      A.UI.say = say125;
+      A.UI.toast = toast125;
+      A.Collect.DB.critters = db125;
+      A.Cal.load(cal125);
+      const F2 = A.Game.flags, p = prev125;
+      F2.buddy = p.buddy; F2.buddyLv = p.buddyLv; F2.buddyExp = p.buddyExp;
+      F2.buddyExpGot = p.buddyExpGot; F2.buddyExpDay = p.buddyExpDay; F2.buddyBond = p.buddyBond;
+      F2.buddyWalkDay = p.buddyWalkDay; F2.wildHp = p.wildHp; F2.wildHpDay = p.wildHpDay;
+      F2.petRoster = p.petRoster;
+      if (prevIns) { ins125.c6 = prevIns.c6; ins125.c7 = prevIns.c7;
+        ['c6', 'c7'].forEach(k => { if (prevIns[k] === undefined) delete ins125[k]; }); }
+      else if (ins125 === undefined) delete colRef125.insects;
     }
   }
 

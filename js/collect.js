@@ -660,6 +660,7 @@ ADV.Collect = (function () {
       const e = roster()[h.id], isBud = !!(F.buddy && F.buddy.id === h.id);
       return { id: h.id, cr: h.cr, buddy: isBud, rest: isBud && !!F.buddy.rest,
                lv: isBud ? (F.buddyLv || 1) : ((e && e.lv) || 1),        // 随行的成长以工作区为实时真值
+               exp: isBud ? (F.buddyExpGot || 0) : ((e && e.expGot) || 0),   // 批次七十一：本级经验进度（名册页经验条）
                bond: isBud ? (F.buddyBond || 0) : ((e && e.bond) || 0),
                body: (e && e.body) || h.body, shiny: (e && e.shiny) || h.shiny };
     }).sort((a, b) => (b.buddy ? 1 : 0) - (a.buddy ? 1 : 0));
