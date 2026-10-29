@@ -18,6 +18,15 @@ body { display: flex; align-items: center; justify-content: center;
 /* 画布被缩小到原生分辨率以下时（小屏），pixelated 反而让画面发糊——切回平滑插值（P2-21） */
 #game.soft { image-rendering: auto; }
 
+/* ---------- 3D 星空台画布（sky3d.js · 批次四十八） ----------
+ * 叠在 #game 正上方，几何尺寸由 main.js fit() 与 #game 同步；默认隐藏，
+ * 仅 ADV.Sky3D.active 时显示——WebGL 不可用/冒烟环境永远走不到显示分支。 */
+#gl {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: none; z-index: 5;
+  background: #05070f;
+}
+
 /* ---------- 触屏虚拟按键 ----------
  * 尺寸与 js/ui.js 的 CTL 常量保持一致（dpad 3×46+2×4=146，abtns 2×56+10=122，贴边 8px），
  * 对话框会让出同样宽度的安全区（safePad），避免按键压住文字。

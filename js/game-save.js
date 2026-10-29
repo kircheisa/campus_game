@@ -1034,6 +1034,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     return scene ? scene[mapId] || null : null;
   }
   function guideSoon(mapId) {
+    if (ADV.__soonOff) return;               // 冒烟静默钩子：环境叙事定时器不进测试（[5.115]）
     if (['campus', 'town', 'classroom', 'library', 'lab', 'english'].indexOf(mapId) < 0) return;
     let tries = 0;
     (function attempt() {
@@ -1127,6 +1128,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     return buzz ? buzz[c.period] : null;
   }
   function lifeBuzzSoon(mapId) {
+    if (ADV.__soonOff) return;               // 冒烟静默钩子：环境叙事定时器不进测试（[5.115]）
     if (['campus', 'town', 'estate', 'oldstreet', 'riverbay', 'cultureHub', 'orchard', 'hillside', 'transportHub', 'seasonPlaza', 'farmstead'].indexOf(mapId) < 0) return;
     let tries = 0;
     (function attempt() {
@@ -1150,6 +1152,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     })();
   }
   function chapterPulseSoon(mapId) {
+    if (ADV.__soonOff) return;               // 冒烟静默钩子：环境叙事定时器不进测试（[5.115]）
     if (['campus', 'town', 'backhill', 'moonhall', 'northyard', 'timehall', 'homeYard', 'gradhall'].indexOf(mapId) < 0) return;
     let tries = 0;
     (function attempt() {
@@ -1174,6 +1177,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     })();
   }
   function taleSoon(mapId) {
+    if (ADV.__soonOff) return;               // 冒烟静默钩子：环境叙事定时器不进测试（[5.115]）
     if (['campus', 'town', 'fields', 'park', 'moonhall'].indexOf(mapId) < 0) return;
     let tries = 0;
     (function attempt() {

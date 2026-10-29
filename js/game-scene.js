@@ -449,6 +449,9 @@
     if (ADV.Growth) ADV.Growth.addDim('mind', 2, '观星');
     addCup(1);
     ADV.Audio.sfx('save');
+    // 批次四十八：3D 星空台——成功则先环视夜空（Z 返回后继续走下方心得与提示），
+    // 失败（无 THREE / 无 WebGL，含冒烟环境）静默跳过直接看原文案；奖励与日锁口径不变。
+    if (ADV.Sky3D) await ADV.Sky3D.viewPromise('astro', C.day % STAR_NOTES.length, C.day % 8);
     await say({ text: `你凑上目镜——夜空哗地铺开。\n${STAR_NOTES[C.day % STAR_NOTES.length]}\n（心性 +2 · 学院分 +1）` });
     UI().toast(' 🔭 天文角观星：心性 +2 · 学院分 +1 ');
     logEvent('在天文角看了一晚星星');
@@ -1700,7 +1703,11 @@
   };
 
   // —— 天文台顶层 ——
-  S.topScope = async () => { await say({ text: '整片星空涌入镜筒——\n银河像一条发光的河，从天这头流到那头。' }); };
+  S.topScope = async () => {
+    // 批次四十八：顶层望远镜升维 3D 银河（无 THREE/WebGL 自动回退原文案）
+    if (ADV.Sky3D && await ADV.Sky3D.viewPromise('galaxy')) return;
+    await say({ text: '整片星空涌入镜筒——\n银河像一条发光的河，从天这头流到那头。' });
+  };
   S.topSign = async () => { await say({ name: '木牌', text: '「星之誓约」\n—— 凡在顶层许下的心愿，\n星星都会记得。' }); };
   S.chestTop = async () => {
     if (F().topGift) { await say({ text: '箱子里只剩一张星图，\n上面画着你们的冒险路线。' }); return; }

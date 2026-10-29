@@ -307,17 +307,20 @@ ADV.Main = (function () {
    * P（自动播放）例外走软守卫：对话中开/关自动播放是正当用法，只挡其余模态。 —— */
   function prefBlock() {
     return journalOpen || ADV.Game.busy || ADV.UI.busy ||
-      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
+      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active) ||
+      (ADV.Sky3D && ADV.Sky3D.active);
   }
   function prefBlockSoft() {
     return journalOpen || ADV.Game.busy ||
-      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
+      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active) ||
+      (ADV.Sky3D && ADV.Sky3D.active);
   }
 
   /* —— 游玩中手动保存 / 读取（工具条 💾 📂；战斗/小游戏/阅读器/对话/手册中不响应） —— */
   function uiModalBlock() {
     return state !== 'play' || journalOpen || ADV.Game.busy || ADV.UI.busy ||
-      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active);
+      (ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) || (ADV.Books && ADV.Books.active) ||
+      (ADV.Sky3D && ADV.Sky3D.active);
   }
   async function manualSave() {
     if (uiModalBlock()) return;
@@ -632,6 +635,7 @@ ADV.Main = (function () {
   let last = performance.now();
   let ambClock = 0;                                  // 环境音评估节流（0.5 秒一次）
   let splashEl = document.getElementById('splash');  // 启动画面（脚本 defer 加载完首帧后移除）
+  let glEl = null;                                   // 3D 星空台画布（存在才同步尺寸，冒烟/旧缓存无此元素也不炸）
   function loop(now) {
     const frameMs = now - last;                        // 出帧间隔（含浏览器合成）＝真实帧节奏
     const __t0 = performance.now();                    // 本帧逻辑（update+render）计时起点
@@ -651,9 +655,9 @@ ADV.Main = (function () {
           document.body.classList.toggle('playing', playing);
           fit();
         }
-        // 战斗/小游戏/阅读器接管画面时收起顶部工具条（避免压住战斗血条与标题）
+        // 战斗/小游戏/阅读器/星空台接管画面时收起顶部工具条（避免压住战斗血条与标题）
         const modal = playing && ((ADV.Battle && ADV.Battle.active) || (ADV.Mini && ADV.Mini.active) ||
-                                  (ADV.Books && ADV.Books.active));
+                                  (ADV.Books && ADV.Books.active) || (ADV.Sky3D && ADV.Sky3D.active));
         if (document.body.classList.contains('modal') !== !!modal)
           document.body.classList.toggle('modal', !!modal);
       }
@@ -681,6 +685,11 @@ ADV.Main = (function () {
           if (ADV.Mini && ADV.Mini.active) {              // 小游戏接管画面与输入
             ADV.Mini.update(dt, pressed, held);           // held：搏鱼等"按住"类小游戏需要
             ADV.Mini.render(ctx);
+            break;
+          }
+          if (ADV.Sky3D && ADV.Sky3D.active) {            // 3D 星空台接管画面与输入（批次四十八）
+            ADV.Sky3D.update(dt, pressed, held);          // held：方向键环视
+            ADV.Sky3D.render();
             break;
           }
           if (journalOpen) {                              // 手册：暂停世界；← → 切组内页，↑ ↓ 切组
@@ -774,6 +783,8 @@ ADV.Main = (function () {
     canvas.style.width = L.cw + 'px';
     canvas.style.height = L.ch + 'px';
     canvas.classList.toggle('soft', L.cw < W - 1);   // 缩到原生分辨率以下时关掉 pixelated，避免颗粒糊化（P2-21）
+    if (!glEl) glEl = document.getElementById('gl'); // 3D 星空台画布与 #game 同尺寸同位（首次成功后缓存）
+    if (glEl && glEl.style) { glEl.style.width = L.cw + 'px'; glEl.style.height = L.ch + 'px'; }
     ADV.UI.setTouch(touchy);
     ADV.UI.setSafePad(L.pad);                                   // 对话框/选项窗避开虚拟按键
   }

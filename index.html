@@ -9,6 +9,7 @@
 <body>
 <div id="wrap">
   <canvas id="game" width="960" height="640"></canvas>
+  <canvas id="gl" width="960" height="640"></canvas><!-- 3D 星空台（sky3d.js）：WebGL 不可用时保持隐藏，游戏走 2D 原流程 -->
 
   <!-- 触屏虚拟按键（仅触屏设备显示） -->
   <div id="touch-ui">
@@ -62,6 +63,7 @@
 <script src="js/ai.js?v=20260914a" defer></script>
 <script src="js/battle.js?v=20260914a" defer></script>
 <script src="js/minigame.js?v=20260914a" defer></script>
+<script src="js/sky3d.js?v=20261029a" defer></script><!-- 3D 星空台：天文角/天文台顶层；共享 js/vendor/three.min.js（r159），无 THREE/WebGL 自动回退原文案 -->
 <script src="js/game-core.js?v=20260914a" defer></script>
 <script src="js/game-event.js?v=20260914a" defer></script>
 <script src="js/game-scene.js?v=20260914a" defer></script>

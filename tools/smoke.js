@@ -50,7 +50,7 @@ global.addEventListener = (type, fn) => { if (type === 'storage') storageEvents.
 const ROOT = path.join(__dirname, '..');
 const GAME_CHUNKS = ['game-core', 'game-event', 'game-scene', 'game-quest', 'game-retro', 'game-town', 'game-life', 'game-save'];
 const gameSrc = () => GAME_CHUNKS.map(f => fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8')).join('\n');
-for (const f of ['audio', 'sprites', 'maps', 'ui', 'stage3d', 'engine', 'cal', 'books', 'collect', 'mistake', 'growth', 'skills', 'ai', 'battle', 'minigame', ...GAME_CHUNKS]) {
+for (const f of ['audio', 'sprites', 'maps', 'ui', 'stage3d', 'engine', 'cal', 'books', 'collect', 'mistake', 'growth', 'skills', 'ai', 'battle', 'minigame', 'sky3d', ...GAME_CHUNKS]) {
   vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'js', f + '.js'), 'utf8'), { filename: f + '.js' });
 }
 const A = global.ADV;
@@ -58,6 +58,10 @@ A.UI.setCtx(makeCtx(makeCanvas()));   // UI 需要测量文本宽度
 // 序章延迟定时器全局隔离：ngStart/newGame 遗留的 80ms intro 定时器若在后段中途开窗，
 // 会顶掉该段正在等待输入的 say/choose（UI 窗口单例）→ 挂死（曾为 [5.96]/[5.98] 随机挂因；
 // 游戏侧 armIntro 已加空闲门闸，冒烟里序章内容仍由下方 realIntro 显式 pump 验证）。
+// 同族隔离（[5.115]）：game-save 的 soon 家族（guide/lifeBuzz/chapterPulse/tale）在 loadMap
+// 时武装 900ms 真实定时器，空闲缺口开窗——曾致 [5.17] 对话快进 ~20% 假红（[5.113] 排队化
+// 后从「顶窗挂死」变为「僵尸窗排队」），置 __soonOff 全局静默，行为断言见 [5.115]。
+A.__soonOff = true;
 const realIntro = A.Game.S._intro;
 A.Game.S._intro = async () => {};
 A.Main = { startEnding: noop };       // main.js 不参与冒烟测试，祭坛结局走桩
@@ -7878,6 +7882,76 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
        && fs.readFileSync(path.join(ROOT, '.gitattributes'), 'utf8').includes('eol=lf'),
       '行尾守护：.gitattributes 强制 eol=lf——rebase/checkout 不再把工作区写成 CRLF');
   }
+
+  /* ==================== [5.114] 3D 星空台（共享 r159 vendor · sky3d.js，批次六十） ==================== */
+  console.log('\n[5.114] 3D 星空台：天文角/顶层挂点 + 双守卫回退（无 THREE/WebGL 即原文案）——vendor/接线底线由 [5.112] 守护');
+  {
+    try {
+      // —— A. 接线面：index.html / css / main / game-scene ——
+      const html114 = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+      ok(html114.includes('id="gl"') && html114.includes('js/sky3d.js'),
+        'index.html：#gl 画布 + sky3d.js defer 标签在位（共享 js/vendor/three.min.js，不重复引库）');
+      const css114 = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
+      ok(/#gl \{/.test(css114) && css114.includes('display: none'),
+        '#gl 默认隐藏叠于 #game 之上——冒烟/无 WebGL 环境永远走不到显示分支');
+      const main114 = fs.readFileSync(path.join(ROOT, 'js', 'main.js'), 'utf8');
+      ok((main114.match(/\(ADV\.Sky3D && ADV\.Sky3D\.active\)/g) || []).length === 5
+         && main114.includes('ADV.Sky3D.update(dt, pressed, held)')
+         && main114.includes("document.getElementById('gl')"),
+        'main.js 五处接线：prefBlock×2/uiModalBlock/modal 互斥 + 主循环接管分支（同式）+ fit() #gl 尺寸同步');
+      const scene114 = fs.readFileSync(path.join(ROOT, 'js', 'game-scene.js'), 'utf8');
+      ok(scene114.includes("ADV.Sky3D.viewPromise('astro'") && scene114.includes('C.day % STAR_NOTES.length')
+         && scene114.includes("viewPromise('galaxy'") && scene114.includes('银河像一条发光的河'),
+        'game-scene 挂点：天文角观星（今日星座高亮 + 月相随天）与顶层银河均接 3D，且原文案完整保留作回退');
+      // —— B. 行为面：vm 无 THREE == 双守卫回退路径本体 ——
+      ok(!!A.Sky3D && A.Sky3D.active === false && typeof A.Sky3D.dbg === 'object',
+        'sky3d.js 顶层零 THREE/零 DOM：vm 装载成功、active 静止于 false、dbg 观测口可用');
+      ok(A.Sky3D.open('astro', 0, 3) === false && A.Sky3D.open('galaxy') === false
+         && A.Sky3D.active === false && (A.Sky3D.close(), true),
+        '守卫一（无 THREE）双模式 open 均 false + close 空操作安全——无 3D 环境绝不影响原流程');
+      const vr114 = await A.Sky3D.viewPromise('galaxy');
+      ok(vr114 === false, 'viewPromise 失败即 resolve(false)——场景调用方 await 后无缝落回原文案链路');
+    } catch (e) {
+      ok(false, '[5.114] 异常：' + e.message);
+    }
+  }
+
+  /* ==================== [5.115] soon 家族冒烟静默钩子（__soonOff，批次六十并线巡检根修） ====================
+   * game-save 的 guide/lifeBuzz/chapterPulse/tale 在 loadMap 时武装 900ms 真实定时器，
+   * 空闲缺口开窗——[5.113] 排队化后表现为僵尸窗排队，[5.17] 对话快进 ~20% 假红。
+   * 游戏侧四处 `if (ADV.__soonOff) return;` + 冒烟头部全局置位（行为断言在本段临时摘除验证）。 */
+  console.log('\n[5.115] soon 家族（guide/lifeBuzz/chapterPulse/tale）__soonOff 静默钩子——僵尸窗假红根除');
+  { try {
+    const gs115 = fs.readFileSync(path.join(ROOT, 'js', 'game-save.js'), 'utf8');
+    ok((gs115.match(/if \(ADV\.__soonOff\) return;/g) || []).length === 4,
+      '源：guide/lifeBuzz/chapterPulse/tale 四处 __soonOff 门闸（浏览器零影响，仅测试置位）');
+    const snapF115 = JSON.parse(JSON.stringify(A.Game.flags));
+    const snapCal115 = { day: A.Cal.day, period: A.Cal.period, weather: A.Cal.weather, checkedIn: A.Cal.checkedIn, streak: A.Cal.streak };
+    try {
+      A.Game.busy = false;
+      Object.assign(A.Game.flags, { introDone: true, dailyTaleDay: -1, touredCampus: true, touredTown: true });
+      A.Cal.load({ day: 3, period: 2, weather: '晴', checkedIn: true, streak: 1 });
+      // —— 行为一：旗标摘除 → 见闻定时器 900ms 后真实开窗（探针有效性自证） ——
+      A.__soonOff = false;
+      A.Engine.loadMap('fields', 40, 15, 'left');          // fields 只武装 tale，无 guide/chapterPulse 干扰
+      await new Promise(r => setTimeout(r, 1050));         // 900ms 定时器 + 余量
+      const fired115 = A.UI.busy;
+      for (let i = 0; i < 80 && A.UI.busy; i++) A.UI.update(1 / 60, { ok: true });   // 清场
+      ok(fired115, '行为：无旗标时见闻定时器 900ms 后真实开窗（曾为 [5.17] 假红源，探针有效）');
+      // —— 行为二：旗标置位 → 同条件零开窗 ——
+      A.Game.busy = false;
+      A.Game.flags.dailyTaleDay = -1;
+      A.__soonOff = true;
+      A.Engine.loadMap('fields', 40, 15, 'left');
+      await new Promise(r => setTimeout(r, 1050));
+      ok(A.UI.busy === false, '行为：__soonOff 置位后同条件 1s 零开窗——环境叙事定时器被静默');
+    } finally {
+      A.__soonOff = true;
+      Object.assign(A.Game.flags, snapF115);
+      A.Cal.load(snapCal115);
+      for (let i = 0; i < 80 && A.UI.busy; i++) A.UI.update(1 / 60, { ok: true });   // 兜底清场
+    }
+  } catch (e) { ok(false, '[5.115] 异常：' + e.message); } }
 
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
