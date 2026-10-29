@@ -25,6 +25,7 @@ body { display: flex; align-items: center; justify-content: center;
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   display: none; z-index: 5;
   background: #05070f;
+  touch-action: none;            /* 星空台：触屏拖拽环视时别让浏览器抢去滚屏（批次六十二） */
 }
 
 /* ---------- 触屏虚拟按键 ----------

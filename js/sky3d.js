@@ -25,6 +25,7 @@ ADV.Sky3D = (function () {
   let twA = null, twB = null, bandMat = null;      // 闪烁层 ×2 + 银河带材质
   let hiStars = null, hiLines = null;              // 今日高亮星座的脉冲材质
   let meteorOn = false, meteors = null;            // 批次六十一：观星夜流星雨——三条流线的循环池
+  let drag = null, ptrBound = false;               // 批次六十二：指针拖拽环视状态 / 绑定标记
   const D2R = Math.PI / 180;
 
   /* —— 星座定义：az/el 为天球方位角/仰角（度），stars 为 [dAz,dEl] 偏移 ——
@@ -99,6 +100,43 @@ ADV.Sky3D = (function () {
     });
     scene = null; twA = twB = bandMat = hiStars = hiLines = null;
     meteors = null;
+  }
+
+  /* —— 触屏/鼠标环视（批次六十二）：拖住星空拉拽转向（世界随手走的抓取手感），
+   *    轻点（位移 ≤8px 且 <350ms）= 离开——纯触屏没有 Z 键，必须自有离开通道；
+   *    pointer 系列同时覆盖鼠标，桌面党也能按住拖动环视。 —— */
+  function onPtrDown(e) {
+    if (!act || drag) return;
+    drag = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false };
+    try { if (cv.setPointerCapture && e.pointerId != null) cv.setPointerCapture(e.pointerId); } catch (err) {}
+  }
+  function onPtrMove(e) {
+    if (!act || !drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 8) drag.moved = true;
+    yaw += dx * .005;                                  // 拖右→星空右移→视线左转（抓取手感）
+    pitch = Math.max(-.5, Math.min(1.15, pitch + dy * .005));
+    drag.x = e.clientX; drag.y = e.clientY;
+  }
+  function onPtrUp() {
+    if (drag && !drag.moved && performance.now() - drag.t < 350) close();   // 轻点 = 离开
+    drag = null;
+  }
+  function bindPtr() {
+    if (ptrBound || !cv || !cv.addEventListener) return;
+    cv.addEventListener('pointerdown', onPtrDown);
+    cv.addEventListener('pointermove', onPtrMove);
+    cv.addEventListener('pointerup', onPtrUp);
+    cv.addEventListener('pointercancel', onPtrUp);
+    ptrBound = true;
+  }
+  function unbindPtr() {
+    if (!ptrBound || !cv || !cv.removeEventListener) return;
+    cv.removeEventListener('pointerdown', onPtrDown);
+    cv.removeEventListener('pointermove', onPtrMove);
+    cv.removeEventListener('pointerup', onPtrUp);
+    cv.removeEventListener('pointercancel', onPtrUp);
+    ptrBound = false; drag = null;
   }
 
   /* —— 观星夜流星：中高空随机方位生成一条斜向下的流线（头→尾 24-44 单位） —— */
@@ -251,6 +289,9 @@ ADV.Sky3D = (function () {
     const hint = textSprite('←→↑↓ 环视 · Z 离开', '#9fb6e8', 13, true);
     hint.position.set(0, -6.2, -30);
     camera.add(hint);
+    const hint2 = textSprite('触屏/鼠标：拖动环视 · 轻点离开', '#7e93bd', 11, true);   // 批次六十二
+    hint2.position.set(0, -7.7, -30);
+    camera.add(hint2);
   }
 
   function open(m, h, phase, met) {
@@ -275,6 +316,7 @@ ADV.Sky3D = (function () {
       pitch = CONSTS[hi].el * D2R * .8;
     }
     try { cv.style.display = 'block'; } catch (e2) {}
+    bindPtr();                                           // 指针环视：拖拽转向 + 轻点离开（含纯触屏离开通道）
     act = true;
     return true;
   }
@@ -290,6 +332,7 @@ ADV.Sky3D = (function () {
   function close() {
     if (!act) return;
     act = false;
+    unbindPtr();
     try { if (cv) cv.style.display = 'none'; } catch (e) {}
     if (done) { const f = done; done = null; f(true); }
   }
@@ -304,7 +347,7 @@ ADV.Sky3D = (function () {
     if (L.right) { yaw -= spd; moved = true; }
     if (L.up)    { pitch = Math.min(1.15, pitch + spd * .8); moved = true; }
     if (L.down)  { pitch = Math.max(-.5, pitch - spd * .8); moved = true; }
-    if (!moved) {                                          // 闲置缓漂：星空自己活着
+    if (!moved && !(drag && drag.moved)) {                 // 闲置缓漂：星空自己活着（拖拽中不叠加）
       yaw += (.012 + Math.sin(t * .13) * .028) * dt;
       pitch += Math.sin(t * .09) * .005 * dt;
     }

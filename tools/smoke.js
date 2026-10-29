@@ -8013,6 +8013,24 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   } catch (e) { ok(false, '[5.116] 异常：' + e.message); } }
 
+  /* ==================== [5.117] O6 触屏/鼠标环视（批次六十二：拖拽转向 + 轻点离开） ====================
+   * 纯触屏没有 Z 键——3D 视图若无自有离开通道即软锁；pointer 系列同时覆盖鼠标拖拽。
+   * DOM 事件行为面浏览器专属，冒烟走源守护（绑定/解绑对称 + 抓取参数 + css 触摸放行）。 */
+  console.log('\n[5.117] O6 触屏/鼠标环视：拖拽 yaw/pitch + 轻点离开（触屏离开通道 + css touch-action）');
+  { try {
+    const sky117 = fs.readFileSync(path.join(ROOT, 'js', 'sky3d.js'), 'utf8');
+    ok(sky117.includes('function onPtrDown') && sky117.includes('function onPtrMove')
+       && sky117.includes('function onPtrUp') && sky117.includes('bindPtr()')
+       && sky117.includes('unbindPtr()') && /drag\.t < 350\) close\(\)/.test(sky117)
+       && sky117.includes('pitch + dy * .005') && sky117.includes('!(drag && drag.moved)'),
+      'sky3d：pointer 三件套 + open 绑定/close 解绑对称 + 轻点离开（≤8px 且 <350ms）+ 抓取增量 + 拖拽中停闲置漂移');
+    ok(sky117.includes('触屏/鼠标：拖动环视 · 轻点离开'),
+      'sky3d：环视提示补第二行（触屏/鼠标拖拽口径，桌面键盘行不变）');
+    const css117 = fs.readFileSync(path.join(ROOT, 'css', 'style.css'), 'utf8');
+    ok(/#gl \{[^}]*touch-action: none/s.test(css117),
+      'css：#gl touch-action:none——触屏拖拽环视不被浏览器滚屏/双击缩放抢事件');
+  } catch (e) { ok(false, '[5.117] 异常：' + e.message); } }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
