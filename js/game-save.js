@@ -252,6 +252,44 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
     if (!d) return false;
     return applySaveData(d);
   }
+  /* —— O1 离线推进（批次六十三）：读档时按 Date.now() - savedAt 折算错过的自然日（封顶 3 天），
+   *    逐日走 newDay + farmTick + 日常旗标重置的「睡眠模拟」——进化/季节/天气/生日节日 roll、
+   *    庄稼生长（浇水日→次日长一截）、蛋奶羊毛积累、牧场盒产蛋全按既有日结算口径；
+   *    落定为抵达日清晨（newDay 每轮 period 归零），信箱照常生成 + 塞一封「欢迎回来」家书
+   *    汇总离线大事 + 零花钱小礼物（5/天），日历/晨报写入 L 键回看。
+   *    幂等：错过天数只由档内 savedAt 决定——读档不落盘再读结果一致；存过一次盘 savedAt
+   *    刷新自然归零；同日重开（missed=0）零扰动。命名槽读取同走 applySaveData，口径一致。 —— */
+  function offlineAdvance(d) {
+    const C = ADV.Cal, f = state.flags;
+    if (!C || !f || !d || !d.savedAt) return;
+    const missed = Math.min(3, Math.floor((Date.now() - d.savedAt) / 864e5));
+    if (missed < 1) return;
+    const notes = [];
+    for (let i = 0; i < missed; i++) {
+      const evs = C.newDay();
+      try { farmTick(); } catch (e0) {}
+      f.gotLunch = false; f.today = [];
+      f.badges = { math: false, chinese: false, science: false, english: false };
+      f.talent = { sports: false, music: false, labor: false, read: false };
+      evs.forEach(ev => { if (ev.text) notes.push(ev.text); });
+    }
+    try { genMail(); } catch (e1) {}                     // 抵达日清晨的信箱照常生成
+    const gift = 5 * missed;
+    f.gold = (f.gold || 0) + gift;
+    f.mail = f.mail || [];
+    f.mail.unshift({
+      from: '妈妈', title: '欢迎回来', day: C.day, read: false,
+      text: `一转眼你离开了 ${missed} 天——\n院子的地我们都没动，等你回来自己看。` +
+        (notes.length ? `\n这几天家里的事：\n${notes.join('\n')}\n` : '\n') +
+        `桌上有 ${gift} 文零花钱，拿去花吧。`
+    });
+    if (f.mail.length > 10) f.mail.length = 10;
+    try {
+      UI().toast(` 📅 一觉醒来已是第 ${C.day} 天——你离开了 ${missed} 天（信箱有妈妈的信） `);
+      UI().pushHistory('日历', `离线推进：错过 ${missed} 天，抵达第 ${C.day} 天清晨`);
+      notes.forEach(t => UI().pushHistory('晨报', t));
+    } catch (e2) {}
+  }
   /* 应用存档数据：主档回档 / 命名槽读取共用同一条 apply 路径 */
   function applySaveData(d) {
     state.hero = d.hero || 'hero_boy';
@@ -266,6 +304,7 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
       ADV.Engine.loadMap('homeIn', 18, 11, 'up');
       try { UI().toast(' ⚠ 存档地图缺失，已送回家中 '); } catch (e2) {}
     }
+    try { offlineAdvance(d); } catch (e3) {}             // O1 离线推进：绝不因它挡读档（批次六十三）
     return true;
   }
 

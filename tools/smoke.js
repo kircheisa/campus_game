@@ -8031,6 +8031,62 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       'css：#gl touch-action:none——触屏拖拽环视不被浏览器滚屏/双击缩放抢事件');
   } catch (e) { ok(false, '[5.117] 异常：' + e.message); } }
 
+  /* ==================== [5.118] O1 离线推进（批次六十三：读档跨自然日 → 睡眠模拟 + 家书） ====================
+   * savedAt 距今折算错过自然日（封顶 3），逐日 newDay + farmTick + 旗标重置，落定抵达日清晨；
+   * 幂等（只看档内 savedAt），同日重开零扰动。vm 直接拨 savedAt 驱动真链路。 */
+  console.log('\n[5.118] O1 离线推进：读档跨自然日 → 逐日睡眠模拟（封顶 3 天）+ 欢迎回来家书 + 零花钱');
+  {
+    const KMAIN118 = 'campus_adventure_save_v1';
+    const KS118 = [KMAIN118, KMAIN118 + '_a', KMAIN118 + '_b'];
+    const keep118 = {};
+    KS118.forEach(k => { keep118[k] = localStorage.getItem(k); });
+    const snapF118 = JSON.parse(JSON.stringify(A.Game.flags));
+    const snapCal118 = { day: A.Cal.day, period: A.Cal.period, weather: A.Cal.weather, checkedIn: A.Cal.checkedIn, streak: A.Cal.streak };
+    const b64 = d => btoa(unescape(encodeURIComponent(JSON.stringify(d))));
+    try {
+      const gs118 = fs.readFileSync(path.join(ROOT, 'js', 'game-save.js'), 'utf8');
+      ok(gs118.includes('function offlineAdvance') && gs118.includes('try { offlineAdvance(d); } catch')
+         && gs118.includes('Math.min(3, Math.floor((Date.now() - d.savedAt) / 864e5))')
+         && gs118.includes('try { genMail(); } catch'),
+        '源：offlineAdvance 在位 + applySaveData 尾部兜底调用 + 封顶 3 天折算 + 抵达日照常生成信箱');
+      // —— 行为一：拨回 2.5 天 → 推进 2 日 + 家书 + 零花钱 ——
+      A.Game.save();                                       // 以当前状态造档
+      const d118 = JSON.parse(localStorage.getItem(KMAIN118));
+      d118.savedAt = Date.now() - 2.5 * 864e5;
+      ok(A.Game.importSave(b64(d118)) === true, '造档：当前状态落盘 + savedAt 拨回 2.5 天后导入成功');
+      const day0 = A.Cal.day, gold0 = A.Game.flags.gold;
+      const toasts118 = []; const rt118 = A.UI.toast;
+      A.UI.toast = t => { toasts118.push(t); try { rt118(t); } catch (e) {} };
+      try { A.Game.continueGame(); } finally { A.UI.toast = rt118; }
+      ok(A.Cal.day === day0 + 2 && A.Cal.period === 0 && A.Game.flags.gold === gold0 + 10
+         && A.Game.flags.mail && A.Game.flags.mail[0] && A.Game.flags.mail[0].title === '欢迎回来'
+         && toasts118.some(t => t.includes('离开了 2 天')),
+        '行为一：读档跨 2 个自然日 → 逐日睡眠模拟（抵达日清晨 period0）+ 妈妈家书 + 零花钱 +10 + 离线 toast');
+      // —— 行为二：拨回 10 天 → 封顶只推 3 天（以导入档内 cal.day 为基线） ——
+      const d118b = JSON.parse(localStorage.getItem(KMAIN118));
+      d118b.savedAt = Date.now() - 10 * 864e5;
+      A.Game.importSave(b64(d118b));
+      const day1 = d118b.cal.day;
+      A.Game.continueGame();
+      ok(A.Cal.day === day1 + 3, '行为二：离开 10 个自然日 → 封顶只推 3 天（防囤积）');
+      // —— 行为三：同日重开零扰动 ——
+      A.Game.save();                                       // savedAt 刷新为当下
+      const day2 = A.Cal.day, gold2 = A.Game.flags.gold;
+      A.Game.continueGame();
+      ok(A.Cal.day === day2 && A.Game.flags.gold === gold2,
+        '行为三：同日重开（missed=0）→ 日数与金币零扰动（幂等口径）');
+    } finally {
+      try {
+        KS118.forEach(k => {                              // 原档回灌（三槽原串）
+          if (keep118[k] === null) localStorage.removeItem(k); else localStorage.setItem(k, keep118[k]);
+        });
+        A.Game.continueGame();                            // 以原档重载（savedAt 新鲜 → 离线零推进）
+      } catch (e) {}
+      Object.assign(A.Game.flags, snapF118);
+      A.Cal.load(snapCal118);
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
