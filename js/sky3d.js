@@ -4,6 +4,8 @@
  * 天文角观星 / 天文台顶层看银河的升维场景：点云星空 + 银河带 + 星座连线
  * + 中文标牌，方向键环视，Z/X 离开。奖励、日锁、星座心得文案仍全部由
  * game-scene 原链路执行——本模块只负责「看」，不碰任何数值与存档。
+ * 批次六十一：open/viewPromise 增第四参 meteors——观星夜（第 33 天节日）
+ * 传入后加挂三条流线的流星雨池（冷却→划过→再冷却），其余夜空零扰动。
  *
  * 约束（与全项目一致）：
  *  - 顶层零 THREE / 零 DOM 触碰：冒烟 vm 装载安全；THREE 缺失或 WebGL
@@ -22,6 +24,7 @@ ADV.Sky3D = (function () {
   let yaw = 0, pitch = 0, t = 0;
   let twA = null, twB = null, bandMat = null;      // 闪烁层 ×2 + 银河带材质
   let hiStars = null, hiLines = null;              // 今日高亮星座的脉冲材质
+  let meteorOn = false, meteors = null;            // 批次六十一：观星夜流星雨——三条流线的循环池
   const D2R = Math.PI / 180;
 
   /* —— 星座定义：az/el 为天球方位角/仰角（度），stars 为 [dAz,dEl] 偏移 ——
@@ -95,6 +98,19 @@ ADV.Sky3D = (function () {
       }
     });
     scene = null; twA = twB = bandMat = hiStars = hiLines = null;
+    meteors = null;
+  }
+
+  /* —— 观星夜流星：中高空随机方位生成一条斜向下的流线（头→尾 24-44 单位） —— */
+  function spawnMeteor(M) {
+    const az = -170 + Math.random() * 340, el = 38 + Math.random() * 40;
+    const dir = new THREE.Vector3(
+      Math.random() * 1.8 - .9, -(1 + Math.random() * .7), Math.random() * 1.8 - .9
+    ).normalize();
+    M.a = sph(az, el, 170);
+    M.b = M.a.clone().addScaledVector(dir, 24 + Math.random() * 20);
+    M.age = 0; M.dur = .7 + Math.random() * .4;
+    M.mat.opacity = 0;
   }
 
   function build() {
@@ -212,6 +228,22 @@ ADV.Sky3D = (function () {
       scene.add(grp);
     });
 
+    /* 观星夜流星雨（批次六十一）：三条流线的循环池——几何体先给零位，update 里逐条驱动；
+     * frustumCulled 关掉：零位包围球为空，不做会被视锥剔除吞掉 */
+    meteors = null;
+    if (meteorOn) {
+      meteors = [];
+      for (let i = 0; i < 3; i++) {
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+        const mt = new THREE.LineBasicMaterial({ color: 0xeaf2ff, transparent: true, opacity: 0, depthWrite: false });
+        const ln = new THREE.Line(g, mt);
+        ln.frustumCulled = false;
+        scene.add(ln);
+        meteors.push({ ln, mat: mt, wait: .4 + i * 1.2 + Math.random() * .8, dur: .9, age: 0, a: null, b: null });
+      }
+    }
+
     /* 标题与操作提示：挂在相机上（始终可见，不随环视飘走） */
     const title = textSprite(mode === 'galaxy' ? '🔭 天文台顶层 · 银河' : '🔭 天文角 · 校园夜空', '#dfe8ff', 17, true);
     title.position.set(0, 5.6, -30);
@@ -221,7 +253,7 @@ ADV.Sky3D = (function () {
     camera.add(hint);
   }
 
-  function open(m, h, phase) {
+  function open(m, h, phase, met) {
     if (act) return true;
     if (typeof THREE === 'undefined') return false;        // 守卫一：库未加载（含冒烟 vm）→ 回退
     try {
@@ -235,6 +267,7 @@ ADV.Sky3D = (function () {
     mode = (m === 'galaxy') ? 'galaxy' : 'astro';
     hi = (typeof h === 'number') ? h : -1;
     moonPhase = (typeof phase === 'number') ? phase : 0;
+    meteorOn = !!met;
     build();
     yaw = 0; pitch = .18; t = 0;
     if (hi >= 0 && hi < CONSTS.length) {                   // 开场正对今日星座
@@ -247,9 +280,9 @@ ADV.Sky3D = (function () {
   }
 
   /* —— 供场景 async 调用：打开成功 → resolve(true) 于玩家离开时；失败 → 立即 resolve(false) —— */
-  function viewPromise(m, h, phase) {
+  function viewPromise(m, h, phase, met) {
     return new Promise(res => {
-      if (!open(m, h, phase)) { res(false); return; }
+      if (!open(m, h, phase, met)) { res(false); return; }
       done = res;
     });
   }
@@ -283,6 +316,22 @@ ADV.Sky3D = (function () {
     bandMat.opacity = .3 + .12 * Math.sin(t * .7);
     if (hiStars) hiStars.size = (mode === 'galaxy' ? 7 : 4.2) + .9 * Math.sin(t * 3);
     if (hiLines) hiLines.opacity = .55 + .4 * (.5 + .5 * Math.sin(t * 3));
+    if (meteors) for (const M of meteors) {                // 流星雨：冷却倒计时→划过→再冷却
+      if (!M.a) { if ((M.wait -= dt) <= 0) spawnMeteor(M); continue; }
+      M.age += dt;
+      const k = M.age / M.dur;
+      if (k >= 1) { M.a = M.b = null; M.mat.opacity = 0; M.wait = 1.1 + Math.random() * 2.4; continue; }
+      const vx = (M.b.x - M.a.x) * .16 / M.dur * dt,      // 整条线沿航向缓移 16% 长度（拖尾感）
+            vy = (M.b.y - M.a.y) * .16 / M.dur * dt,
+            vz = (M.b.z - M.a.z) * .16 / M.dur * dt;
+      M.a.x += vx; M.a.y += vy; M.a.z += vz;
+      M.b.x += vx; M.b.y += vy; M.b.z += vz;
+      const pa = M.ln.geometry.attributes.position;
+      pa.setXYZ(0, M.a.x, M.a.y, M.a.z);
+      pa.setXYZ(1, M.b.x, M.b.y, M.b.z);
+      pa.needsUpdate = true;
+      M.mat.opacity = Math.sin(Math.PI * k) * .95;         // 透明度包络：亮起→熄灭
+    }
     if (p && (p.ok || p.cancel)) close();
   }
 
@@ -294,6 +343,6 @@ ADV.Sky3D = (function () {
   return {
     open, close, update, render, viewPromise,
     get active() { return act; },
-    get dbg() { return { mode, hi, yaw, pitch }; }         // 供冒烟/调试读取内部状态
+    get dbg() { return { mode, hi, yaw, pitch, meteorOn }; }   // 供冒烟/调试读取内部状态
   };
 })();

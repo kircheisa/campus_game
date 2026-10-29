@@ -441,19 +441,56 @@
     '「金星最亮的时候白天都找得到——\n古人叫它长庚，也叫启明，其实是一颗。」',
     '「月亮今天缺了一角，\n缺口那边其实也在——只是太阳没照到。」'
   ];
+  /* 星座卡（批次六十一）：c19-c22 与 STAR_NOTES 同序——看哪座星，得哪张卡（day%4 轮换首见赠） */
+  const STAR_CARDS = ['c19', 'c20', 'c21', 'c22'];
   S.astroCorner = async () => {
     const f = F(), C = ADV.Cal;
     if (!C.isNight()) { await say({ text: '白天的望远镜罩着镜罩。\n铭牌上刻着：「日落后来观星。」' }); return; }
     if (f.astroDay === C.day) { await say({ text: '你眯眼看了很久，星群在镜筒里轻轻晃。\n（今晚看得够多了，明天再来）' }); return; }
     f.astroDay = C.day;
+    const meteors = C.festival() === '观星夜';            // 批次六十一：观星夜（第 33 天）流星雨
+    const starSky = C.weather === '星空';                 // 批次六十一：通透星空 → 学院分加成
+    let cup = 1;
+    if (starSky) cup++;
     if (ADV.Growth) ADV.Growth.addDim('mind', 2, '观星');
-    addCup(1);
+    addCup(cup);
     ADV.Audio.sfx('save');
     // 批次四十八：3D 星空台——成功则先环视夜空（Z 返回后继续走下方心得与提示），
     // 失败（无 THREE / 无 WebGL，含冒烟环境）静默跳过直接看原文案；奖励与日锁口径不变。
-    if (ADV.Sky3D) await ADV.Sky3D.viewPromise('astro', C.day % STAR_NOTES.length, C.day % 8);
-    await say({ text: `你凑上目镜——夜空哗地铺开。\n${STAR_NOTES[C.day % STAR_NOTES.length]}\n（心性 +2 · 学院分 +1）` });
-    UI().toast(' 🔭 天文角观星：心性 +2 · 学院分 +1 ');
+    // 批次六十一：观星夜传入 meteors——3D 视野里多一场流星雨（旧客户端参数缺失即无流星）。
+    if (ADV.Sky3D) await ADV.Sky3D.viewPromise('astro', C.day % STAR_NOTES.length, C.day % 8, meteors);
+    // 星座卡首见赠（gain 自带查重与「收藏入手」吐司）——四枚集齐同街机口径发完成奖励
+    const cid = STAR_CARDS[C.day % STAR_CARDS.length];
+    let cardLine = '', completeLine = '';
+    if (ADV.Collect && !ADV.Collect.has('cards', cid)) {
+      ADV.Collect.gain('cards', cid);
+      const info = ADV.Collect.info('cards', cid);
+      ADV.Audio.sfx('item');
+      cardLine = `\n（星座卡入手：${info ? info.name : cid}——已收进卡册）`;
+      logEvent(`在天文角收下星座卡「${info ? info.name : cid}」`);
+      if (STAR_CARDS.every(id => ADV.Collect.has('cards', id))) {
+        addCup(5);
+        completeLine = '\n四枚星座卡集齐——整片夜空都是你的了！（成就「星空观测者」· 学院分 +5）';
+        logEvent('集齐四枚星座卡，成为「星空观测者」');
+      }
+    }
+    // 观星夜许愿：婉拒不扣不烧——astroDay 已锁当晚，本选择不会重来第二遍
+    let wishLine = '';
+    if (meteors) {
+      f.wishDay = C.day;
+      const w = await choose(['对着一颗最亮的流星许愿', '心里默默记住就好'],
+        { caption: { name: '观星夜', text: '一颗流星拖着银尾划过天顶——\n今晚云量低，宜许愿。' } });
+      if (w === 0) {
+        if (ADV.Growth) ADV.Growth.addDim('mind', 2, '许愿');
+        addCup(1);
+        wishLine = '\n你闭眼合掌，把愿望说给最亮的那颗流星听过了。（心性 +2 · 学院分 +1）';
+        logEvent('在观星夜对流星许了愿');
+      } else {
+        wishLine = '\n你把愿望悄悄收好——有些话说出口就不灵了。';
+      }
+    }
+    await say({ text: `你凑上目镜——夜空哗地铺开。\n${STAR_NOTES[C.day % STAR_NOTES.length]}\n（心性 +2 · 学院分 +${cup}${starSky ? '，星空通透加成 +1' : ''}）${cardLine}${completeLine}${wishLine}` });
+    UI().toast(` 🔭 天文角观星：心性 +2 · 学院分 +${cup}${meteors ? ' · 观星夜流星雨' : ''} `);
     logEvent('在天文角看了一晚星星');
     save();
   };

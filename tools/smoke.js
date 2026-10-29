@@ -978,8 +978,8 @@ async function pump(promise, maxSteps) {
   // —— 图鉴第 8 类 ——
   ok(A.Collect.CATS.length === 9 && A.Collect.CATS.some(c => c[0] === 'cards') && A.Collect.CATS.some(c => c[0] === 'scenes')
      && A.Collect.DB.critters.length === 48, '图鉴 9 类 + 生物图鉴 48 种（虫系旧 8 种并入生物图鉴）');
-  ok(A.Collect.DB.cards.length === 18 && A.Collect.DB.cards.every(c => c.id && c.name && c.star >= 1 && c.star <= 3),
-     `童年卡 12 + 街机限定 6 = ${A.Collect.DB.cards.length} 张齐备（含 1-3 星）`);
+  ok(A.Collect.DB.cards.length === 22 && A.Collect.DB.cards.every(c => c.id && c.name && c.star >= 1 && c.star <= 3),
+     `童年卡 12 + 街机限定 6 + 星座卡 4 = ${A.Collect.DB.cards.length} 张齐备（含 1-3 星）`);
   // —— 地图触发点 ——
   const cus = A.Maps.get('campus');
   ok(['hopscotch', 'marbles', 'snowfight', 'radio'].every(s => cus.objects.some(o => o.s === s)),
@@ -7952,6 +7952,66 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       for (let i = 0; i < 80 && A.UI.busy; i++) A.UI.update(1 / 60, { ok: true });   // 兜底清场
     }
   } catch (e) { ok(false, '[5.115] 异常：' + e.message); } }
+
+  /* ==================== [5.116] 星空台二期（批次六十一：观星夜流星雨+许愿 / 星空加成 / 星座图鉴） ====================
+   * O3：sky3d 第四参 meteors（三条流线循环池）+ 观星夜许愿 choose（wishDay 记档）；
+   * O4：星空天气 → 学院分 +2（基础 1 + 加成 1）；
+   * O5：星座卡 c19-c22 与 STAR_NOTES 同序 day%4 轮换首见赠 + 成就「星空观测者」+ 集齐 +5。 */
+  console.log('\n[5.116] 星空台二期：观星夜流星雨许愿 · 星空天气加成 · 星座卡 c19-c22 与「星空观测者」');
+  { try {
+    // —— A. 源守护 ×4 ——
+    const sky116 = fs.readFileSync(path.join(ROOT, 'js', 'sky3d.js'), 'utf8');
+    ok(sky116.includes('meteorOn') && sky116.includes('function spawnMeteor')
+       && sky116.includes('open(m, h, phase, met)') && sky116.includes('viewPromise(m, h, phase, met)'),
+      'sky3d：open/viewPromise 第四参 meteors 接入 + spawnMeteor 流线池（观星夜限定，其余夜空零扰动）');
+    const scene116 = fs.readFileSync(path.join(ROOT, 'js', 'game-scene.js'), 'utf8');
+    ok(scene116.includes("C.festival() === '观星夜'") && scene116.includes('f.wishDay = C.day')
+       && scene116.includes('STAR_CARDS') && scene116.includes("C.weather === '星空'"),
+      'game-scene：观星夜传 meteors + 许愿 wishDay 记档 + 星座卡轮换 + 星空天气加成四分支在位');
+    const col116 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+    ok(['c19', 'c20', 'c21', 'c22'].every(id => col116.includes(`id: '${id}'`)),
+      'collect：星座卡 c19 天鹅座 / c20 仙后座 / c21 长庚启明 / c22 闪卡·星之誓约 入册');
+    const town116 = fs.readFileSync(path.join(ROOT, 'js', 'game-town.js'), 'utf8');
+    ok(town116.includes("'星空观测者'") && ['c19', 'c20', 'c21', 'c22'].every(id => town116.includes(`'${id}'`)),
+      'game-town：成就「星空观测者」= 四枚星座卡集齐');
+    // —— B. 行为链：连看四晚 → 33 观星夜许愿 / 34 星空加成 / 36 集齐完成 ——
+    const snapF116 = JSON.parse(JSON.stringify(A.Game.flags));
+    const snapCal116 = { day: A.Cal.day, period: A.Cal.period, weather: A.Cal.weather, checkedIn: A.Cal.checkedIn, streak: A.Cal.streak };
+    try {
+      // 晚一（day 33 观星夜）：流星雨 + 许愿（学院分 = 基础 1 + 许愿 1）+ 星座卡 c20
+      A.Cal.load({ day: 33, period: 5, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const cup116 = A.Game.flags.cup;
+      choosePick = () => 0;                                // 对着一颗最亮的流星许愿
+      try { await pump(A.Game.S.astroCorner(), 4000); } finally { choosePick = null; }
+      ok(A.Game.flags.astroDay === 33 && A.Game.flags.wishDay === 33
+         && A.Game.flags.cup === cup116 + 2 && A.Collect.has('cards', 'c20') && !A.Collect.has('cards', 'c21'),
+        '行为一：观星夜观星 → 许愿（学院分 +2）+ 星座卡 c20（33%4）首见入手，astroDay/wishDay 双记档');
+      // 晚二（day 34 星空天气）：学院分 = 基础 1 + 星空加成 1，星座卡 c21，昨夜 wishDay 不被顶掉
+      A.Cal.load({ day: 34, period: 5, weather: '星空', checkedIn: true, streak: 1, energy: 50 });
+      const cup116b = A.Game.flags.cup;
+      await pump(A.Game.S.astroCorner(), 2000);
+      ok(A.Game.flags.astroDay === 34 && A.Game.flags.cup === cup116b + 2
+         && A.Collect.has('cards', 'c21') && A.Game.flags.wishDay === 33,
+        '行为二：星空夜观星 → 学院分 +2（基础+加成）+ c21 入手，wishDay 仍留观星夜档');
+      // 晚三（day 35 常规晴夜）：学院分 +1，星座卡 c22
+      A.Cal.load({ day: 35, period: 5, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const cup116c = A.Game.flags.cup;
+      await pump(A.Game.S.astroCorner(), 2000);
+      ok(A.Game.flags.cup === cup116c + 1 && A.Collect.has('cards', 'c22'),
+        '行为三：常规晴夜 → 学院分 +1 无加成 + c22 入手（day%4 轮换口径稳定）');
+      // 晚四（day 36）：c19 补完最后一枚 → 集齐奖励学院分 +5
+      A.Cal.load({ day: 36, period: 5, weather: '晴', checkedIn: true, streak: 1, energy: 50 });
+      const cup116d = A.Game.flags.cup;
+      await pump(A.Game.S.astroCorner(), 2000);
+      ok(A.Game.flags.cup === cup116d + 1 + 5
+         && ['c19', 'c20', 'c21', 'c22'].every(id => A.Collect.has('cards', id)),
+        '行为四：c19 补完 → 四枚星座卡集齐，成就「星空观测者」链路 + 学院分 +5 到账');
+    } finally {
+      Object.assign(A.Game.flags, snapF116);
+      A.Cal.load(snapCal116);
+      for (let i = 0; i < 80 && A.UI.busy; i++) A.UI.update(1 / 60, { ok: true });   // 兜底清场
+    }
+  } catch (e) { ok(false, '[5.116] 异常：' + e.message); } }
 
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
