@@ -8087,6 +8087,46 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.119] O2 经济数值工具化（批次六十四：tools/econ.js 模型 + 敏感性） ====================
+   * 经济观察 §1/§2 抽成参数模型（日入源 cap×take、大件池），敏感性排名产出调参建议；
+   * 零改游戏数值——关键参数经源断言钉在游戏源码上防漂移。 */
+  console.log('\n[5.119] O2 经济数值工具化：tools/econ.js 参数模型 + 口径核对 + 敏感性排名');
+  {
+    try {
+      const E = require('./econ.js');
+      ok(Array.isArray(E.INCOME) && E.INCOME.length === 9 && Array.isArray(E.BIG) && E.BIG.length === 4
+         && E.poolTotal() === 1600 && E.lumpTotal() === 113,
+        '源：econ 模型在盘——9 个日收入源 + 4 大件（池合计 1600 = 630+300+420+250）+ 一次性 113');
+      const colSrc = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      const retroSrc = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const questSrc = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
+      ok(colSrc.includes("price: 8, desc: '刚钓上来的。可以卖钱") && retroSrc.includes('Math.min(60, 20 + streak * 10)')
+         && questSrc.includes('温室（💰300）') && retroSrc.includes('{ gold: 250, name: \'梦想小窝\''),
+        '源：模型锚点与游戏源码钉死（鲜鱼价 8 / 擂台封顶式 / 温室 300 / 基地末级 250），防模型漂移');
+      ok(E.ladderAt(0) === 20 && E.ladderAt(2) === 40 && E.ladderAt(4) === 60 && E.ladderAt(99) === 60,
+        '行为：赌连胜专项——ladderAt 连胜 0/2/4/99 → 20/40/60/60（封顶 60 口径复现）');
+      const a119 = E.analyze();
+      ok(a119.claims.midInRange && a119.claims.noRunaway && a119.claims.twoWeeks,
+        '行为：经济观察三条结论全部复核通过（中期日入 60-150 / 无单口爆点 / 两周回收）');
+      ok(a119.daily.standard >= 60 && a119.daily.standard <= 150 && a119.daily.ceiling < 300
+         && a119.shares[0].pct < 25 && a119.recycle.pool === 1600
+         && a119.recycle.daysStandard >= 10 && a119.recycle.daysStandard <= 20,
+        `行为：标准日入 ${a119.daily.standard} ∈[60,150]、天花板 ${a119.daily.ceiling}<300、单源 ${a119.shares[0].pct}%<25%、标准回收 ${a119.recycle.daysStandard} 天∈[10,20]`);
+      ok(JSON.stringify(a119) === JSON.stringify(E.analyze()),
+        '行为：analyze 全确定性——两次调用逐字节一致（无随机、可进 CI）');
+      const s119 = a119.sens;
+      const rankOf = t => s119.find(v => v.label.includes(t)).rank;
+      ok(s119.length === 6 && s119[0].rank === 1 && s119[0].label.includes('肝度'),
+        '行为：敏感性六变体齐全且首位是「全源肝度」——通胀敏感度由肝度类主导');
+      ok(rankOf('擂台封顶') < rankOf('鱼价') && rankOf('鱼价') < 6 && rankOf('时薪') === 6,
+        '行为：O2 三问定序——擂台封顶 > 鱼价 > 办公时薪（单价类垫底：实机体感通胀先查肝度/封顶，动单价无效）');
+      const cli119 = E.report();
+      ok(cli119.includes('经济曲线数值模型复核') && cli119.includes('调参建议')
+         && cli119.includes('§D 口径核对') && !cli119.includes('NaN'),
+        '行为：CLI 报告可打印——四节齐全、无 NaN（tools/econ.js 直跑即出报告）');
+    } catch (e) { ok(false, '[5.119] 异常：' + e.message); }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);
