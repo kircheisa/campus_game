@@ -607,8 +607,7 @@
             { caption: { name: `野生的${cr.name}`, text: shiny ? '金色的绒毛在光里一闪一闪——\n它好像对你很感兴趣！'
                                                                 : '它从指缝里探出小脑袋望着你——\n要和这个小家伙结伴同行吗？' } });
           if (inv === 0) {
-            const en = CO.critterEntry(cr.id);   // 批次六十八：个体体格随行（大个/小不点地图缩放的原料；笼捕个体不掷体格记 null）
-            f.buddy = { id: cr.id, shiny: shiny ? 1 : 0, body: (en && en.body) || null };
+            CO.rosterLoad(cr.id);                // 批次七十：旧随行寄存入册 + 新伙伴装载（笼捕个体不掷体格→常态；换宠不丢级）
             ADV.Engine.spawnBuddy();
             ADV.UI.toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
             logEvent(`${cr.name} 成了随行伙伴`);
@@ -687,6 +686,7 @@
       if (bye !== 0) continue;
       f.buddy = null;
       f.buddyLv = 1; f.buddyExp = 0; f.buddyExpGot = 0; f.buddyExpDay = 0;   // 批次六十六：等级随这段同行一并毕业
+      ADV.Collect.rosterDrop(cr.id);                      // 批次七十：道别即名册除名——它带走自己的等级与亲密
       ent.hidden = true; ent.followT = 0;
       ADV.Audio.sfx('cancel');
       ADV.UI.toast(` 与${cr.name}挥手道别，它一溜烟跑远了 `);
@@ -780,7 +780,7 @@
         { caption: { name: `刚出生的${cr.name}`, text: '它睁开水汪汪的眼睛，\n把你当成了家里人——' } });
       if (inv === 0) {
         const e = CO.critterEntry(id);
-        f.buddy = { id, shiny: e && e.s ? 1 : 0, body: (e && e.body) || null };   // 批次六十八：体格随行（孵出个体若掷过体格则带着走）
+        CO.rosterLoad(id);                     // 批次七十：旧随行寄存入册 + 孵出的新种装载（体格/异色从图鉴条目带入）
         ADV.Engine.spawnBuddy();
         if (first) {
           f.buddyBond = Math.min(100, (f.buddyBond || 0) + 15);

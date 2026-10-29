@@ -322,8 +322,21 @@ E().playAction(E().player, 'laugh', 1.6);
     /* 批次六十六 C：个体差异 roll（体型×性情）+ 异色预 roll——金光在进画布前就预告，收服时兑现 */
     const wild = CO.rollWild(cr);
     const wildShiny = CO.rollShiny(CO.shinyMult());
+    // 批次七十：战前派宠——开了「战前派宠」且名册不止一只时先问派谁（默认关：随行自动上阵）
+    let pickNone = false;
+    if (f.battlePick) {
+      const cands = CO.rosterList();
+      if (cands.length >= 2) {
+        const popts = cands.map(c => `${c.cr.name} Lv${c.lv}${c.buddy ? (c.rest ? '（随行·休整中）' : '（随行）') : ''}${c.shiny ? ' ✨' : ''}`)
+                           .concat(['不派伙伴（自己上）']);
+        const pi = await choose(popts, { caption: { name: '随行', text: '这一场派谁上阵？' }, cancelIndex: popts.length - 1 });
+        if (pi === -1 || pi >= cands.length) pickNone = true;
+        else if (!cands[pi].buddy) CO.rosterLoad(cands[pi].id);       // 换它上：寄存旧随行 → 装载新随行（成长各归各）
+        else if (cands[pi].rest) f.buddy.rest = false;                // 随行正休整：点了名就是唤出
+      }
+    }
     // 伙伴体力续航：跨天回满，战斗间保留（精灵口粮 / 面对伙伴按 Z 喂吃的可回满）
-    const budCr = (f.buddy && !f.buddy.rest) ? CO.critter(f.buddy.id) : null;   // 批次六十八：休整中不随战（脱身战口径，等级经验不涨）
+    const budCr = (!pickNone && f.buddy && !f.buddy.rest) ? CO.critter(f.buddy.id) : null;   // 批次六十八/七十：休整中或「不派」→ 脱身战口径（等级经验不涨）
     const fullHp = budCr ? budCr.pow * 6 + 20 : 0;
     if (budCr) {                                           // 休整中的不动体力账——别把存着的满状态清成 0
       if ((f.wildHpDay || 0) !== C.day) { f.wildHpDay = C.day; f.wildHp = null; }
@@ -367,8 +380,7 @@ E().playAction(E().player, 'laugh', 1.6);
           const inv = await choose([`让${cr.name}跟着你走`, '放它回草丛深处'],
             { caption: { name: `野生的${cr.name}`, text: '球里的小家伙探出脑袋望着你——\n要邀它结伴同行吗？' } });
           if (inv === 0) {
-            const en = CO.critterEntry(cr.id);   // 批次六十八：个体体格随行（大个/小不点地图与战斗可见）
-            f.buddy = { id: cr.id, shiny: wildShiny ? 1 : 0, body: (en && en.body) || null };
+            CO.rosterLoad(cr.id);                // 批次七十：旧随行寄存入册 + 新伙伴装载（体格/异色从图鉴条目带入，换宠不丢级）
             f.wildHp = CO.critter(cr.id).pow * 6 + 20; f.wildHpDay = C.day;
             ADV.Engine.spawnBuddy();
             UI().toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
@@ -456,9 +468,11 @@ E().playAction(E().player, 'laugh', 1.6);
     const f = F(), CO = ADV.Collect;
     while (true) {
       const prog = CO.progress();
-      /* 批次六十八：随行伙伴休整中时多一项「唤出」——菜单动态拼，老六项顺序不动（图鉴交换仍在先逛逛前） */
+      /* 批次六十八/七十：菜单动态拼——休整中多「唤出」；名册时代多「换它上阵」与「战前派宠」开关。
+       * 老六项顺序不动（买补给…图鉴交换 = 0-4，索引式按键泵兼容），新增项都排在「先逛逛」前。 */
       const menu = ['买补给', '珍稀精灵架', '收购台', '驯兽讨教', '图鉴交换'];
       if (f.buddy && f.buddy.rest) menu.push('唤出休整的小伙伴');
+      menu.push('换它上阵', `战前派宠：${f.battlePick ? '开' : '关'}`);
       menu.push('先逛逛');
       const a = await choose(menu, { caption: { name: '阿橘',
         text: `欢迎光临精灵小筑～\n你的图鉴收录了 ${prog.got}/${prog.total} 种。\n口粮和宠物球，都是草丛探险的好帮手！` } });
@@ -537,6 +551,26 @@ E().playAction(E().player, 'laugh', 1.6);
         ADV.Engine.spawnBuddy();
         UI().toast(` ${CO.critter(f.buddy.id).name}精神抖擞地跑回你身边啦！ `);
         logEvent(`唤出休整中的${CO.critter(f.buddy.id).name}（随行恢复）`);
+        continue;
+      }
+      if (menu[a] === '换它上阵') {                      // 批次七十：名册换随行——成长各归各，不丢级不丢亲密
+        const cands = CO.rosterList().filter(c => !c.buddy);
+        if (!cands.length) { UI().toast(' 名册上暂时没有别的小伙伴——先去收服或接回几只吧 '); continue; }
+        const copts = cands.map(c => `${c.cr.name} Lv${c.lv}${c.shiny ? ' ✨' : ''}（亲密度 ${c.bond}）`);
+        const ci = await choose(copts, { caption: { name: '阿橘', text: '让谁跟你出门？' }, cancelIndex: copts.length - 1 });
+        if (ci >= 0 && ci < cands.length) {
+          CO.rosterLoad(cands[ci].id);
+          ADV.Engine.spawnBuddy();
+          ADV.Audio.sfx('item');
+          UI().toast(` ${cands[ci].cr.name}换到前头啦——它的等级亲密度都是它自己的 `);
+          logEvent(`换随行：${cands[ci].cr.name}上阵（名册）`);
+        }
+        continue;
+      }
+      if (menu[a] === '战前派宠：开' || menu[a] === '战前派宠：关') {   // 批次七十：遭遇战是否先弹派宠菜单
+        f.battlePick = !f.battlePick;
+        ADV.Audio.sfx(f.battlePick ? 'item' : 'cancel');
+        UI().toast(f.battlePick ? ' 战前派宠已开——遭遇野生的会先问「派谁上阵」 ' : ' 战前派宠已关——随行自动上阵 ');
         continue;
       }
       if (a === 4) { await S.exchange(); continue; }   // P4 图鉴交换所：重复伙伴 + 换资 → 未得图鉴

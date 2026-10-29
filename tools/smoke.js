@@ -8335,16 +8335,16 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       ok(rSrc122.includes("'唤出休整的小伙伴'") && rSrc122.includes('f.buddy.rest = false')
          && rSrc122.includes("'（休整中）'"),
         '源：精灵小筑柜台动态多「唤出休整的小伙伴」（老六项顺序不动）；收购台随行标签区分（休整中）/（随行中）');
-      ok(rSrc122.includes('(f.buddy && !f.buddy.rest)') && rSrc122.includes('&& budCr) f.wildHp'),
-        '源：休整中不随战——脱身战口径，体力账不清零也不回写（旧代码跨天会把存着的满状态冲成 0）');
+      ok(rSrc122.includes('!pickNone && f.buddy && !f.buddy.rest') && rSrc122.includes('&& budCr) f.wildHp'),
+        '源：休整中或「不派」不随战——脱身战口径，体力账不清零也不回写（旧代码跨天会把存着的满状态冲成 0）');
       ok(sSrc122.includes("'buddy_' + cr.id") && sSrc122.includes('function budHash') && sSrc122.includes('v.round'),
         '源：出稿按物种——缓存键带物种 id（不再三系一张脸），哈希色板 + 身材/耳朵/背斑变异');
       ok(bSrc122.includes('body: fm.body || null') && bSrc122.includes("e.body === 'big' ? 1.12")
          && eSrc122.includes('b && b.rest') && eSrc122.includes('dscale'),
         '源：大个/小不点体型入画——战斗画布缩放 1.12/.9，地图行走图 dscale 且休整中不生成');
-      ok((qSrc122.match(/body: \((en|e) && (en|e)\.body\) \|\| null/g) || []).length === 2
-         && (rSrc122.match(/body: \(en && en\.body\) \|\| null/g) || []).length === 1,
-        '源：三处邀随行都抄个体体格——f.buddy.body 从图鉴条目入旗标（否则 dscale 永远落在 1，地图缩放形同虚设）');
+      ok((qSrc122.match(/CO\.rosterLoad\(/g) || []).length === 2
+         && rSrc122.includes('CO.rosterLoad(cr.id)'),
+        '源：三处邀随行走名册装载——旧随行寄存入册、新伙伴体格/异色从图鉴条目带入（批次七十：换宠不丢级，dscale 原料随条目走）');
 
       // —— 行为 A：出稿按物种——同系异种各自成稿；同种稳定复用缓存；异色换色不换稿 ——
       const famA = db122.find(c => db122.some(d => d.id !== c.id && d.fam === c.fam));
@@ -8444,6 +8444,110 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       A.Cal.load(cal123);
       F123.buddy = prev123.buddy; F123.wildHp = prev123.wildHp;
       F123.wildHpDay = prev123.wildHpDay; F123.tame = prev123.tame;
+    }
+  }
+
+  /* ==================== [5.124] 批次七十：伙伴名册 + 战前派宠 ====================
+   * 名册按物种各记成长——换随行=寄存/装载全局工作区（battle/engine/gainBondExp 零改动），
+   * 换宠不丢级；「战前派宠」开关默认关，开了遭遇战先问派谁（可换名册成员、可「不派」走脱身战）；
+   * 卖出/换走/道别即名册除名。源守护 + 定桩行为双验。 */
+  console.log('\n[5.124] 批次七十：伙伴名册 + 战前派宠');
+  {
+    const rnd124 = Math.random, stub124 = A.Battle, say124 = A.UI.say, toast124 = A.UI.toast, cp124 = choosePick;
+    const F124 = A.Game.flags;
+    const prev124 = { buddy: F124.buddy, buddyLv: F124.buddyLv, buddyExp: F124.buddyExp,
+                      buddyExpGot: F124.buddyExpGot, buddyExpDay: F124.buddyExpDay,
+                      buddyBond: F124.buddyBond, buddyWalkDay: F124.buddyWalkDay,
+                      wildHp: F124.wildHp, wildHpDay: F124.wildHpDay,
+                      petRoster: F124.petRoster ? JSON.parse(JSON.stringify(F124.petRoster)) : undefined,
+                      battlePick: F124.battlePick, tame: F124.tame, gold: F124.gold };
+    const cal124 = A.Cal.dump();
+    const db124 = A.Collect.DB.critters;
+    const ik124 = (A.Game.flags.col && A.Game.flags.col.insects) || {};
+    const prevIk = { c6: ik124.c6, c7: ik124.c7, c8: ik124.c8 };
+    try {
+      // —— 源守护 ——
+      const cSrc124 = fs.readFileSync(path.join(ROOT, 'js', 'collect.js'), 'utf8');
+      const rSrc124 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const qSrc124 = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
+      const gSrc124 = fs.readFileSync(path.join(ROOT, 'js', 'game-core.js'), 'utf8');
+      ok(cSrc124.includes('function rosterStash') && cSrc124.includes('function rosterLoad')
+         && cSrc124.includes('function rosterList') && cSrc124.includes('rosterDrop(id);')
+         && cSrc124.includes('rosterDrop(giveId);'),
+        '源：名册核在 collect——寄存/装载/候选列表；卖出与换走的落册点同步除名（rosterDrop）');
+      ok(gSrc124.includes('petRoster: {}') && gSrc124.includes('battlePick: false'),
+        '源：blankFlags 只增补空——petRoster 空表 + 战前派宠默认关（旧档自动补）');
+      ok(rSrc124.includes('f.battlePick') && rSrc124.includes("'不派伙伴（自己上）'")
+         && rSrc124.includes("'换它上阵'") && rSrc124.includes("'战前派宠：开'"),
+        '源：遭遇战派宠菜单（默认关、可换可不派）+ 阿橘柜台「换它上阵」与开关项——老六项索引不动');
+      ok(qSrc124.includes('ADV.Collect.rosterDrop(cr.id)') && (qSrc124.match(/CO\.rosterLoad\(/g) || []).length === 2,
+        '源：道别即名册除名（等级带走）；笼捕与孵化邀新都走名册装载——换宠不丢级');
+
+      // —— 行为 A：旧档迁移 + 换随行寄存/装载，成长各归各 ——
+      A.Collect.DB.critters = [A.Collect.critter('c6'), A.Collect.critter('c7'), A.Collect.critter('c8')];
+      A.Cal.load({ day: 52, period: 2, weather: '晴', checkedIn: true, streak: 1 });
+      F124.tame = {};
+      F124.buddy = { id: 'c6', shiny: 0, body: 'big', rest: false };
+      F124.buddyLv = 3; F124.buddyExp = 2; F124.buddyBond = 44; F124.wildHp = 25; F124.wildHpDay = 52;
+      const colRef124 = A.Game.flags.col || (A.Game.flags.col = {});
+      const ins124 = colRef124.insects || (colRef124.insects = {});
+      ins124.c6 = { s: 0, d: 52 }; ins124.c7 = { s: 0, d: 52 }; ins124.c8 = { s: 0, d: 52 };
+      A.Collect.rosterEnsure();
+      ok(F124.petRoster.c6 && F124.petRoster.c6.lv === 3 && F124.petRoster.c6.bond === 44,
+        '行为：旧档迁移——现随行 Lv3/亲密 44 一次性寄存入册（rosterEnsure 幂等）');
+      A.Collect.rosterLoad('c7');
+      ok(F124.buddy.id === 'c7' && F124.buddyLv === 1 && F124.buddyBond === 0
+         && F124.petRoster.c6.lv === 3 && F124.petRoster.c6.bond === 44 && F124.petRoster.c6.body === 'big',
+        '行为：换随行——c7 上阵（首来 Lv1/亲密 0），c6 的 Lv3/亲密 44/体格 big 原样留册');
+      F124.buddyLv = 2; F124.buddyBond = 10;                       // c7 上阵期间练过
+      A.Collect.rosterLoad('c6');
+      ok(F124.buddy.id === 'c6' && F124.buddyLv === 3 && F124.buddyBond === 44 && F124.wildHp === 25
+         && F124.petRoster.c7.lv === 2 && F124.petRoster.c7.bond === 10,
+        '行为：换回 c6——Lv3/亲密 44/体力 25 原样归位，c7 练出来的 Lv2/亲密 10 留册');
+
+      // —— 行为 B：战前派宠——开了先问；「不派」走脱身战且体力账不动；点名册成员=换随行上阵 ——
+      const caps124 = [];
+      A.UI.say = () => Promise.resolve();
+      A.UI.toast = () => {};
+      A.Battle = { ...stub124, start: (k, o, cb) => { caps124.push(o); cb({ outcome: 'fled', myHp: 12, foeHp: 9 }); } };
+      F124.battlePick = true;
+      Math.random = () => .01;
+      choosePick = opts => { const i = opts.findIndex(o => String(o).includes('不派伙伴'));
+                             return i < 0 ? opts.length - 1 : i; };
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(caps124[0] && caps124[0].buddy === null && F124.wildHp === 25,
+        '行为：战前选「不派」→ 脱身战（无伙伴助战），随行体力账 25 原样不动');
+      choosePick = opts => { const i = opts.findIndex(o => String(o).includes(A.Collect.critter('c7').name));
+                             return i < 0 ? opts.length - 1 : i; };
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(caps124[1] && caps124[1].buddy && caps124[1].buddy.id === 'c7' && F124.buddy.id === 'c7'
+         && F124.petRoster.c6.lv === 3 && F124.buddyLv === 2,
+        '行为：战前点名册成员 → 寄存/装载后 c7 上阵（Lv2 归位），c6 成长留册');
+      choosePick = cp124;
+      F124.battlePick = false;
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(caps124[2] && caps124[2].buddy && caps124[2].buddy.id === 'c7',
+        '行为：开关关掉 → 随行自动上阵（现状口径，不再弹菜单）');
+
+      // —— 行为 C：卖出落册除名 ——
+      const sold124 = A.Collect.sellCritter('c8');
+      ok(sold124.ok && F124.petRoster.c8 === undefined,
+        '行为：卖出的小伙伴名册除名——接回来也从头认识（防卖买来回刷级）');
+    } finally {
+      Math.random = rnd124;
+      A.Battle = stub124;
+      A.UI.say = say124;
+      A.UI.toast = toast124;
+      choosePick = cp124;
+      A.Collect.DB.critters = db124;
+      A.Cal.load(cal124);
+      const F2 = A.Game.flags, p = prev124;
+      F2.buddy = p.buddy; F2.buddyLv = p.buddyLv; F2.buddyExp = p.buddyExp;
+      F2.buddyExpGot = p.buddyExpGot; F2.buddyExpDay = p.buddyExpDay; F2.buddyBond = p.buddyBond;
+      F2.buddyWalkDay = p.buddyWalkDay; F2.wildHp = p.wildHp; F2.wildHpDay = p.wildHpDay;
+      F2.petRoster = p.petRoster; F2.battlePick = p.battlePick; F2.tame = p.tame; F2.gold = p.gold;
+      ik124.c6 = prevIk.c6; ik124.c7 = prevIk.c7; ik124.c8 = prevIk.c8;
+      ['c6', 'c7', 'c8'].forEach(k => { if (prevIk[k] === undefined) delete ik124[k]; });
     }
   }
 

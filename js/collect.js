@@ -617,6 +617,54 @@ ADV.Collect = (function () {
                body: (e && e.body) || 'normal', temper: (e && e.temper) || '沉着' };   // 批次六十六：个体差异透出
     }).filter(Boolean);
   }
+  /* ---------- 批次七十：伙伴名册（按物种各记一份成长；换随行=寄存/装载工作区） ----------
+   * 成长的工作区仍是 f.buddyLv/f.buddyExp/f.buddyExpGot/f.buddyExpDay/f.buddyBond/
+   * f.buddyWalkDay/f.wildHp/f.wildHpDay（battle 加护 / engine 同行加护 / gainBondExp
+   * 全按这套读，零改动）；名册只在「换随行」时把工作区寄存回条目、再把新条目装载进
+   * 工作区——换宠不再丢级丢亲密，每只小伙伴的成长都各归各。 */
+  function roster() { const F = ADV.Game.flags; return F.petRoster || (F.petRoster = {}); }
+  function rosterEntry(id) {
+    const F = ADV.Game.flags, ce = critterEntry(id);
+    return roster()[id] || (roster()[id] = {
+      lv: 1, exp: 0, expGot: 0, expDay: 0, bond: 0, walkDay: null, hp: null, hpDay: null,
+      body: (ce && ce.body) || null, shiny: !!(ce && ce.s)
+    });
+  }
+  function rosterStash() {                             // 当前随行 → 名册条目（换随行/邀新前必调）
+    const F = ADV.Game.flags, b = F.buddy;
+    if (!b) return;
+    const e = rosterEntry(b.id);
+    e.lv = F.buddyLv || 1; e.exp = F.buddyExp || 0; e.expGot = F.buddyExpGot || 0;
+    e.expDay = F.buddyExpDay || 0; e.bond = F.buddyBond || 0; e.walkDay = F.buddyWalkDay || null;
+    e.hp = F.wildHp; e.hpDay = F.wildHpDay;
+    e.body = b.body || null; e.shiny = !!b.shiny;
+  }
+  function rosterEnsure() {                            // 旧档迁移：现随行的成长寄存入册（幂等）
+    const F = ADV.Game.flags;
+    if (F.buddy && !roster()[F.buddy.id]) rosterStash();
+  }
+  function rosterLoad(id) {                            // 名册条目 → 工作区 + 随行槽（换宠/邀新通用入口）
+    const F = ADV.Game.flags;
+    rosterStash();                                     // 旧的先寄存——成长各归各
+    const e = rosterEntry(id);
+    F.buddyLv = e.lv; F.buddyExp = e.exp; F.buddyExpGot = e.expGot; F.buddyExpDay = e.expDay;
+    F.buddyBond = e.bond; F.buddyWalkDay = e.walkDay;
+    F.wildHp = e.hp; F.wildHpDay = e.hpDay;
+    F.buddy = { id, shiny: e.shiny ? 1 : 0, body: e.body || null, rest: false };
+    return e;
+  }
+  function rosterList() {                              // 候选名册：手上所有未送走的小伙伴（随行打头）
+    const F = ADV.Game.flags;
+    rosterEnsure();
+    return heldCritters().filter(h => !h.gone).map(h => {
+      const e = roster()[h.id], isBud = !!(F.buddy && F.buddy.id === h.id);
+      return { id: h.id, cr: h.cr, buddy: isBud, rest: isBud && !!F.buddy.rest,
+               lv: isBud ? (F.buddyLv || 1) : ((e && e.lv) || 1),        // 随行的成长以工作区为实时真值
+               bond: isBud ? (F.buddyBond || 0) : ((e && e.bond) || 0),
+               body: (e && e.body) || h.body, shiny: (e && e.shiny) || h.shiny };
+    }).sort((a, b) => (b.buddy ? 1 : 0) - (a.buddy ? 1 : 0));
+  }
+  function rosterDrop(id) { delete roster()[id]; }     // 道别/卖出/换走 → 名册除名（接回来从头认识）
   /* 购入：金币不足拒绝；新种直接入册；已收录的等于「接回家」（清 gone，
    * 且非异色时按 2 倍概率补 roll 一次异色——买个体也可能淘到金色） */
   function buyCritter(id) {
@@ -655,6 +703,7 @@ ADV.Collect = (function () {
     if (!e || !cr) return { ok: false, msg: '（手里没有这一只。）' };
     const gold = sellPrice(cr, !!e.s);
     e.gone = 1;
+    rosterDrop(id);                                      // 批次七十：卖出即名册除名（防卖买来回刷级）
     F.gold = (F.gold || 0) + gold;
     ADV.Game.save();
     return { ok: true, msg: `阿橘数出 ${gold} 文：「${cr.name}会找到新主人的，放心。」` };
@@ -674,6 +723,7 @@ ADV.Collect = (function () {
     if ((F.gold || 0) < cost) return { ok: false, msg: `换资不够（还差 ${cost - (F.gold || 0)} 文）……` };
     F.gold = (F.gold || 0) - cost;
     give.gone = 1;                                     // 换出的伙伴住进新家（你的图鉴收录保留）
+    rosterDrop(giveId);                                // 批次七十：换走即名册除名（它的成长随它远行）
     const k = col()['insects'] || (col()['insects'] = {});
     k[getId] = { s: rollShiny(1) ? 1 : 0, d: ADV.Cal ? ADV.Cal.day : 0 };
     ADV.UI.toast(` 收藏入手：${getCr.name} `);
@@ -737,6 +787,7 @@ ADV.Collect = (function () {
            netTier, cageTier, shinyMult,
            applyEvolve, critterRearing,
            critterPrice, sellPrice, critterEntry, heldCritters, buyCritter, sellCritter, petShelf,
+           rosterEnsure, rosterStash, rosterLoad, rosterList, rosterDrop, rosterEntry,   // 批次七十：伙伴名册
            exchangeCritter, dailyOffer, doDailyOffer, EX_COST,
            addItem, useItem, count, giftables, bagList, itemInfo, give };
 })();
