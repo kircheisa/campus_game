@@ -341,7 +341,7 @@ E().playAction(E().player, 'laugh', 1.6);
     await say({ text: `草丛哗啦一响——\n野生的「${cr.name}」（${cr.fam}系）跳了出来！\n${flavors.join('\n')}` });
     // —— 画布宠物战：胜/负/溜/收服四出口（旧存档布尔桩 true=收服 / false=溜走） ——
     const res = await new Promise(done =>
-      ADV.Battle.start(cr.id, { petMode: true, buddy: budCr ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp } : null,
+      ADV.Battle.start(cr.id, { petMode: true, buddy: budCr ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp, body: f.buddy.body || null } : null,
                                 foeMod: wild, shinyHint: wildShiny }, done));
     const outcome = (res && typeof res === 'object') ? res.outcome : (res ? 'caught' : 'fled');
     if (res && typeof res === 'object' && budCr) f.wildHp = Math.max(0, res.myHp);   // 战斗间保留伙伴体力（休整中不随战，不动账）

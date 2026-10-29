@@ -8402,6 +8402,51 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.123] 批次六十九：我方立绘体格 + 异色对手金色盘 ====================
+   * 批次六十八遗留两件 P2：随行体格跟进战斗（我方立绘缩放）、异色对手进画布亮金色盘。 */
+  console.log('\n[5.123] 批次六十九：我方伙伴立绘乘体格 + 异色对手画布亮金');
+  {
+    const rnd123 = Math.random, stub123 = A.Battle, say123 = A.UI.say, toast123 = A.UI.toast;
+    const F123 = A.Game.flags;
+    const prev123 = { buddy: F123.buddy, wildHp: F123.wildHp, wildHpDay: F123.wildHpDay, tame: F123.tame };
+    const cal123 = A.Cal.dump();
+    const db123 = A.Collect.DB.critters;
+    try {
+      // —— 源守护 ——
+      const rSrc123 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const bSrc123 = fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8');
+      ok(rSrc123.includes('body: f.buddy.body || null'),
+        '源：随行入战 opts 带 body——个体体格从旗标跟进战斗（我方立绘缩放的原料）');
+      ok(bSrc123.includes('body: bud.body || null') && bSrc123.includes('const ms = a.me.body')
+         && bSrc123.includes('!!a.opts.shinyHint'),
+        '源：战斗我方实体带 body、立绘乘 ms（1.12/.9）；对手立绘吃 shinyHint——异色进画布亮金色盘');
+
+      // —— 行为：小不点随行体格随 opts 入战；定桩下异色必中，shinyHint 走真 ——
+      A.Collect.DB.critters = [A.Collect.critter('c6')];
+      const caps123 = [];
+      A.UI.say = () => Promise.resolve();
+      A.UI.toast = () => {};
+      A.Battle = { ...stub123, start: (k, o, cb) => { caps123.push(o); cb({ outcome: 'fled', myHp: 12, foeHp: 9 }); } };
+      A.Cal.load({ day: 52, period: 2, weather: '晴', checkedIn: true, streak: 1 });
+      F123.tame = {};
+      F123.buddy = { id: 'c6', shiny: false, rest: false, body: 'small' };
+      F123.wildHp = 20; F123.wildHpDay = 52;
+      Math.random = () => .01;                           // 异色必中：shinyHint 走真
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(caps123[0] && caps123[0].buddy && caps123[0].buddy.body === 'small' && caps123[0].shinyHint === true,
+        '行为：小不点随行体格随 opts 入战（画布我方立绘缩小）；定桩下异色必中——对手侧金色盘通路有真值');
+    } finally {
+      Math.random = rnd123;
+      A.Battle = stub123;
+      A.UI.say = say123;
+      A.UI.toast = toast123;
+      A.Collect.DB.critters = db123;
+      A.Cal.load(cal123);
+      F123.buddy = prev123.buddy; F123.wildHp = prev123.wildHp;
+      F123.wildHpDay = prev123.wildHpDay; F123.tame = prev123.tame;
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

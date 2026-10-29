@@ -222,7 +222,7 @@ ADV.Battle = (function () {
         petMode: true, onDone, opts,
         e: { id: cr.id, name: cr.name, fam: cr.fam, hp: foeMax, hpMax: foeMax, pow: cr.pow + (fm.powAdd || 0), spd: cr.spd + (fm.spdAdd || 0), dmgMul: fm.dmgMul || 1, body: fm.body || null, scared: false, fleeIn: 0, bait: cr.bait || [], intro: `${cr.fam}系 · 稀有${'★'.repeat(cr.rar || 1)}` },
         me: { id: myCr.id, name: myCr.name, fam: myCr.fam, hp: Math.min(myMax, Math.max(0, bud.hp == null ? myMax : bud.hp)), hpMax: myMax,
-              pow: myCr.pow + bst.pow + bPerk.pow, spd: myCr.spd + bst.spd + bPerk.spd + (SK ? SK.duelSpd() : 0) + edu.spdAdd, shiny: !!bud.shiny },
+              pow: myCr.pow + bst.pow + bPerk.pow, spd: myCr.spd + bst.spd + bPerk.spd + (SK ? SK.duelSpd() : 0) + edu.spdAdd, shiny: !!bud.shiny, body: bud.body || null },
         skills: petMoves(myCr.fam),
         mode: 'menu', sel: 0, catSel: 0, log: [`野生的${cr.name}跳了出来！`],
         pps: {}, fed: 0, weary: false, cheer: false, petGuard: false, tries: 0,
@@ -857,11 +857,14 @@ ADV.Battle = (function () {
     const rk = a.eRecoil > 0 ? Math.sin((1 - a.eRecoil / .28) * Math.PI) : 0;
     const mk = a.mRecoil > 0 ? Math.sin((1 - a.mRecoil / .28) * Math.PI) : 0;
     if (a.petMode) {
-      // 敌方：野生小伙伴（放大 + 呼吸；批次六十八：大个/小不点体型入画）
+      // 敌方：野生小伙伴（放大 + 呼吸；批次六十八：体格入画；批次六十九：异色亮金色盘）
       const bs = e.body === 'big' ? 1.12 : e.body === 'small' ? .9 : 1;
-      drawCritter(g, e, false, W / 2 + rk * 8, 210 + bob, 5 * (1 - .06 * rk) * bs);
-      // 我方：随行伙伴（左下；无伙伴战只画野生侧）
-      if (!a.me.out) drawCritter(g, a.me, a.me.shiny, 170 - mk * 8, 350 - bob * .6, 4 * (1 - .06 * mk));
+      drawCritter(g, e, !!a.opts.shinyHint, W / 2 + rk * 8, 210 + bob, 5 * (1 - .06 * rk) * bs);
+      // 我方：随行伙伴（左下；无伙伴战只画野生侧；批次六十九：体格随行入画）
+      if (!a.me.out) {
+        const ms = a.me.body === 'big' ? 1.12 : a.me.body === 'small' ? .9 : 1;
+        drawCritter(g, a.me, a.me.shiny, 170 - mk * 8, 350 - bob * .6, 4 * (1 - .06 * mk) * ms);
+      }
       if (a.flash > 0) { g.globalAlpha = a.flash; g.fillStyle = '#fff'; g.fillRect(W / 2 - 110, 150, 220, 160); g.globalAlpha = 1; }
     } else {
       // 敌人立绘（放大行走图；后仰右移 + 横压纵拉挤压）
