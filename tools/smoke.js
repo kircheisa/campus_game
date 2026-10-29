@@ -3047,7 +3047,9 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
         await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
         ok(F33.gold === gW + 3 && A.Collect.has('critters', 'c6'),
            '野外遭遇：再收服已入册的乌龟 → 放归草丛换 3 金');
-        ok(F33.wildHp === 7, '野外遭遇：出画布后按 myHp 保留伙伴体力');
+        const fullOf33 = id => A.Collect.critter(id).pow * 6 + 20 + (A.Skills ? A.Skills.duelHp() : 0)
+          + (((A.Battle.bondPerks ? A.Battle.bondPerks(F33.buddyLv || 1) : {}) || {}).hp || 0);   // 与 wildBattle fullHpOf 同口径
+        ok(F33.wildHp === fullOf33('c6'), '野外遭遇：出画布后伙伴满体力回营（批次七十六：战后即满）');
         ok(startedW.length === 1 && startedW[0].opts.buddy && startedW[0].opts.buddy.id === 'c6' && startedW[0].opts.buddy.hp > 0,
            '野外遭遇：出战把伙伴体力带进画布（buddy.hp 入场）');
         startedW.length = 0;
@@ -3055,14 +3057,14 @@ A.Skills.reset();   // 社交清零：猫的「闲聊 +1」断言按 0 级基准
         A.Collect.addItem('critBall');                      // 与球无关了，只为对照「已入册」路径
         fakeW = { outcome: 'lose', myHp: 0 };
         await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
-        ok(F33.wildHp === 0 && saidW.some(t => t.includes('累趴下了')),
-           '野外遭遇：伙伴战败 → 体力归零并提示补状态');
+        ok(F33.wildHp === fullOf33('c6') && saidW.some(t => t.includes('累趴下了')),
+           '野外遭遇：伙伴战败也满状态回营（喘匀了气，下场满体力出战）');
         startedW.length = 0;
 
         fakeW = { outcome: 'win', myHp: 4 };
         await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
-        ok(F33.wildHp === 4 && saidW.some(t => t.includes('钻回了深草')),
-           '野外遭遇：打跑野生（win）→ 无收成、体力照记');
+        ok(F33.wildHp === fullOf33('c6') && saidW.some(t => t.includes('钻回了深草')),
+           '野外遭遇：打跑野生（win）→ 血条照旧回满（每场都以最佳状态出战）');
         startedW.length = 0;
 
         A.Battle = { ...stubW, start: (k, o, cb) => cb(true) };   // 旧布尔桩兼容：true=收服 / false=溜走
@@ -4313,7 +4315,7 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
 
       // —— 阿橘·驯兽讨教：交 60 文学费，答对驯兽题学「轻声细语」 ——
       F54.gold = 500;
-      const KNOWN54 = ['放轻脚步压低声音，别吓到它', '丢球前估算成功率，心里有数', '战后自行恢复约三成',
+      const KNOWN54 = ['放轻脚步压低声音，别吓到它', '丢球前估算成功率，心里有数', '缓过来，满体力迎接下一场',
                        '对方血量越低、越疲惫时', '喂自己的伙伴，回满体力', '对方埋头大吃，收服率上升',
                        '捕捉加成更高', '力量——力越高血越厚', '它没了战意，正是丢球好时机',
                        '通体金色，图鉴带 ✨ 标记', '双方速度差与尝试次数'];
@@ -4336,14 +4338,16 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       ok(tameStep54 === 1 && F54.tame.soft === true && F54.gold === 440,
          '阿橘讨教：60 文学费 + 答对驯兽题 → 学会「轻声细语」（捕捉 +10%），金币 500 → 440');
 
-      // —— 战后急救：出画后伙伴自行恢复三成 ——
+      // —— 战后照护（批次七十六）：战后即满——全员新规，旧「三成急救」已被覆盖 ——
       F54.tame.aid = true;
       F54.buddy = { id: 'i8', shiny: false };
       F54.wildHp = 8; F54.wildHpDay = A.Cal.day;           // 战后 8/62
       A.Battle.start = (k, o, cb) => cb({ outcome: 'fled', myHp: 8 });
       await pump(A.Game.S.wildBattle({ map: 'homeYard' }), 4000);
       A.Battle.start = realStart54;
-      ok(F54.wildHp === 27, '战后急救：8/62 出画 → 自动恢复三成（ceil 18.6 = 19）到 27，不溢出上限');
+      const full54 = A.Collect.critter('i8').pow * 6 + 20 + (A.Skills ? A.Skills.duelHp() : 0)
+        + (A.Battle.bondPerks(F54.buddyLv || 1) || {}).hp;    // 此段已载真实 battle.js，bondPerks 在位
+      ok(F54.wildHp === full54, `战后即满：8/62 出画 → 直接回满（${full54}）——批次七十六新规覆盖旧三成急救`);
 
       // —— 画布驯兽挂接：克制环常显 / 察言观色提示 / 招式克制标记 ——
       F54.tame.eye = true;
@@ -8377,9 +8381,11 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
       F122.buddy = { id: 'c6', shiny: false, rest: false };
       F122.wildHp = 20; F122.wildHpDay = 52;
       await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      const full122c = A.Collect.critter('c6').pow * 6 + 20 + (A.Skills ? A.Skills.duelHp() : 0)
+        + (((stub122.bondPerks ? stub122.bondPerks(F122.buddyLv || 1) : {}) || {}).hp || 0);
       ok(caps122[1] && caps122[1].buddy && caps122[1].buddy.id === 'c6' && caps122[1].buddy.hp === 20
-         && F122.wildHp === 12,
-        '行为：唤出后随战恢复——伙伴重新入战斗面板（体力 20），战后回写 myHp=12');
+         && F122.wildHp === full122c,
+        '行为：唤出后随战恢复——伙伴入战斗面板（体力 20），战后即满（批次七十六：' + full122c + '）');
 
       // —— 行为 C：休整中不生成跟随实体；大个/小不点 dscale 地图可见 ——
       F122.buddy = { id: 'c6', shiny: false, rest: true, body: 'big' };

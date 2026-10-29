@@ -335,9 +335,11 @@ E().playAction(E().player, 'laugh', 1.6);
         else if (cands[pi].rest) f.buddy.rest = false;                // 随行正休整：点了名就是唤出
       }
     }
-    // 伙伴体力续航：跨天回满，战斗间保留（精灵口粮 / 面对伙伴按 Z 喂吃的可回满）
+    // 伙伴体力（批次七十六新规）：战后即满——每场都以最佳状态出战；跨天旧账自然失效仅作兜底
     const budCr = (!pickNone && f.buddy && !f.buddy.rest) ? CO.critter(f.buddy.id) : null;   // 批次六十八/七十：休整中或「不派」→ 脱身战口径（等级经验不涨）
-    const fullHp = budCr ? budCr.pow * 6 + 20 : 0;
+    const fullHpOf = cr => cr.pow * 6 + 20 + (ADV.Skills ? ADV.Skills.duelHp() : 0)
+                         + (((ADV.Battle.bondPerks ? ADV.Battle.bondPerks(f.buddyLv || 1) : {}) || {}).hp || 0);   // 与 Battle 侧 myMax 同口径（桩环境安全）
+    const fullHp = budCr ? fullHpOf(budCr) : 0;
     if (budCr) {                                           // 休整中的不动体力账——别把存着的满状态清成 0
       if ((f.wildHpDay || 0) !== C.day) { f.wildHpDay = C.day; f.wildHp = null; }
       if (f.wildHp == null) f.wildHp = fullHp;
@@ -357,13 +359,9 @@ E().playAction(E().player, 'laugh', 1.6);
       ADV.Battle.start(cr.id, { petMode: true, buddy: budCr ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp, body: f.buddy.body || null } : null,
                                 foeMod: wild, shinyHint: wildShiny }, done));
     const outcome = (res && typeof res === 'object') ? res.outcome : (res ? 'caught' : 'fled');
-    if (res && typeof res === 'object' && budCr) f.wildHp = Math.max(0, res.myHp);   // 战斗间保留伙伴体力（休整中不随战，不动账）
+    if (res && typeof res === 'object' && budCr) f.wildHp = fullHp;   // 批次七十六：战后即满——血条回满迎接下一场（休整中不随战，不动账）
     if (f.buddy && budCr) gainBondExp(                                     // 批次六十六 A：随行伙伴战后攒经验（收服新种 +3 / 放归 +2 / 胜 +3 / 败溜 +1）
       outcome === 'caught' ? (CO.has('critters', cr.id) ? 2 : 3) : outcome === 'win' ? 3 : 1, budCr);
-    if (f.tame && f.tame.aid && f.wildHp > 0 && fullHp > 0) {               // 阿橘「战后急救」：自行恢复三成
-      f.wildHp = Math.min(fullHp, f.wildHp + Math.ceil(fullHp * .3));
-      UI().toast(` 🩹 战后急救——${budCr.name}的体力恢复到了 ${f.wildHp}/${fullHp} `);
-    }
     if (outcome === 'caught') {                        // 收服簿记：已入册放归 +3 文；新种入册可邀随行
       f.catchTotal = (f.catchTotal || 0) + 1;          // 成就「捕虫高手」累计（球收，含重复收服）
       ADV.Audio.sfx('ok');
@@ -381,7 +379,7 @@ E().playAction(E().player, 'laugh', 1.6);
             { caption: { name: `野生的${cr.name}`, text: '球里的小家伙探出脑袋望着你——\n要邀它结伴同行吗？' } });
           if (inv === 0) {
             CO.rosterLoad(cr.id);                // 批次七十：旧随行寄存入册 + 新伙伴装载（体格/异色从图鉴条目带入，换宠不丢级）
-            f.wildHp = CO.critter(cr.id).pow * 6 + 20; f.wildHpDay = C.day;
+            f.wildHp = fullHpOf(CO.critter(cr.id)); f.wildHpDay = C.day;
             ADV.Engine.spawnBuddy();
             UI().toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
             logEvent(`${cr.name} 成了随行伙伴`);
@@ -395,7 +393,7 @@ E().playAction(E().player, 'laugh', 1.6);
       await say({ text: `「${cr.name}」败下阵来，\n一溜烟钻回了深草深处。` });
     } else if (outcome === 'lose') {
       E().playAction(E().player, 'sad', 1.6);
-      await say({ text: `「${budCr ? budCr.name : '伙伴'}」累趴下了……\n（精灵口粮或面对伙伴按 Z 喂吃的，\n　回满体力再来！）` });
+      await say({ text: `「${budCr ? budCr.name : '伙伴'}」累趴下了……\n（它喘匀了气好好睡了一觉——\n　下一场会以满体力出战！）` });
     } else {                                           // fled：全身而退
       await say({ text: `你屏住呼吸退出草丛——\n「${cr.name}」抖抖毛，继续觅食去了。` });
     }
@@ -457,9 +455,9 @@ E().playAction(E().player, 'laugh', 1.6);
     { key: 'eye', name: '察言观色', cost: 100, prev: 'soft',
       tip: '选中球时能看到估算捕捉率——\n耳朵尖眼睛亮，什么时候丢球心里就有数。',
       q: '【讨教】「察言观色」帮你做到什么？', opts: ['丢球前估算成功率，心里有数', '听懂小动物说话', '看出对方几岁了'], a: 0 },
-    { key: 'aid', name: '战后急救', cost: 160, prev: 'eye',
-      tip: '战斗结束后帮伙伴包扎调息，\n体力能自行恢复三成，不用每次都回满血硬撑。',
-      q: '【讨教】「战后急救」能恢复伙伴多少体力？', opts: ['战后自行恢复约三成', '瞬间满血', '越打越多'], a: 0 },
+    { key: 'aid', name: '战后照护', cost: 160, prev: 'eye',
+      tip: '打完全场给伙伴顺顺毛、上点水——\n现在每个小伙伴战后都会自己缓过劲儿来，满体力迎接下一场。',
+      q: '【讨教】「战后照护」告诉我们伙伴打完全场会怎样？', opts: ['缓过来，满体力迎接下一场', '得睡一整觉才能再战', '越打越饿，要吃两份口粮'], a: 0 },
   ];
 
   /* —— 精灵小筑·阿橘（s9）：补给柜台 / 每日珍稀精灵架 / 收购台 / 驯兽讨教（s12）——
