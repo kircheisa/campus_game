@@ -8695,6 +8695,31 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.127] 旧档补空：battlePick/petRoster 读档回填（批次七十五） ==================== */
+  console.log('\n[5.127] 旧档补空：applySaveData 回填 battlePick/petRoster——战前派宠对旧档真正生效');
+  {
+    const KEY127 = 'campus_adventure_save_v1';
+    const keep127 = localStorage.getItem(KEY127);
+    try {
+      const oldFlags127 = JSON.parse(JSON.stringify(A.Game.flags));
+      delete oldFlags127.battlePick;                    // 构造批次七十以前的旧档（两字段均缺失）
+      delete oldFlags127.petRoster;
+      localStorage.setItem(KEY127, JSON.stringify({
+        v: 1, hero: 'hero_boy', map: 'campus', x: 22, y: 30, dir: 'up',
+        flags: oldFlags127, friends: {}, cal: A.Cal.dump(), savedAt: Date.now()
+      }));
+      const ok127 = A.Game.continueGame();
+      ok(ok127 === true && A.Game.flags.battlePick === true && A.Game.flags.petRoster !== undefined &&
+         JSON.stringify(A.Game.flags.petRoster) === '{}',
+        '旧档补空：无 battlePick/petRoster 的老存档读档即回填 true/空表——旧档也开战前派宠（此前 undefined 恒 falsy，形同虚设）');
+      const gs127 = fs.readFileSync(path.join(ROOT, 'js', 'game-save.js'), 'utf8');
+      ok(gs127.includes('state.flags.battlePick === undefined') && gs127.includes('!state.flags.petRoster'),
+        '源：applySaveData 读档回填口径在位（存档只增不改惯例的补空半边——后加开关不再依赖 blankFlags 单腿走路）');
+    } finally {
+      if (keep127 === null) localStorage.removeItem(KEY127); else localStorage.setItem(KEY127, keep127);
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

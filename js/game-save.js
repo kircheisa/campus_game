@@ -294,6 +294,11 @@ skills: ADV.Skills ? ADV.Skills.dump() : null,
   function applySaveData(d) {
     state.hero = d.hero || 'hero_boy';
     state.flags = d.flags;
+    /* 旧档补空（存档只增不改惯例）：后加的开关/表字段在读档时补默认值，
+     * 老玩家存档直接享受新功能——不补则 undefined 恒 falsy，功能对旧档形同虚设
+     * （战前派宠即此坑：批次七十四改默认开只惠及新档，实排查于 2026-10-29） */
+    if (state.flags.battlePick === undefined) state.flags.battlePick = true;   // 批次七十四：战前派宠默认开
+    if (!state.flags.petRoster) state.flags.petRoster = {};                   // 批次七十：伙伴名册表（rosterEnsure 惰性补的读档版）
     state.friends = d.friends || {};
     if (ADV.Cal && d.cal) ADV.Cal.load(d.cal);
     if (ADV.Growth && d.growth) ADV.Growth.load(d.growth);
