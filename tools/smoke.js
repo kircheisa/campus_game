@@ -8309,6 +8309,99 @@ ok(SK49.chatCap() === 2 && SK49.chatBonus() === 1 && SK49.giftBonus() === 2, '�
     }
   }
 
+  /* ==================== [5.122] 批次六十八：随行收起/唤出 + 按物种出稿 + 体型可见 ====================
+   * 面对伙伴菜单多一项「先回家休息（收起）」——等级/亲密度留住，精灵小筑阿橘处唤出；
+   * 休整中不随战（脱身战口径）、不烧体力账、不生成跟随实体；出稿按物种哈希色板/变异；
+   * 大个/小不点在地图行走图与战斗画布都可见。源守护 + 定桩行为双验。 */
+  console.log('\n[5.122] 批次六十八：随行收起/唤出 + 按物种出稿 + 体型可见');
+  {
+    const rnd122 = Math.random, stub122 = A.Battle, say122 = A.UI.say, toast122 = A.UI.toast;
+    const F122 = A.Game.flags;
+    const prev122 = { buddy: F122.buddy, wildHp: F122.wildHp, wildHpDay: F122.wildHpDay, tame: F122.tame };
+    const cal122 = A.Cal.dump();
+    const db122 = A.Collect.DB.critters;
+    try {
+      // —— 源守护 ——
+      const qSrc122 = fs.readFileSync(path.join(ROOT, 'js', 'game-quest.js'), 'utf8');
+      const rSrc122 = fs.readFileSync(path.join(ROOT, 'js', 'game-retro.js'), 'utf8');
+      const sSrc122 = fs.readFileSync(path.join(ROOT, 'js', 'sprites.js'), 'utf8');
+      const bSrc122 = fs.readFileSync(path.join(ROOT, 'js', 'battle.js'), 'utf8');
+      const eSrc122 = fs.readFileSync(path.join(ROOT, 'js', 'engine.js'), 'utf8');
+      ok(qSrc122.includes("'先回家休息（收起）'") && qSrc122.includes('f.buddy.rest = true')
+         && qSrc122.includes('去精灵小筑找阿橘随时唤出'),
+        '源：面对伙伴菜单多「先回家休息（收起）」——休整只藏不删，等级/亲密度都留住，toast 指路阿橘');
+      ok(qSrc122.includes("'道别（解除随行 · 等级清零）'") && qSrc122.includes('f.buddy.rest = false'),
+        '源：道别项标明「等级清零」代价并兜底清休整标记——收起与道别两条路不再混淆');
+      ok(rSrc122.includes("'唤出休整的小伙伴'") && rSrc122.includes('f.buddy.rest = false')
+         && rSrc122.includes("'（休整中）'"),
+        '源：精灵小筑柜台动态多「唤出休整的小伙伴」（老六项顺序不动）；收购台随行标签区分（休整中）/（随行中）');
+      ok(rSrc122.includes('(f.buddy && !f.buddy.rest)') && rSrc122.includes('&& budCr) f.wildHp'),
+        '源：休整中不随战——脱身战口径，体力账不清零也不回写（旧代码跨天会把存着的满状态冲成 0）');
+      ok(sSrc122.includes("'buddy_' + cr.id") && sSrc122.includes('function budHash') && sSrc122.includes('v.round'),
+        '源：出稿按物种——缓存键带物种 id（不再三系一张脸），哈希色板 + 身材/耳朵/背斑变异');
+      ok(bSrc122.includes('body: fm.body || null') && bSrc122.includes("e.body === 'big' ? 1.12")
+         && eSrc122.includes('b && b.rest') && eSrc122.includes('dscale'),
+        '源：大个/小不点体型入画——战斗画布缩放 1.12/.9，地图行走图 dscale 且休整中不生成');
+      ok((qSrc122.match(/body: \((en|e) && (en|e)\.body\) \|\| null/g) || []).length === 2
+         && (rSrc122.match(/body: \(en && en\.body\) \|\| null/g) || []).length === 1,
+        '源：三处邀随行都抄个体体格——f.buddy.body 从图鉴条目入旗标（否则 dscale 永远落在 1，地图缩放形同虚设）');
+
+      // —— 行为 A：出稿按物种——同系异种各自成稿；同种稳定复用缓存；异色换色不换稿 ——
+      const famA = db122.find(c => db122.some(d => d.id !== c.id && d.fam === c.fam));
+      const famB = db122.find(c => c.id !== famA.id && c.fam === famA.fam);
+      const shA1 = A.Sprites.makeBuddySheet(famA, false);
+      ok(A.Sprites.makeBuddySheet(famA, false) === shA1,
+        `行为：同种出稿稳定——二次请求复用同一张稿（${famA.name}永远长一个样）`);
+      ok(A.Sprites.makeBuddySheet(famB, false) !== shA1,
+        `行为：同系异种各自出稿（${famA.name}/${famB.name} 同为${famA.fam}系但色板·身材各走各的哈希）`);
+      ok(A.Sprites.makeBuddySheet(famA, true) !== shA1,
+        '行为：异色稿独立成画（金色盘），身形参数仍由物种哈希决定——金的是颜色不是换了只');
+
+      // —— 行为 B：休整中不随战——buddy 不进战斗、体力账不动；唤出后恢复随战 ——
+      A.Collect.DB.critters = [A.Collect.critter('c6')];
+      const caps122 = [];
+      A.UI.say = () => Promise.resolve();
+      A.UI.toast = () => {};
+      A.Battle = { ...stub122, start: (k, o, cb) => { caps122.push(o); cb({ outcome: 'fled', myHp: 12, foeHp: 9 }); } };
+      A.Cal.load({ day: 52, period: 2, weather: '晴', checkedIn: true, streak: 1 });
+      F122.tame = {};
+      F122.buddy = { id: 'c6', shiny: false, rest: true };
+      F122.wildHp = 33; F122.wildHpDay = 51;             // 跨天旧账：若门控失效会被清成 0
+      Math.random = () => .01;
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(caps122[0] && caps122[0].buddy === null && F122.wildHp === 33,
+        '行为：休整中遭遇野生 → 脱身战（无伙伴助战），存着的体力账 33 原样保留');
+      F122.buddy = { id: 'c6', shiny: false, rest: false };
+      F122.wildHp = 20; F122.wildHpDay = 52;
+      await pump(A.Game.S.wildBattle({ map: 'riverbay', tier: 0 }), 4000);
+      ok(caps122[1] && caps122[1].buddy && caps122[1].buddy.id === 'c6' && caps122[1].buddy.hp === 20
+         && F122.wildHp === 12,
+        '行为：唤出后随战恢复——伙伴重新入战斗面板（体力 20），战后回写 myHp=12');
+
+      // —— 行为 C：休整中不生成跟随实体；大个/小不点 dscale 地图可见 ——
+      F122.buddy = { id: 'c6', shiny: false, rest: true, body: 'big' };
+      A.Engine.spawnBuddy();
+      ok(!A.Engine.getBuddy(), '行为：休整中 spawnBuddy 不生成跟随实体——地图上真的看不见了');
+      F122.buddy = { id: 'c6', shiny: false, rest: false, body: 'big' };
+      A.Engine.spawnBuddy();
+      const bd122 = A.Engine.getBuddy();
+      ok(bd122 && bd122.dscale === 1.14, '行为：大个随行实体 dscale 1.14——地图行走图放大可见');
+      F122.buddy = { id: 'c6', shiny: false, rest: false, body: 'small' };
+      A.Engine.spawnBuddy();
+      ok(A.Engine.getBuddy() && A.Engine.getBuddy().dscale === .88,
+        '行为：小不点随行实体 dscale 0.88——地图行走图缩小可见');
+    } finally {
+      Math.random = rnd122;
+      A.Battle = stub122;
+      A.UI.say = say122;
+      A.UI.toast = toast122;
+      A.Collect.DB.critters = db122;
+      A.Cal.load(cal122);
+      F122.buddy = prev122.buddy; F122.wildHp = prev122.wildHp;
+      F122.wildHpDay = prev122.wildHpDay; F122.tame = prev122.tame;
+    }
+  }
+
   console.log(`\n========== 结果: ${pass} 通过, ${fail} 失败 ==========`);
 
   process.exit(fail ? 1 : 0);

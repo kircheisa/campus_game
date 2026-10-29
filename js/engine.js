@@ -164,6 +164,7 @@ ADV.Engine = (function () {
   function spawnBuddy() {
     npcs = npcs.filter(n => !n.buddy);                   // 防重复生成
     const b = ADV.Game.flags && ADV.Game.flags.buddy;
+    if (b && b.rest) return;                             // 批次六十八：休整中不跟随（精灵小筑阿橘处唤出）
     const cr = b && ADV.Collect && ADV.Collect.critter(b.id);
     if (!b || !cr) return;
     // 落在玩家脚边一格空位（上下左右 → 斜角）
@@ -177,6 +178,7 @@ ADV.Engine = (function () {
       balloon: null, balloonT: -1, pose: null, poseT: 0, speech: null,
       goal: null, followT: 1e9, lastBrain: null,
       shiny: !!b.shiny,
+      dscale: (b.body === 'big') ? 1.14 : (b.body === 'small') ? .88 : 1,   // 批次六十八：大个/小不点地图可见
       sheet: ADV.Sprites.makeBuddySheet(cr, !!b.shiny),
       s: '_buddy'                                        // Z 键互动脚本
     };
@@ -1179,10 +1181,12 @@ ADV.Engine = (function () {
     } else sh = e.sheet;
     const fh = sh.height / 4;
     const row = { down: 0, left: 1, right: 2, up: 3 }[e.dir];
-    // 阴影
+    // 阴影（缩放个体随脚不变心）
+    const ds = e.dscale || 1;
     g.fillStyle = 'rgba(0,0,0,.25)';
-    g.beginPath(); g.ellipse(e.px + 16, e.py + 30, 10, 4, 0, 0, Math.PI * 2); g.fill();
-    g.drawImage(sh, frameOf(e) * 32, row * fh, 32, fh, e.px, e.py + T - fh, 32, fh);
+    g.beginPath(); g.ellipse(e.px + 16, e.py + 30, 10 * ds, 4, 0, 0, Math.PI * 2); g.fill();
+    if (ds !== 1) g.drawImage(sh, frameOf(e) * 32, row * fh, 32, fh, e.px + (32 - 32 * ds) / 2, e.py + T - fh * ds, 32 * ds, fh * ds);
+    else g.drawImage(sh, frameOf(e) * 32, row * fh, 32, fh, e.px, e.py + T - fh, 32, fh);
   }
 
   function render(g) {

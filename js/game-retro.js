@@ -323,10 +323,12 @@ E().playAction(E().player, 'laugh', 1.6);
     const wild = CO.rollWild(cr);
     const wildShiny = CO.rollShiny(CO.shinyMult());
     // 伙伴体力续航：跨天回满，战斗间保留（精灵口粮 / 面对伙伴按 Z 喂吃的可回满）
-    const budCr = f.buddy ? CO.critter(f.buddy.id) : null;
+    const budCr = (f.buddy && !f.buddy.rest) ? CO.critter(f.buddy.id) : null;   // 批次六十八：休整中不随战（脱身战口径，等级经验不涨）
     const fullHp = budCr ? budCr.pow * 6 + 20 : 0;
-    if ((f.wildHpDay || 0) !== C.day) { f.wildHpDay = C.day; f.wildHp = null; }
-    if (f.wildHp == null) f.wildHp = fullHp;
+    if (budCr) {                                           // 休整中的不动体力账——别把存着的满状态清成 0
+      if ((f.wildHpDay || 0) !== C.day) { f.wildHpDay = C.day; f.wildHp = null; }
+      if (f.wildHp == null) f.wildHp = fullHp;
+    }
     ADV.Audio.sfx('start');
     /* 演出分级：稀有 / 体型 / 性情 / 异色各一行白描——进画布前就读出这一只的份量 */
     const flavors = [];
@@ -339,10 +341,10 @@ E().playAction(E().player, 'laugh', 1.6);
     await say({ text: `草丛哗啦一响——\n野生的「${cr.name}」（${cr.fam}系）跳了出来！\n${flavors.join('\n')}` });
     // —— 画布宠物战：胜/负/溜/收服四出口（旧存档布尔桩 true=收服 / false=溜走） ——
     const res = await new Promise(done =>
-      ADV.Battle.start(cr.id, { petMode: true, buddy: f.buddy ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp } : null,
+      ADV.Battle.start(cr.id, { petMode: true, buddy: budCr ? { id: f.buddy.id, shiny: f.buddy.shiny, hp: f.wildHp } : null,
                                 foeMod: wild, shinyHint: wildShiny }, done));
     const outcome = (res && typeof res === 'object') ? res.outcome : (res ? 'caught' : 'fled');
-    if (res && typeof res === 'object') f.wildHp = Math.max(0, res.myHp);   // 战斗间保留伙伴体力
+    if (res && typeof res === 'object' && budCr) f.wildHp = Math.max(0, res.myHp);   // 战斗间保留伙伴体力（休整中不随战，不动账）
     if (f.buddy && budCr) gainBondExp(                                     // 批次六十六 A：随行伙伴战后攒经验（收服新种 +3 / 放归 +2 / 胜 +3 / 败溜 +1）
       outcome === 'caught' ? (CO.has('critters', cr.id) ? 2 : 3) : outcome === 'win' ? 3 : 1, budCr);
     if (f.tame && f.tame.aid && f.wildHp > 0 && fullHp > 0) {               // 阿橘「战后急救」：自行恢复三成
@@ -365,7 +367,8 @@ E().playAction(E().player, 'laugh', 1.6);
           const inv = await choose([`让${cr.name}跟着你走`, '放它回草丛深处'],
             { caption: { name: `野生的${cr.name}`, text: '球里的小家伙探出脑袋望着你——\n要邀它结伴同行吗？' } });
           if (inv === 0) {
-            f.buddy = { id: cr.id, shiny: wildShiny ? 1 : 0 };
+            const en = CO.critterEntry(cr.id);   // 批次六十八：个体体格随行（大个/小不点地图与战斗可见）
+            f.buddy = { id: cr.id, shiny: wildShiny ? 1 : 0, body: (en && en.body) || null };
             f.wildHp = CO.critter(cr.id).pow * 6 + 20; f.wildHpDay = C.day;
             ADV.Engine.spawnBuddy();
             UI().toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
@@ -453,7 +456,11 @@ E().playAction(E().player, 'laugh', 1.6);
     const f = F(), CO = ADV.Collect;
     while (true) {
       const prog = CO.progress();
-      const a = await choose(['买补给', '珍稀精灵架', '收购台', '驯兽讨教', '图鉴交换', '先逛逛'], { caption: { name: '阿橘',
+      /* 批次六十八：随行伙伴休整中时多一项「唤出」——菜单动态拼，老六项顺序不动（图鉴交换仍在先逛逛前） */
+      const menu = ['买补给', '珍稀精灵架', '收购台', '驯兽讨教', '图鉴交换'];
+      if (f.buddy && f.buddy.rest) menu.push('唤出休整的小伙伴');
+      menu.push('先逛逛');
+      const a = await choose(menu, { caption: { name: '阿橘',
         text: `欢迎光临精灵小筑～\n你的图鉴收录了 ${prog.got}/${prog.total} 种。\n口粮和宠物球，都是草丛探险的好帮手！` } });
       if (a === 0) { await shop(['critBall', 'goodBall', 'ultraBall', 'petFood', 'bait'], '精灵小筑 · 阿橘'); continue; }
       if (a === 1) {                                   // 珍稀精灵架：每日三格，隔天换货
@@ -480,7 +487,7 @@ E().playAction(E().player, 'laugh', 1.6);
           const rear = CO.critterRearing(h.id, ADV.Cal.day);   // 饲养倒计时：防止手滑卖掉临进化的幼体
           const bodyTag = h.body === 'big' ? '（大个）' : h.body === 'small' ? '（小不点）' : '';   // 批次六十六：个体体型标签
           const temperTag = h.temper === '好斗' ? '（好斗）' : h.temper === '胆小' ? '（胆小）' : '';   // 批次六十七：性子上架——好斗伤高、胆小好捕，买前看清楚
-          return `${h.cr.name}${h.shiny ? '✨' : ''}${bodyTag}${temperTag}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? '（随行中）' : ''} → 💰${p}`;
+          return `${h.cr.name}${h.shiny ? '✨' : ''}${bodyTag}${temperTag}${rear >= 0 ? ` 🫙剩${rear}天` : ''}${f.buddy && f.buddy.id === h.id ? (f.buddy.rest ? '（休整中）' : '（随行中）') : ''} → 💰${p}`;
         }).concat(['还是不卖了']);
         const i = await choose(opts, { caption: { name: '阿橘', text: '图鉴收录过的可以寄养到我这，\n按稀有度给收购价——异色翻三倍！' } });
         if (i < 0 || i >= held.length) continue;
@@ -522,6 +529,14 @@ E().playAction(E().player, 'laugh', 1.6);
           continue;
         }
         await say({ name: '阿橘', text: `「${les.name}」你已经出师啦！\n${les.tip}` });
+        continue;
+      }
+      if (menu[a] === '唤出休整的小伙伴') {              // 批次六十八：休整中的伙伴唤出——等级/亲密度原样归队，一觉回满
+        f.buddy.rest = false; f.wildHp = null;
+        ADV.Audio.sfx('item');
+        ADV.Engine.spawnBuddy();
+        UI().toast(` ${CO.critter(f.buddy.id).name}精神抖擞地跑回你身边啦！ `);
+        logEvent(`唤出休整中的${CO.critter(f.buddy.id).name}（随行恢复）`);
         continue;
       }
       if (a === 4) { await S.exchange(); continue; }   // P4 图鉴交换所：重复伙伴 + 换资 → 未得图鉴

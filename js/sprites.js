@@ -942,21 +942,37 @@ ADV.Sprites = (function () {
 
   /* ==================== 随行伙伴小精灵（三系圆滚滚小生物） ==================== */
   // 3 帧 × 4 向，帧 32×28，与 makeCatSheet 同规格（drawChar 可直接绘制）
+  // 批次六十八：出稿按物种——同系 44 种各有各的色相偏移与身材/耳朵/斑点，不再三张脸走天下；
+  // 异色仍走金色盘，但身形与本种一致（金的是颜色，不是换了一只）。
   function makeBuddySheet(cr, shiny) {
-    const key = 'buddy_' + cr.fam + (shiny ? '_s' : '');
+    const key = 'buddy_' + cr.id + (shiny ? '_s' : '');
     if (cache[key]) return cache[key];
-    const c = cnv(96, 112), g = c.getContext('2d');
+    const H = budHash(cr.id);
+    const famHue = { 虫: 105, 水: 208, 兽: 33 }[cr.fam] || 90;
+    const hue = (famHue + ((H & 7) - 3) * 7 + 360) % 360;              // ±21° 同系微移
+    const sat = 48 + ((H >> 3) & 7) * 3;                               // 48–69%
+    const lit = 50 + ((H >> 6) & 3) * 4;                               // 50–62%
     const pal = shiny
       ? { body: '#ffd94c', dark: '#c8a020', belly: '#fff4c8', acc: '#ffffff' }
-      : {
-          虫: { body: '#7ac878', dark: '#4c8a4a', belly: '#c8e8b8', acc: '#ffe08a' },
-          水: { body: '#6aa8e8', dark: '#3a6ab0', belly: '#c8e8ff', acc: '#a8d8ff' },
-          兽: { body: '#d8a860', dark: '#a87840', belly: '#f8e8c8', acc: '#ffb890' }
-        }[cr.fam] || { body: '#9ab090', dark: '#6a8060', belly: '#d8e8c8', acc: '#ffe08a' };
-    DIRS.forEach((d, r) => { for (let f = 0; f < 3; f++) drawBuddyFrame(g, f * 32, r * 28, d, f, pal, cr.fam); });
+      : { body: `hsl(${hue},${sat}%,${lit}%)`,
+          dark: `hsl(${hue},${sat + 8}%,${Math.max(26, lit - 22)}%)`,
+          belly: `hsl(${hue},${Math.max(20, sat - 18)}%,${Math.min(92, lit + 30)}%)`,
+          acc: `hsl(${(hue + 40) % 360},${sat}%,${Math.min(80, lit + 18)}%)` };
+    const v = { round: 6.3 + (H >> 9) % 3 * .55 + (cr.rar === 3 ? .7 : 0),   // 身材：圆润度 + 三星更壮一圈
+                earK: .8 + (H >> 11) % 5 * .13,                              // 触角/耳朵/尾鳍大小
+                spots: (H >> 14) % 4 };                                      // 背斑 0–3 颗
+    const c = cnv(96, 112), g = c.getContext('2d');
+    DIRS.forEach((d, r) => { for (let f = 0; f < 3; f++) drawBuddyFrame(g, f * 32, r * 28, d, f, pal, cr.fam, v); });
     cache[key] = c; return c;
   }
-  function drawBuddyFrame(g, ox, oy, dir, f, pal, fam) {
+  /* FNV-1a 风格字符串散列：同一 id 稳定得出同一组外观参数（存档换机器也长一个样） */
+  function budHash(id) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+    return h >>> 0;
+  }
+  function drawBuddyFrame(g, ox, oy, dir, f, pal, fam, v) {
+    v = v || { round: 7, earK: 1, spots: 0 };
     const E = (x, y, rx, ry, col) => { g.fillStyle = col; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); };
     const cx = ox + 16;
     const bounce = f === 0 ? 0 : 1;                     // 走路帧小跳
@@ -984,24 +1000,34 @@ ADV.Sprites = (function () {
       E(cx - 3.5, footY - (f === 1 ? step : 0), 2.4, 1.8, pal.dark);
       E(cx + 3.5, footY - (f === 2 ? -step : 0), 2.4, 1.8, pal.dark);
     }
-    // 圆滚滚身体
-    E(cx, bodyY, 7, 6, pal.body);
+    // 圆滚滚身体（批次六十八：身材随物种——round 控半径，纵横比保持原 7:6）
+    E(cx, bodyY, v.round, v.round * 6 / 7, pal.body);
     E(cx, bodyY + 2.5, 4.5, 3, pal.belly);              // 肚皮
     if (fam === '水') {                                   // 背上水光点
       E(cx - 2.5, bodyY - 3.5, 1.3, 1, pal.acc);
       E(cx + 3, bodyY - 2.5, 1, .8, pal.acc);
     }
+    if ((fam === '虫' || fam === '兽') && v.spots) {      // 批次六十八：背斑 0–3 颗，看斑也能认出是哪一只
+      for (let s = 0; s < v.spots; s++) {
+        g.globalAlpha = .45;
+        E(cx - 3 + (s % 2) * 6, bodyY - 3 - (s >> 1) * 2.5, 1.1, .9, pal.dark);
+        g.globalAlpha = 1;
+      }
+    }
     // 系别特征（身体上面：触角 / 耳朵 / 尾鳍）
-    if (fam === '虫') {                                   // 两根小触角
+    if (fam === '虫') {                                   // 两根小触角（长短随物种）
+      const ek = v.earK;
       g.strokeStyle = pal.dark; g.lineWidth = 1.2;
-      g.beginPath(); g.moveTo(cx - 2.5, bodyY - 5); g.lineTo(cx - 4, bodyY - 9); g.stroke();
-      g.beginPath(); g.moveTo(cx + 2.5, bodyY - 5); g.lineTo(cx + 4, bodyY - 9); g.stroke();
-      E(cx - 4.4, bodyY - 9.6, 1.4, 1.4, pal.acc); E(cx + 4.4, bodyY - 9.6, 1.4, 1.4, pal.acc);
-    } else if (fam === '兽') {                            // 圆耳朵
-      E(cx - 4.5, bodyY - 5, 2.4, 2.4, pal.body); E(cx + 4.5, bodyY - 5, 2.4, 2.4, pal.body);
-      E(cx - 4.5, bodyY - 5, 1.2, 1.2, pal.acc); E(cx + 4.5, bodyY - 5, 1.2, 1.2, pal.acc);
-    } else if (fam === '水' && dir === 'up') {            // 背面小尾鳍
-      E(cx, bodyY - 6, 2, 2.6, pal.acc);
+      g.beginPath(); g.moveTo(cx - 2.5, bodyY - 5); g.lineTo(cx - 2.5 - 1.5 * ek, bodyY - 4 - 5 * ek); g.stroke();
+      g.beginPath(); g.moveTo(cx + 2.5, bodyY - 5); g.lineTo(cx + 2.5 + 1.5 * ek, bodyY - 4 - 5 * ek); g.stroke();
+      E(cx - 2.5 - 1.9 * ek, bodyY - 4.6 - 5 * ek, 1.4 * ek, 1.4 * ek, pal.acc);
+      E(cx + 2.5 + 1.9 * ek, bodyY - 4.6 - 5 * ek, 1.4 * ek, 1.4 * ek, pal.acc);
+    } else if (fam === '兽') {                            // 圆耳朵（大小随物种）
+      const ek = v.earK;
+      E(cx - 4.5, bodyY - 5, 2.4 * ek, 2.4 * ek, pal.body); E(cx + 4.5, bodyY - 5, 2.4 * ek, 2.4 * ek, pal.body);
+      E(cx - 4.5, bodyY - 5, 1.2 * ek, 1.2 * ek, pal.acc); E(cx + 4.5, bodyY - 5, 1.2 * ek, 1.2 * ek, pal.acc);
+    } else if (fam === '水' && dir === 'up') {            // 背面小尾鳍（大小随物种）
+      E(cx, bodyY - 6, 2 * v.earK, 2.6 * v.earK, pal.acc);
     }
     // 脸：down 双眼；left/right 单眼；up 无脸
     if (dir === 'down') {

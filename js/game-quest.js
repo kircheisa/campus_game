@@ -607,7 +607,8 @@
             { caption: { name: `野生的${cr.name}`, text: shiny ? '金色的绒毛在光里一闪一闪——\n它好像对你很感兴趣！'
                                                                 : '它从指缝里探出小脑袋望着你——\n要和这个小家伙结伴同行吗？' } });
           if (inv === 0) {
-            f.buddy = { id: cr.id, shiny: shiny ? 1 : 0 };
+            const en = CO.critterEntry(cr.id);   // 批次六十八：个体体格随行（大个/小不点地图缩放的原料；笼捕个体不掷体格记 null）
+            f.buddy = { id: cr.id, shiny: shiny ? 1 : 0, body: (en && en.body) || null };
             ADV.Engine.spawnBuddy();
             ADV.UI.toast(` ${cr.name} 成了你的随行伙伴！按 Z 可以和它互动 `);
             logEvent(`${cr.name} 成了随行伙伴`);
@@ -635,14 +636,14 @@
       /* 批次六十六 A：伙伴等级可见化——并肩同行攒下的 Lv/经验与亲密度并列展示 */
       const lv = f.buddyLv || 1;
       const lvLine = `伙伴 Lv${lv}${lv >= 5 ? '（满级）' : ''} · 经验 ${f.buddyExp || 0}/${ADV.Battle.bondNeed(lv)} · 亲密度 ${bond}/100`;
-      const a = await choose(['摸摸头', '喂点吃的', '说说悄悄话', '道别（解除随行）', '就这样吧'], {
-        cancelIndex: 4,                                     // X/ESC = 就这样吧，随时收起选项
+      const a = await choose(['摸摸头', '喂点吃的', '说说悄悄话', '先回家休息（收起）', '道别（解除随行 · 等级清零）', '就这样吧'], {
+        cancelIndex: 5,                                     // X/ESC = 就这样吧，随时收起选项
         caption: { name: cr.name,
                    text: stage === 3 ? `它把下巴搁在你的鞋面上，\n尾巴摇成了小风扇。\n（亲密度加护全开：战中每回合回体力 · 濒死稳住一次）\n（${lvLine}）`
                        : stage === 2 ? `它绕着你的脚踝转圈，\n时不时抬头看你一眼。\n（亲密度加护：战中每回合回 1 体力）\n（${lvLine}）`
                        : stage === 1 ? `它蹲坐在你脚边，\n耳朵朝你的方向偏着。\n（${lvLine}）`
                        : `它安安静静待在你的影子里。\n${lvLine}` } });
-      if (a === 4 || a === -1) return;
+      if (a === 5 || a === -1) return;
       if (a === 0) {                                      // 摸摸头：每日一次 +3
         if (f.buddyPetDay === C.day) { await say({ name: cr.name, text: '（它舒服地眯起眼睛，往旁边挪了半步——\n今天已经摸过头啦）' }); continue; }
         f.buddyPetDay = C.day;
@@ -671,7 +672,17 @@
                                   : '它歪着小脑袋听你说完，\n虽然好像没太懂，但听得很认真。' });
         continue;
       }
-      // a === 3：道别解除随行
+      if (a === 3) {                                      // 批次六十八：先回家休息（收起）——等级/亲密度/体力都留住，随时可唤出
+        f.buddy.rest = true;
+        f.wildHp = cr.pow * 6 + 20; f.wildHpDay = C.day;  // 休整一觉回满，唤出即全状态
+        ent.hidden = true; ent.followT = 0; ent.balloon = '💤'; ent.balloonT = 0;
+        ADV.Audio.sfx('cancel');
+        ADV.UI.toast(` ${cr.name}先回家休息啦——去精灵小筑找阿橘随时唤出（等级·亲密度都在） `);
+        logEvent(`${cr.name}回家休整（随行收起，等级亲密度保留）`);
+        return;
+      }
+      // a === 4：道别解除随行
+      f.buddy.rest = false;                               // 道别走的是解除，不落休整标记
       const bye = await choose(['真的要道别', '再想想']);
       if (bye !== 0) continue;
       f.buddy = null;
@@ -769,7 +780,7 @@
         { caption: { name: `刚出生的${cr.name}`, text: '它睁开水汪汪的眼睛，\n把你当成了家里人——' } });
       if (inv === 0) {
         const e = CO.critterEntry(id);
-        f.buddy = { id, shiny: e && e.s ? 1 : 0 };
+        f.buddy = { id, shiny: e && e.s ? 1 : 0, body: (e && e.body) || null };   // 批次六十八：体格随行（孵出个体若掷过体格则带着走）
         ADV.Engine.spawnBuddy();
         if (first) {
           f.buddyBond = Math.min(100, (f.buddyBond || 0) + 15);
